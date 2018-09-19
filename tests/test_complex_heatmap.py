@@ -7,14 +7,27 @@ import complex_heatmap as ch
 #-
 
 rng = np.random.RandomState(1)
-df1 = pd.DataFrame(rng.randn(10, 5) + np.tile([5, 10], 5)[:, np.newaxis])
-df2 = pd.DataFrame(rng.randn(10, 5)+ np.tile([2, 4], 5)[:, np.newaxis])
+data = np.tile([5, 10], (5, 5)).T + np.tile(np.arange(0, 20, 4), (10, 1))
+names = 's' + pd.Series(np.arange(5)).astype(str)
+df1 = pd.DataFrame(data + rng.randn(10, 5), columns=names)
+df2 = pd.DataFrame(data + rng.randn(10, 5), columns=names)
+df3 = pd.DataFrame(rng.randn(10, 5) * 3 + 1, columns=names)
 
 complex_heatmap_list = ch.ComplexHeatmapList(
         [
-            ch.ComplexHeatmap(df1, is_main=True),
-            ch.ComplexHeatmap(df2)
-        ]
+            ch.ComplexHeatmap(df1, is_main=True, cmap_sequential='YlOrBr',
+                              col_dendrogram_height=1/2.54,
+                              row_dendrogram_width=1/2.54,
+                              title='dtype1'
+                              ),
+            ch.ComplexHeatmap(df2, cmap_sequential='Blues',
+                              title='dtype2'
+                              ),
+            ch.ComplexHeatmap(df3, cmap_norm='midpoint',
+                              title='dtype3'
+                              ),
+        ],
+        figsize=(12/2.54, 6/2.54)
 )
 fig = complex_heatmap_list.plot()
 #-
