@@ -15,9 +15,15 @@ df3 = pd.DataFrame(rng.randn(10, 5) * 3 + 1, columns=names)
 
 complex_heatmap_list = ch.ComplexHeatmapList(
         [
-            ch.ComplexHeatmap(df1, is_main=True, cmap_sequential='YlOrBr',
+            ch.ComplexHeatmap(df1,
+                              is_main=True,
+                              cluster_use_cols = ['s1', 's2'],
+                              cmap_sequential='YlOrBr',
+                              cluster_cols = False,
+                              col_show_list = ['s1', 's2', 's3'],
                               col_dendrogram_height=1/2.54,
                               row_dendrogram_width=1/2.54,
+                              col_dendrogram_show=False,
                               title='dtype1'
                               ),
             ch.ComplexHeatmap(df2, cmap_sequential='Blues',
@@ -27,7 +33,8 @@ complex_heatmap_list = ch.ComplexHeatmapList(
                               title='dtype3'
                               ),
         ],
-        figsize=(12/2.54, 6/2.54)
+        figsize=(12/2.54, 6/2.54),
+        dpi=360
 )
 fig = complex_heatmap_list.plot()
 #-
