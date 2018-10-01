@@ -15,6 +15,8 @@ mpl.use('Agg') # import before pyplot import!
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
+
+from complex_heatmap.dynamic_grid import GridManager, GridElement
 #-
 
 class MidpointNormalize(mpl.colors.Normalize):
@@ -48,6 +50,8 @@ class ComplexHeatmap:
     col_dendrogram_show: bool = True
     col_labels_show: bool = True
     cluster_rows: bool = True
+    cluster_row_ids: pd.DataFrame = None
+    cluster_row_ids_width_per_col: float = 1/2.54
     cluster_rows_method: str = 'complete'
     cluster_rows_metric: str = 'euclidean'
     row_linkage_matrix: Optional[np.ndarray] = None
@@ -64,6 +68,8 @@ class ComplexHeatmap:
     def __post_init__(self):
         if self.col_show_list is not None and self.col_dendrogram_show:
             raise NotImplementedError()
+        if self.cluster_row_ids is not None:
+            assert isinstance(self.cluster_row_ids, pd.DataFrame)
 
     def plot(self) -> Figure:
         raise NotImplementedError()
@@ -75,18 +81,18 @@ class ComplexHeatmapList:
     dpi: int =  180
 
     def plot(self):
-        width_ratios = np.array([hmap.rel_width for hmap in self.hmaps])
-        height_ratios = np.array([1])
+        width_ratios = [(hmap.rel_width, 'relative') for hmap in self.hmaps]
+        height_ratios = [(1, 'relative')]
 
         main_hmap = [hmap for hmap in self.hmaps if hmap.is_main]
         assert len(main_hmap) == 1
         main_hmap = main_hmap[0]
 
-        main_hmap.title += ' (main)'
+        main_hmap.title += '\n(main)'
 
         if main_hmap.col_linkage_matrix is not None:
             if not isinstance(main_hmap.col_linkage_matrix, np.ndarray):
-                raise TypeError('Need to cluster cols with supplied linkage matrix, '
+                raise TypeError('User supplied column linkage matrix, '
                                 'but the linkage matrix is not an NDarray')
             col_Z = main_hmap.col_linkage_matrix
         elif main_hmap.cluster_cols:
@@ -95,9 +101,9 @@ class ComplexHeatmapList:
         else:
             col_Z = None
 
-        if main_hmap.row_linkage_matrix:
+        if main_hmap.row_linkage_matrix is not None:
             if not isinstance(main_hmap.row_linkage_matrix, np.ndarray):
-                raise TypeError('Need to cluster rows with supplied linkage matrix, '
+                raise TypeError('User-supplied row linkage matrix, '
                                 'but the linkage matrix is not an NDarray')
             row_Z = main_hmap.row_linkage_matrix
         elif main_hmap.cluster_rows:
@@ -111,25 +117,37 @@ class ComplexHeatmapList:
         else:
             row_Z = None
 
+        heatmap_col_start = 0
+
+        if main_hmap.cluster_row_ids is not None:
+            cluster_row_ids_bar_width = (
+                    main_hmap.cluster_row_ids_width_per_col
+                    * main_hmap.cluster_row_ids.shape[1])
+            width_ratios.insert(0, (cluster_row_ids_bar_width, 'absolute'))
+            heatmap_col_start += 1
+
         if col_Z is not None and main_hmap.col_dendrogram_show:
-            norm_heights = height_ratios / np.sum(height_ratios)
-            height_ratios = np.concatenate([
-                np.array([main_hmap.col_dendrogram_height]),
-                norm_heights * (self.figsize[1] - main_hmap.col_dendrogram_height)])
+            height_ratios.insert(0, (main_hmap.col_dendrogram_height, 'absolute'))
             heatmap_row = 1
-            print(height_ratios)
+            # norm_heights = height_ratios / np.sum(height_ratios)
+            # height_ratios = np.concatenate([
+            #     np.array([main_hmap.col_dendrogram_height]),
+            #     norm_heights * (self.figsize[1] - main_hmap.col_dendrogram_height)])
+            # print(height_ratios)
         else:
             heatmap_row = 0
 
         if row_Z is not None and main_hmap.row_dendrogram_show:
-            norm_widths = width_ratios / np.sum(width_ratios)
-            width_ratios = np.concatenate([
-                np.array([main_hmap.row_dendrogram_width]),
-                norm_widths * (self.figsize[0] - main_hmap.row_dendrogram_width)])
-            heatmap_col_start = 1
-            print(width_ratios)
-        else:
-            heatmap_col_start = 0
+            width_ratios.insert(0, (main_hmap.row_dendrogram_width, 'absolute'))
+            heatmap_col_start += 1
+            # norm_widths = width_ratios / np.sum(width_ratios)
+            # width_ratios = np.concatenate([
+            #     np.array([main_hmap.row_dendrogram_width]),
+            #     norm_widths * (self.figsize[0] - main_hmap.row_dendrogram_width)])
+            # print(width_ratios)
+
+        width_ratios = self.compute_grid_ratios(width_ratios)
+        height_ratios = self.compute_grid_ratios(height_ratios)
 
         fig = plt.figure(constrained_layout=True, figsize=self.figsize, dpi=self.dpi)
         gs = gridspec.GridSpec(ncols=len(width_ratios), nrows=len(height_ratios),
@@ -148,7 +166,6 @@ class ComplexHeatmapList:
 
         show_cols = main_hmap.col_show_list
         for hmap_ax, hmap in zip(hmap_axes, self.hmaps):
-
             self.heatmap(ax=hmap_ax, fig=fig, hmap=hmap, col_Z=col_Z, row_Z=row_Z,
                          show_cols=show_cols)
 
@@ -167,6 +184,15 @@ class ComplexHeatmapList:
 
         return fig
 
+    def compute_grid_ratios(self, ratios: List[Tuple[float, str]]) -> np.ndarray:
+        width_float, width_anno = zip(*ratios)
+        width_float = np.array(width_float)
+        width_anno = np.array(width_anno)
+        absolute_width = width_float[width_anno == 'absolute'].sum()
+        remaining_figsize = self.figsize[0] - absolute_width
+        rel_widths= width_float[width_anno == 'relative']
+        width_float[width_anno == 'relative'] = rel_widths / rel_widths.sum() * remaining_figsize
+        return width_float
 
     def dendrogram(self, Z, axes: Union[Axes, List[Axes]], orientation):
         kwargs = dict(
