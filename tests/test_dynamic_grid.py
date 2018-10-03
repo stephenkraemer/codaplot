@@ -18,9 +18,9 @@ def test_grid_manager_without_plotting(tmpdir):
                 ],
             ],
             figsize = (10, 5),
-            height_ratios=(1, 1, 1)
+            height_ratios=((1, 'rel'), (1, 'rel'), (1, 'rel'))
     )
-    gm.axes['anno1'].scatter([1, 2, 3], [1, 2, 3])
+    gm.axes_dict['anno1'].scatter([1, 2, 3], [1, 2, 3])
     gm.fig.savefig(tmpdir / 'test.png')
 
 def test_grid_manager_with_mixed_plotting(tmpdir):
@@ -46,8 +46,8 @@ def test_grid_manager_with_mixed_plotting(tmpdir):
                 ],
             ],
             figsize = (10, 5),
-            height_ratios=(1, 1, 1)
+            height_ratios=((1, 'rel'), (1, 'rel'), (1, 'rel'))
     )
 
-    gm.axes['var1'].plot([1, 2, 3], [1, 2, 3])
+    gm.axes_dict['var1'].plot([1, 2, 3], [1, 2, 3])
     gm.fig.savefig(tmpdir / 'test.png')

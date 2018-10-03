@@ -1,4 +1,5 @@
 from collections import defaultdict
+from inspect import getfullargspec
 from typing import Optional, List, Tuple, Callable, Any, Dict
 
 import matplotlib.gridspec as gridspec
@@ -35,11 +36,21 @@ class GridManager:
             grid: 2D arrangement of GridElements
         """
     grid: List[List[GridElement]]
-    height_ratios: List[float]
+    height_ratios: List[Tuple[float, str]]
     figsize: Optional[Tuple[float, float]] = None
 
     def __post_init__(self):
         self._create_or_update_figure()
+
+    def _compute_height_ratios(self):
+        heights = np.array([t[0] for t in self.height_ratios]).astype(float)
+        anno = np.array([t[1] for t in self.height_ratios])
+        total_abs_heights = heights[anno == 'abs'].sum()
+        remaining_height = self.figsize[1] - total_abs_heights
+        rel_heights = heights[anno == 'rel']
+        heights[anno == 'rel'] = rel_heights / rel_heights.sum() * remaining_height
+        self._height_ratios = heights
+
 
     def _compute_width_ratios(self):
         columns = []
@@ -79,23 +90,37 @@ class GridManager:
 
     def _create_or_update_figure(self):
         self._compute_width_ratios()
+        self._compute_height_ratios()
         self._compute_element_gridspec_slices()
         if hasattr(self, 'fig'):
             self.fig.clear()
             self.fig.set_size_inches(self.figsize)
         else:
             self.fig = plt.figure(constrained_layout=True, figsize = self.figsize)
-        self.gs = gridspec.GridSpec(3, len(self.columns_sortu),
-                               width_ratios=self.width_ratios,
-                               height_ratios=self.height_ratios,
-                               figure=self.fig,
-                               hspace=0, wspace=0)
-        self.axes = {}
+        self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
+                                    ncols=len(self.columns_sortu),
+                                    width_ratios=self.width_ratios,
+                                    height_ratios=self._height_ratios,
+                                    figure=self.fig,
+                                    hspace=0, wspace=0)
+        self.axes_dict = {}
+        self.axes_list = [[] for unused in self._height_ratios]
         for name, coord in self.elem_gs.items():
-            self.axes[name] = self.fig.add_subplot(self.gs[coord['row']['start']:coord['row']['end'], slice(*coord['col'])])
-            ge = self.elem_gs[name]['grid_element']
-            if ge.plotter is not None:
-                ge.plotter(*ge.args, **ge.kwargs, ax=self.axes[name])
+            if not name.startswith('spacer'):
+                ax = self.fig.add_subplot(self.gs[coord['row']['start']:coord['row']['end'], slice(*coord['col'])])
+                self.axes_dict[name] = ax
+                self.axes_list[coord['row']['start']].append(ax)
+                ge = self.elem_gs[name]['grid_element']
+                if ge.plotter is not None:
+                    plotter_args = getfullargspec(ge.plotter).args
+                    if 'ax' not in plotter_args and 'fig' not in plotter_args:
+                        raise ValueError('plotter function must have kwarg ax, fig or both')
+                    if 'ax' in plotter_args:
+                        ge.kwargs['ax'] = self.axes_dict[name]
+                    if 'fig' in plotter_args:
+                        ge.kwargs['fig'] = self.fig
+
+                    ge.plotter(*ge.args, **ge.kwargs)
 
 
     def update_figure(self):
