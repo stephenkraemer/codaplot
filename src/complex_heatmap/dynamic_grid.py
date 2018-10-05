@@ -1,6 +1,9 @@
 from collections import defaultdict
+from copy import copy, deepcopy
+from datetime import time
 from inspect import getfullargspec
 from typing import Optional, List, Tuple, Callable, Any, Dict
+from dataclasses import field
 
 import matplotlib.gridspec as gridspec
 # mpl.use('Agg') # import before pyplot import!
@@ -12,9 +15,11 @@ from dataclasses import dataclass
 class GridElement:
     def __init__(self,
                  name: str,
-                 width: float,
+                 width: float = 1,
                  kind: str = 'rel',
                  plotter: Optional[Callable] = None,
+                 metadata: Optional[Dict] = None,
+                 tags: Optional[List[str]] = None,
                  *args: List[Any],
                  **kwargs: Dict[Any, Any],
                  ):
@@ -24,6 +29,8 @@ class GridElement:
         self.plotter = plotter
         self.args = args
         self.kwargs = kwargs
+        self.metadata = {} if metadata is None else metadata
+        self.tags = [] if tags is None else tags
 GE = GridElement
 
 @dataclass
@@ -37,10 +44,11 @@ class GridManager:
         """
     grid: List[List[GridElement]]
     height_ratios: List[Tuple[float, str]]
-    figsize: Optional[Tuple[float, float]] = None
+    figsize: Tuple[float, float]
+    fig_args: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        self._create_or_update_figure()
+        self.spacer_count = 0
 
     def _compute_height_ratios(self):
         heights = np.array([t[0] for t in self.height_ratios]).astype(float)
@@ -88,7 +96,56 @@ class GridManager:
                                                }
                 last_column = curr_column + 1
 
-    def _create_or_update_figure(self):
+    def prepend_col(self, grid_element: GridElement, only_rows: Optional[List[int]] = None):
+        for row_idx, row_list in enumerate(self.grid):
+            if only_rows is not None and row_idx not in only_rows:
+                row_list.insert(0, GridElement(self._get_spacer_id(), width=grid_element.width,
+                                               kind=grid_element.kind))
+            else:
+                row_list.insert(0, grid_element)
+
+    def insert_matched_row(self, i, grid_element: GridElement,
+                           height: Tuple[float, str],
+                           where='above',
+                           only_cols: Optional[List[str]] = None):
+        """Insert row above current row /i/
+
+        For each GridElement in row /i/, insert either a spacer or the grid
+        element and use the size properties of the matched object.
+        """
+        if where == 'above':
+            pass
+        elif where == 'below':
+            i += 1
+        else:
+            raise ValueError(f'Unknown value {where} for argument where')
+        new_row = []
+        times_grid_element_was_inserted = 0
+        grid_element_orig_name = grid_element.name
+        for col_idx, grid_element_below_insertion_point in enumerate(self.grid[i]):
+            if only_cols is not None and col_idx not in only_cols:
+                new_row.append(self._spacer_like(grid_element_below_insertion_point))
+            else:
+                times_grid_element_was_inserted += 1
+                grid_element_for_col = deepcopy(grid_element)
+                grid_element_for_col.name = grid_element_orig_name + f'_{times_grid_element_was_inserted}'
+                grid_element_for_col.width = grid_element_below_insertion_point.width
+                grid_element_for_col.kind = grid_element_below_insertion_point.kind
+                new_row.append(grid_element_for_col)
+        self.grid.insert(i, new_row)
+        self.height_ratios.insert(i, height)
+
+    def _get_spacer_id(self):
+        id = f'spacer_{self.spacer_count}'
+        self.spacer_count += 1
+        return id
+
+    def _spacer_like(self, grid_element: GridElement):
+        return GridElement(self._get_spacer_id(),
+                    width=grid_element.width,
+                    kind=grid_element.kind)
+
+    def create_or_update_figure(self):
         self._compute_width_ratios()
         self._compute_height_ratios()
         self._compute_element_gridspec_slices()
@@ -96,7 +153,7 @@ class GridManager:
             self.fig.clear()
             self.fig.set_size_inches(self.figsize)
         else:
-            self.fig = plt.figure(constrained_layout=True, figsize = self.figsize)
+            self.fig = plt.figure(constrained_layout=True, figsize=self.figsize, **self.fig_args)
         self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
                                     ncols=len(self.columns_sortu),
                                     width_ratios=self.width_ratios,
@@ -122,6 +179,3 @@ class GridManager:
 
                     ge.plotter(*ge.args, **ge.kwargs)
 
-
-    def update_figure(self):
-        self._create_or_update_figure()
