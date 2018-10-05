@@ -33,6 +33,8 @@ def test_plot_panel():
         align_vars = ['data']
     CustomPlot(x = [1, 2]).plot()
 
+def test_agg_line():
+    pass
 
 def test_heatmap_grid():
 
@@ -44,9 +46,25 @@ def test_heatmap_grid():
     )
     with sns.plotting_context('paper', font_scale=0.6):
         gm = profile_plot.plot_grid(
-                old_grid=[[ch.heatmap.Heatmap(cmap='YlOrBr'), ch.heatmap.Heatmap(df=df2, cmap='RdBu_r')]],
+                old_grid=[
+                    [
+                        ch.heatmap.Heatmap(cmap='YlOrBr'),
+                        ch.heatmap.Heatmap(df=df2, cmap='RdBu_r')
+                    ],
+                    # [
+                    #     ch.heatmap.AggLine(cluster_ids, 'mean'),
+                    #     ch.heatmap.AggLine(df=df2, cluster_ids, 'mean'),
+                    #
+                    # ]
+                          ],
                 row_dendrogram=True,
                 col_dendrogram=True,
+                row_annotation=pd.DataFrame({'cluster_ids1': np.repeat(np.arange(5), 2),
+                                             'cluster_ids2': np.repeat(np.arange(2), 5),
+                                             }),
+                row_anno_heatmap_args={'colors': [(1, 1, 1), (.5, .5, .5)],
+                               'show_values':    True},
+                row_anno_col_width = 1/2.54,
                 figsize=(10/2.54, 5/2.54),
                 fig_args = dict(dpi=180)
         )

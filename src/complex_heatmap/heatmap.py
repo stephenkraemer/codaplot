@@ -231,7 +231,11 @@ class ClusterProfilePlot:
 
     def plot_grid(self, old_grid: List[List['ClusterProfilePlotPanel']],
                   figsize: Tuple[float, float],
+                  h_pad = 1/72, w_pad = 1/72, hspace=1/72, wspace=1/72,
                   row_dendrogram = False, col_dendrogram = False,
+                  row_annotation: Optional[pd.DataFrame] = None,
+                  row_anno_heatmap_args: Optional[Dict[str, Any]] = None,
+                  row_anno_col_width: float = 0.6/2.54,
                   fig_args: Optional[Dict[str, Any]] = None
                   ):
         """Create grid of plots with an underlying clustering
@@ -240,6 +244,8 @@ class ClusterProfilePlot:
         or be placed in the grid for finer control.
         """
 
+        # noinspection PyUnusedLocal
+        height_ratios = [(1, 'rel') for unused_row in old_grid]
 
         # noinspection PyUnusedLocal
         new_grid: List[List[GridElement]] = [[[] for unused in range(len(row))] for row in old_grid]
@@ -251,9 +257,19 @@ class ClusterProfilePlot:
                                                          **panel_element.kwargs)
 
         # noinspection PyUnusedLocal
-        height_ratios = [(1, 'rel') for unused_row in new_grid]
         gm = GridManager(new_grid, height_ratios=height_ratios,
-                         figsize=figsize, fig_args=fig_args)
+                         figsize=figsize, fig_args=fig_args,
+                         h_pad=h_pad, w_pad=w_pad, hspace=hspace, wspace=wspace)
+
+        if row_annotation is not None:
+            assert isinstance(row_annotation, pd.DataFrame)
+            anno_ge = GridElement('row_anno', width=row_anno_col_width, kind='abs',
+                                  tags=['no_col_dendrogram'],
+                                  plotter=categorical_heatmap,
+                                  df=row_annotation, **row_anno_heatmap_args)
+            row_annotation_only_rows = [row_idx for row_idx, row in enumerate(gm.grid)
+                                        if not 'no_row_dendrogram' in row[0].tags]
+            gm.prepend_col(anno_ge, only_rows=row_annotation_only_rows)
 
         if row_dendrogram:
             row_dendro_ge = GridElement('row_dendrogram', width=1/2.54,
@@ -262,7 +278,7 @@ class ClusterProfilePlot:
                                         orientation='left',
                                         tags=['no_col_dendrogram'])
             row_dendro_only_rows = []
-            for row_idx, row in enumerate(new_grid):
+            for row_idx, row in enumerate(gm.grid):
                 if not 'no_row_dendrogram' in row[0].tags:
                     row_dendro_only_rows.append(row_idx)
             gm.prepend_col(row_dendro_ge, only_rows=row_dendro_only_rows)
@@ -273,7 +289,7 @@ class ClusterProfilePlot:
                                         orientation='top',
                                         tags=['no_row_dendrogram']
                                         )
-            col_dendro_only_cols = [i for i, ge in enumerate(new_grid[0])
+            col_dendro_only_cols = [i for i, ge in enumerate(gm.grid[0])
                                     if not 'no_col_dendrogram' in ge.tags]
             gm.insert_matched_row(0, col_dendro_ge, height=(1/2.54, 'abs'),
                                   only_cols=col_dendro_only_cols)
@@ -419,9 +435,9 @@ def dendrogram_wrapper(linkage_mat, ax: Axes, orientation: str):
 
 
 def categorical_heatmap(df: pd.DataFrame, ax: Axes,
-                        cmap: str = None, colors: List = None,
+                        cmap: str = 'Set1', colors: List = None,
                         show_values = True,
-                        show_legend = True,
+                        show_legend = False,
                         legend_ax: Optional[Axes] = None,
                         despine = True,
                         show_yticklabels=False,
@@ -492,7 +508,7 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
             y, s = find_stretches(df.iloc[:, i])
             x = i + 0.5
             for curr_y, curr_s in zip(list(y), s):
-                ax.text(x, curr_y, str(curr_s))
+                ax.text(x, curr_y, str(curr_s), va='center', ha='center')
 
     return {'quadmesh': qm, 'patches': patches, 'levels': levels}
 
@@ -572,5 +588,9 @@ class Heatmap(ClusterProfilePlotPanel):
     align_vars = ['df']
     supply_vars = {'df': 'main_df'}
     plotter = staticmethod(heatmap)
+
+
+def agg_line(df, cluster_ids, function):
+    pass
 
 

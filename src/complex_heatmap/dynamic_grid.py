@@ -46,6 +46,10 @@ class GridManager:
     height_ratios: List[Tuple[float, str]]
     figsize: Tuple[float, float]
     fig_args: Dict[str, Any] = field(default_factory=dict)
+    h_pad: float = 1/72
+    w_pad: float = 1/72
+    wspace: float = 0
+    hspace: float = 0
 
     def __post_init__(self):
         self.spacer_count = 0
@@ -153,7 +157,11 @@ class GridManager:
             self.fig.clear()
             self.fig.set_size_inches(self.figsize)
         else:
-            self.fig = plt.figure(constrained_layout=True, figsize=self.figsize, **self.fig_args)
+            self.fig = plt.figure(constrained_layout=True,
+                                  figsize=self.figsize, **self.fig_args)
+            self.fig.set_constrained_layout_pads(
+                    h_pad=self.h_pad, w_pad=self.w_pad,
+                    hspace=self.hspace, wspace=self.wspace)
         self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
                                     ncols=len(self.columns_sortu),
                                     width_ratios=self.width_ratios,
