@@ -32,23 +32,32 @@ def test_insert_matched_row():
 def test_prepend_col():
     def fn():
         pass
-    gm = ch.GridManager(grid=[[GE('a', plotter=fn, width=3, kind='abs'),
-                               GE('b', plotter=fn, width=4, kind='rel'),
-                               ],
-                              [GE('c', plotter=fn, width=5, kind='abs'),
-                               GE('d', plotter=fn, width=6, kind='rel'),
-                               GE('e', plotter=fn, width=4, kind='abs'),
-                               ]
-                              ],
-                        height_ratios=[(1, 'rel'), (1, 'abs')],
-                        figsize=(4, 4))
-    gm.prepend_col(GE('f', plotter=fn, width=10, kind='abs'), only_rows=[1])
+    gm = ch.GridManager(grid=[
+        [
+            GE('a', plotter=fn, width=3, kind='abs'),
+            GE('b', plotter=fn, width=4, kind='rel'),
+        ],
+        [
+            GE('c', plotter=fn, width=5, kind='abs'),
+            GE('d', plotter=fn, width=6, kind='rel'),
+            GE('e', plotter=fn, width=4, kind='abs'),
+        ],
+        [
+            GE('f', plotter=fn, width=4, kind='abs'),
+        ]
+    ],
+            height_ratios=[(1, 'rel'), (1, 'abs')],
+            figsize=(4, 4))
+    gm.prepend_col(GE('g', plotter=fn, width=10, kind='abs'), only_rows=[1, 2])
     assert gm.grid[0][0].name.startswith('spacer')
     assert gm.grid[0][0].width == 10
     assert gm.grid[0][0].kind == 'abs'
-    assert gm.grid[1][0].name == 'f'
+    assert gm.grid[1][0].name == 'g_1'
     assert gm.grid[1][0].width == 10
     assert gm.grid[1][0].kind == 'abs'
+    assert gm.grid[2][0].name == 'g_2'
+    assert gm.grid[2][0].width == 10
+    assert gm.grid[2][0].kind == 'abs'
 
 
 def test_grid_manager_without_plotting(tmpdir):
