@@ -20,7 +20,6 @@ import seaborn as sns
 from complex_heatmap.dynamic_grid import GridManager, GridElement
 #-
 
-# From matplotlib docs:
 
 
 
@@ -56,6 +55,8 @@ class ClusterProfilePlotPanel(ABC):
     align_vars: List[str] = []
     supply_vars: Dict[str, str] = []
     plotter: Callable = None
+    row_deco: bool = True
+    col_deco: bool = True
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -262,8 +263,14 @@ class ClusterProfilePlot:
         for row_idx, row in enumerate(old_grid):
             for col_idx, panel_element in enumerate(row):
                 panel_element.align_and_supply(self)
+                tags = []
+                if not panel_element.row_deco:
+                    tags.append('no_row_dendrogram')
+                if not panel_element.col_deco:
+                    tags.append('no_col_dendrogram')
                 new_grid[row_idx][col_idx] = GridElement(f'{row_idx}_{col_idx}',
                                                          plotter=panel_element.plotter,
+                                                         tags=tags,
                                                          **panel_element.kwargs)
 
         # noinspection PyUnusedLocal
@@ -291,8 +298,11 @@ class ClusterProfilePlot:
                                         tags=['no_col_dendrogram'])
             row_dendro_only_rows = []
             for row_idx, row in enumerate(gm.grid):
-                if not 'no_row_dendrogram' in row[0].tags:
-                    row_dendro_only_rows.append(row_idx)
+                for row_grid_element in row:
+                    if row_grid_element.name.startswith('spacer'):
+                        continue
+                    if not 'no_row_dendrogram' in row_grid_element.tags:
+                        row_dendro_only_rows.append(row_idx)
             gm.prepend_col(row_dendro_ge, only_rows=row_dendro_only_rows)
 
         if col_dendrogram:
@@ -529,6 +539,8 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
     return {'quadmesh': qm, 'patches': patches, 'levels': levels}
 
 
+# Note: jit compilation does not seem to provide speed-ups. Haven't
+# checked it out yet.
 numba.jit(nopython=True)
 def find_stretches(arr):
     """Find stretches of equal values in ndarray"""
@@ -555,6 +567,7 @@ def find_stretches(arr):
     return marks[:(mark_i + 1)], values[:(mark_i + 1)]
 
 
+# From matplotlib docs:
 class MidpointNormalize(mpl.colors.Normalize):
     def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
         self.midpoint = midpoint
@@ -639,5 +652,12 @@ class AggLine(ClusterProfilePlotPanel):
     supply_vars = {'df': 'main_df'}
     plotter = staticmethod(agg_line)
 
-
+def simple_line(ax):
+    ax.plot([1, 2, 3, 4, 5])
+class SimpleLine(ClusterProfilePlotPanel):
+    align_vars = []
+    supply_vars = {}
+    row_deco = False
+    col_deco = False
+    plotter = staticmethod(simple_line)
 

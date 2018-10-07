@@ -51,14 +51,109 @@ df6 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
 # df7 = pd.DataFrame(rng.randn(10, 5) * 3 + 1, columns=names)
 
 
-def test_heatmap_grid():
+def test_heatmap_grids(tmpdir):
+
+    tmpdir = Path(tmpdir)
+    plot_count = 0
+
 
     profile_plot = (
         ch.ClusterProfilePlot(main_df=df1)
             .cluster_rows(usecols=['s0', 's1'])
             .cluster_cols()
     )
-    with sns.plotting_context('paper', font_scale=0.6):
+
+    # one row of heatmaps
+    # ===================
+
+    # vanilla
+    # -------
+    gm = profile_plot.plot_grid(
+            old_grid=[[
+                ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                ch.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
+            ]],
+            row_dendrogram=False,
+            col_dendrogram=False,
+            figsize=(20/2.54, 15/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    plot_count += 1
+    gm.fig.savefig(tmpdir / f'test_{plot_count}.png')
+
+    # with dendrograms
+    # ----------------
+    gm = profile_plot.plot_grid(
+            old_grid=[[
+                ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                ch.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
+            ]],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            figsize=(20/2.54, 15/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    plot_count += 1
+    gm.fig.savefig(tmpdir / f'test_{plot_count}.png')
+
+    # dendrograms plus annotation, with colors and text
+    # -------------------------------------------------
+    gm = profile_plot.plot_grid(
+            old_grid=[[
+                ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                ch.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
+            ]],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 15/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    plot_count += 1
+    gm.fig.savefig(tmpdir / f'test_{plot_count}.png')
+
+    # simple grid
+    gm = profile_plot.plot_grid(
+            old_grid=[
+                [
+                    ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                ],
+                [
+                    ch.heatmap.Heatmap(df=df3, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df4, cmap='RdBu_r'),
+                ],
+                [
+                    ch.heatmap.Heatmap(df=df5, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df6, cmap='RdBu_r'),
+                ],
+            ],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 15/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    plot_count += 1
+    gm.fig.savefig(tmpdir / f'test_{plot_count}.png')
+
+    # with different style
+    with sns.plotting_context('paper', font_scale=0.6), \
+         sns.axes_style('darkgrid'):
+        # simple grid
         gm = profile_plot.plot_grid(
                 old_grid=[
                     [
@@ -78,16 +173,77 @@ def test_heatmap_grid():
                 col_dendrogram=True,
                 row_annotation=cluster_ids_row_df,
                 row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
-                                       'show_values':    True},
+                                       'show_values': True},
                 row_anno_col_width = 1/2.54,
                 figsize=(20/2.54, 15/2.54),
                 fig_args = dict(dpi=180)
         )
         gm.create_or_update_figure()
-        gm.fig.savefig('test.png')
-    subprocess.run(['firefox', abspath('test.png')])
+        plot_count += 1
+        gm.fig.savefig(tmpdir / f'test_{plot_count}.png')
 
+    subprocess.run(['firefox', tmpdir.absolute()])
 
+    # with plt.rc_context({'xtick.bottom': False, 'ytick.left': False,
+    #                      'xtick.major.size': 0, 'xtick.minor.size': 0,
+    #                      'ytick.major.size': 0, 'ytick.minor.size': 0,
+    #                      }):
+
+def test_heatmap_with_deco_plots(tmpdir):
+
+    profile_plot = (
+        ch.ClusterProfilePlot(main_df=df1)
+            .cluster_rows(usecols=['s0', 's1'])
+            .cluster_cols()
+    )
+
+    tmpdir = Path(tmpdir)
+    plot_count = 0
+    gm = profile_plot.plot_grid(
+            old_grid=[
+                [
+                    ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                    ch.heatmap.SimpleLine(),
+                ],
+                [
+                    ch.heatmap.Heatmap(df=df3, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df4, cmap='RdBu_r'),
+                    ch.heatmap.SimpleLine(),
+                ],
+                [
+                    ch.heatmap.Heatmap(df=df5, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df6, cmap='RdBu_r'),
+                    ch.heatmap.SimpleLine(),
+                ],
+                [
+                    ch.heatmap.SimpleLine(),
+                ],
+                [
+                    ch.heatmap.SimpleLine(),
+                    ch.heatmap.SimpleLine(),
+                ],
+                [
+                    ch.heatmap.SimpleLine(),
+                    ch.heatmap.SimpleLine(),
+                    ch.heatmap.SimpleLine(),
+                ]
+            ],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 15/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    plot_count += 1
+    gm.fig.savefig(tmpdir / f'test_{plot_count}.png')
+
+    # subprocess.run(['firefox', tmpdir.absolute()])
+    subprocess.run(['firefox', tmpdir / f'test_{plot_count}.png'])
 
 def test_plot_panel():
     def fn(x):

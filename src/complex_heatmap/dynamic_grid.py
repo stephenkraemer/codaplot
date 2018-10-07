@@ -1,17 +1,18 @@
-import pandas as pd
 from collections import defaultdict
-from copy import copy, deepcopy
-from datetime import time
+from copy import deepcopy
 from inspect import getfullargspec
-from typing import Optional, List, Tuple, Callable, Any, Dict
-from dataclasses import field
+from typing import Optional, List, Tuple, Callable, Any, Dict, DefaultDict
 
 import matplotlib.gridspec as gridspec
 # mpl.use('Agg') # import before pyplot import!
 import matplotlib.pyplot as plt
 import numpy as np
 from dataclasses import dataclass
+from dataclasses import field
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
+from complex_heatmap.utils import warn
 
 
 class GridElement:
@@ -53,6 +54,11 @@ class GridManager:
     wspace: float = 0
     hspace: float = 0
 
+    fig: Figure = field(init=False)
+    axes_list: List[Axes] = field(init=False)
+    axes_dict: Dict[str, Axes] = field(init=False)
+    gs: gridspec.GridSpec = field(init=False)
+
     def __post_init__(self):
         self.spacer_count = 0
 
@@ -67,28 +73,84 @@ class GridManager:
 
 
     def _compute_width_ratios(self):
-        columns = []
-        self.row_boundaries = []
-        for row in self.grid:
-            widths = np.array([x.width for x in row]).astype(float)
-            kind = np.array([x.kind for x in row])
-            absolute_widths = widths[kind == 'abs'].sum()
-            remaining_width = self.figsize[0] - absolute_widths
-            rel_widths = widths[kind == 'rel']
-            widths[kind == 'rel'] = rel_widths / rel_widths.sum() * remaining_width
-            widths = np.cumsum(widths)
-            self.row_boundaries.append(widths)
-            columns.extend(widths)
+        """Given figsize and row-wise width specs
 
-        self.columns_sortu = np.unique(np.sort(columns))
-        self.width_ratios = np.diff(np.insert(self.columns_sortu, 0, 0))
+        For each row, compute the absolute gridline positions that this row
+        requires (values depend on figsize).
+        Use the set of all gridline positions collected across the rows
+        to calculate the width_ratios for the gridspec.
+
+        Fills these attributes:
+          - abs_grid_line_positions_per_row: List of sequences specifying
+            the absolute grid line positions required for each row
+          - all_unique_abs_grid_line_positions_sorted: array of all unique
+            (within floating point precision) grid column boundary positions
+          - width_ratios: for use in GridSpec. Will contain union of columns drawn
+              from the specs for all rows.
+        """
+
+        all_unique_abs_grid_line_positions = np.array([], dtype='f8')
+        self.abs_grid_line_positions_per_row: List = []
+        for row in self.grid:
+            # Each GridElement specifies its width with a float value width and
+            # a kind: absolute (abs) or relative (rel)
+            width_spec_value_arr = np.array([x.width for x in row]).astype('f8')
+            width_spec_kind_arr = np.array([x.kind for x in row])
+
+            # For each row, we first find all absolute widths, and subtract their total from
+            # the width of the figure. This gives the width that is left to be distributed
+            # among the remaining columns, according to their relative widths.
+            space_remaining_for_cols_w_rel_widths = (
+                    self.figsize[0] - width_spec_value_arr[width_spec_kind_arr == 'abs'].sum())
+
+            # Now we can calculate an array of absolute widths for each column.
+            abs_widths_value_arr = np.copy(width_spec_value_arr)
+            rel_widths_values = width_spec_value_arr[width_spec_kind_arr == 'rel']
+            abs_widths_value_arr[width_spec_kind_arr == 'rel'] = (
+                    rel_widths_values / rel_widths_values.sum()
+                    * space_remaining_for_cols_w_rel_widths)
+            # The absolute positions of the grid lines are given by the cumsum
+            # of the absolute column widths
+            abs_width_cumsums = np.cumsum(abs_widths_value_arr)
+
+            # Two rows may share a certain grid line position, but the calculation to
+            # arrive at the grid line position may differ if the number or specs
+            # of columns is different between the rows. In this case, grid line
+            # positions must be matched to each other to avoid duplicates due to
+            # floating point precision.
+            precision_matched_widths = []
+            for curr_width in abs_width_cumsums:
+                for curr_column in all_unique_abs_grid_line_positions:
+                    if np.isclose(curr_width, curr_column):
+                        curr_width = curr_column
+                        break
+                else:
+                    all_unique_abs_grid_line_positions = np.append(
+                            all_unique_abs_grid_line_positions, curr_width)
+                precision_matched_widths.append(curr_width)
+            self.abs_grid_line_positions_per_row.append(precision_matched_widths)
+
+        self.all_unique_abs_grid_line_positions_sorted = np.sort(
+                all_unique_abs_grid_line_positions)
+
+        # The float gridline position matching code is experimental
+        # Therefore, we add an overly cautios warning
+        width_warn_threshold = 0.4/2.54
+        if (np.diff(self.all_unique_abs_grid_line_positions_sorted)
+            < width_warn_threshold).any():
+            warn(f'At least one column in the grid has a'
+                 f'width smaller than {width_warn_threshold}')
+            raise ValueError
+
+        self.width_ratios = np.diff(
+                np.insert(self.all_unique_abs_grid_line_positions_sorted, 0, 0))
 
     def _compute_element_gridspec_slices(self):
-        self.elem_gs = defaultdict(dict)
-        for row_idx, (curr_grid_row, curr_row_boundaries) in enumerate(zip(self.grid, self.row_boundaries)):
+        self.elem_gs: DefaultDict[str, Dict[str, Any]] = defaultdict(dict)
+        for row_idx, (curr_grid_row, curr_row_boundaries) in enumerate(zip(self.grid, self.abs_grid_line_positions_per_row)):
             last_column = 0
             for elem, boundary in zip(curr_grid_row, curr_row_boundaries):
-                curr_column = np.argmax(self.columns_sortu == boundary)
+                curr_column = np.argmax(self.all_unique_abs_grid_line_positions_sorted == boundary)
                 col_slice = (last_column, curr_column + 1)
                 if elem.name in self.elem_gs:
                     assert self.elem_gs[elem.name]['col'] == col_slice
@@ -146,9 +208,9 @@ class GridManager:
         self.height_ratios.insert(i, height)
 
     def _get_spacer_id(self):
-        id = f'spacer_{self.spacer_count}'
+        spacer_id = f'spacer_{self.spacer_count}'
         self.spacer_count += 1
-        return id
+        return spacer_id
 
     def _spacer_like(self, grid_element: GridElement):
         return GridElement(self._get_spacer_id(),
@@ -171,12 +233,13 @@ class GridManager:
             #         h_pad=self.h_pad, w_pad=self.w_pad,
             #         hspace=self.hspace, wspace=self.wspace)
         self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
-                                    ncols=len(self.columns_sortu),
+                                    ncols=len(self.all_unique_abs_grid_line_positions_sorted),
                                     width_ratios=self.width_ratios,
                                     height_ratios=self._height_ratios,
                                     figure=self.fig,
                                     hspace=0, wspace=0)
         self.axes_dict = {}
+        # noinspection PyUnusedLocal
         self.axes_list = [[] for unused in self._height_ratios]
         for name, coord in self.elem_gs.items():
             if not name.startswith('spacer'):
@@ -184,7 +247,7 @@ class GridManager:
                 ax = self.fig.add_subplot(gs_tuple)
                 self.axes_dict[name] = ax
                 self.axes_list[coord['row']['start']].append(ax)
-                ge = self.elem_gs[name]['grid_element']
+                ge: GridElement = self.elem_gs[name]['grid_element']
                 if ge.plotter is not None:
                     plotter_args = getfullargspec(ge.plotter).args
                     if 'ax' not in plotter_args and 'fig' not in plotter_args:
@@ -202,25 +265,22 @@ class GridManager:
                     # agg_line(**ge.kwargs)
                     # ge.kwargs['ax'].plot([1, 2, 3])
 
-def fn(ax, **kwargs):
-    ax.plot([1, 2, 3])
 
-
-def agg_line(df: pd.DataFrame, ax, fig, cluster_ids: pd.Series, fn: Callable,
-             sharey=True, ylim=None):
-    agg_values = df.groupby(cluster_ids).agg(fn)
-    if sharey and ylim is None:
-        ymax = np.max(agg_values.values)
-        pad = abs(0.1 * ymax)
-        padded_ymax = ymax + pad
-        if ymax < 0 < padded_ymax:
-            padded_ymax = 0
-        ymin = np.min(agg_values.values)
-        padded_ymin = ymin - pad
-        if ymin > 0 > padded_ymin:
-            padded_ymin = 0
-        ylim = (padded_ymin, padded_ymax)
-    n_clusters = agg_values.shape[0]
+# def agg_line(df: pd.DataFrame, ax, cluster_ids: pd.Series, fn: Callable,
+#              sharey=True, ylim=None):
+    # agg_values = df.groupby(cluster_ids).agg(fn)
+    # if sharey and ylim is None:
+    #     ymax = np.max(agg_values.values)
+    #     pad = abs(0.1 * ymax)
+    #     padded_ymax = ymax + pad
+    #     if ymax < 0 < padded_ymax:
+    #         padded_ymax = 0
+    #     ymin = np.min(agg_values.values)
+    #     padded_ymin = ymin - pad
+    #     if ymin > 0 > padded_ymin:
+    #         padded_ymin = 0
+    #     ylim = (padded_ymin, padded_ymax)
+    # n_clusters = agg_values.shape[0]
     # gssub = ax.get_gridspec()[0].subgridspec(n_clusters, 1)
     # ax.remove()
     # for row_idx, (cluster_id, row_ser) in enumerate(agg_values.iterrows()):
@@ -230,5 +290,5 @@ def agg_line(df: pd.DataFrame, ax, fig, cluster_ids: pd.Series, fn: Callable,
     #         ax.set_ylim(ylim)
     #     ax.plot(row_ser.values, marker='.', linestyle='-')
     # ax.set(xticks=[1, 2, 3], xticklabels=[1, 2, 3], xlabel='test')
-    ax.plot([1, 2, 3], label='inline label')
+    # ax.plot([1, 2, 3], label='inline label')
     # ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
