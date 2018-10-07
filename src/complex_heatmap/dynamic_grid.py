@@ -1,3 +1,4 @@
+import pandas as pd
 from collections import defaultdict
 from copy import copy, deepcopy
 from datetime import time
@@ -10,6 +11,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from dataclasses import dataclass
+
 
 
 class GridElement:
@@ -101,12 +103,16 @@ class GridManager:
                 last_column = curr_column + 1
 
     def prepend_col(self, grid_element: GridElement, only_rows: Optional[List[int]] = None):
+        times_used = 0
         for row_idx, row_list in enumerate(self.grid):
             if only_rows is not None and row_idx not in only_rows:
                 row_list.insert(0, GridElement(self._get_spacer_id(), width=grid_element.width,
                                                kind=grid_element.kind))
             else:
-                row_list.insert(0, grid_element)
+                times_used += 1
+                curr_grid_element = deepcopy(grid_element)
+                curr_grid_element.name += f'_{times_used}'
+                row_list.insert(0, curr_grid_element)
 
     def insert_matched_row(self, i, grid_element: GridElement,
                            height: Tuple[float, str],
@@ -150,6 +156,7 @@ class GridManager:
                     kind=grid_element.kind)
 
     def create_or_update_figure(self):
+
         self._compute_width_ratios()
         self._compute_height_ratios()
         self._compute_element_gridspec_slices()
@@ -159,9 +166,10 @@ class GridManager:
         else:
             self.fig = plt.figure(constrained_layout=True,
                                   figsize=self.figsize, **self.fig_args)
-            self.fig.set_constrained_layout_pads(
-                    h_pad=self.h_pad, w_pad=self.w_pad,
-                    hspace=self.hspace, wspace=self.wspace)
+            # self.fig = plt.figure(tight_layout=True, figsize=self.figsize, **self.fig_args)
+            # self.fig.set_constrained_layout_pads(
+            #         h_pad=self.h_pad, w_pad=self.w_pad,
+            #         hspace=self.hspace, wspace=self.wspace)
         self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
                                     ncols=len(self.columns_sortu),
                                     width_ratios=self.width_ratios,
@@ -172,7 +180,8 @@ class GridManager:
         self.axes_list = [[] for unused in self._height_ratios]
         for name, coord in self.elem_gs.items():
             if not name.startswith('spacer'):
-                ax = self.fig.add_subplot(self.gs[coord['row']['start']:coord['row']['end'], slice(*coord['col'])])
+                gs_tuple = self.gs[coord['row']['start']:coord['row']['end'], slice(*coord['col'])]
+                ax = self.fig.add_subplot(gs_tuple)
                 self.axes_dict[name] = ax
                 self.axes_list[coord['row']['start']].append(ax)
                 ge = self.elem_gs[name]['grid_element']
@@ -184,6 +193,42 @@ class GridManager:
                         ge.kwargs['ax'] = self.axes_dict[name]
                     if 'fig' in plotter_args:
                         ge.kwargs['fig'] = self.fig
+                    if 'gs_tuple' in plotter_args:
+                        ge.kwargs['gs_tuple'] = gs_tuple
 
                     ge.plotter(*ge.args, **ge.kwargs)
 
+                    # ax.plot([1, 2, 3])
+                    # agg_line(**ge.kwargs)
+                    # ge.kwargs['ax'].plot([1, 2, 3])
+
+def fn(ax, **kwargs):
+    ax.plot([1, 2, 3])
+
+
+def agg_line(df: pd.DataFrame, ax, fig, cluster_ids: pd.Series, fn: Callable,
+             sharey=True, ylim=None):
+    agg_values = df.groupby(cluster_ids).agg(fn)
+    if sharey and ylim is None:
+        ymax = np.max(agg_values.values)
+        pad = abs(0.1 * ymax)
+        padded_ymax = ymax + pad
+        if ymax < 0 < padded_ymax:
+            padded_ymax = 0
+        ymin = np.min(agg_values.values)
+        padded_ymin = ymin - pad
+        if ymin > 0 > padded_ymin:
+            padded_ymin = 0
+        ylim = (padded_ymin, padded_ymax)
+    n_clusters = agg_values.shape[0]
+    # gssub = ax.get_gridspec()[0].subgridspec(n_clusters, 1)
+    # ax.remove()
+    # for row_idx, (cluster_id, row_ser) in enumerate(agg_values.iterrows()):
+    #     ax = fig.add_subplot(gssub[row_idx, 0])
+    #     ax.set(xticks=[], xticklabels=[])
+    #     if ylim is not None:
+    #         ax.set_ylim(ylim)
+    #     ax.plot(row_ser.values, marker='.', linestyle='-')
+    # ax.set(xticks=[1, 2, 3], xticklabels=[1, 2, 3], xlabel='test')
+    ax.plot([1, 2, 3], label='inline label')
+    # ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))

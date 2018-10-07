@@ -227,6 +227,7 @@ class ClusterProfilePlot:
         else:
             df = self.main_df.loc[userows, :]
         self.col_linkage = linkage(df.T, metric=metric, method=method)
+        self.col_int_idx = leaves_list(self.col_linkage)
         return self
 
     def plot_grid(self, old_grid: List[List['ClusterProfilePlotPanel']],
@@ -238,10 +239,19 @@ class ClusterProfilePlot:
                   row_anno_col_width: float = 0.6/2.54,
                   fig_args: Optional[Dict[str, Any]] = None
                   ):
-        """Create grid of plots with an underlying clustering
+        """Create grid of plots with an optionally underlying clustering
 
         Row and column dendrograms and annotations can be added automatically
         or be placed in the grid for finer control.
+
+        If the clustering of the data was computed using the GridManager
+        cluster_{cols,rows} methods or by passing the respective linkage
+        matrices from outside, plots can optionally be aligned based on the
+        clustering.
+
+        Plots are aligned if they are given as ClusterProfilePlotPanel
+        subclass with variables to be aligned indicated in the align_vars
+        class variable.
         """
 
         # noinspection PyUnusedLocal
@@ -263,6 +273,8 @@ class ClusterProfilePlot:
 
         if row_annotation is not None:
             assert isinstance(row_annotation, pd.DataFrame)
+            if self.row_int_idx is not None:
+                row_annotation = row_annotation.iloc[self.row_int_idx, :]
             anno_ge = GridElement('row_anno', width=row_anno_col_width, kind='abs',
                                   tags=['no_col_dendrogram'],
                                   plotter=categorical_heatmap,
@@ -426,6 +438,10 @@ class ClusterProfilePlot:
 
 
 def dendrogram_wrapper(linkage_mat, ax: Axes, orientation: str):
+    """Wrapper around scipy dendrogram - nicer plot
+
+    Despines plot and removes ticks and labels
+    """
     dendrogram(linkage_mat, ax=ax, color_threshold=-1,
                above_threshold_color='black', orientation=orientation)
     ax.set(xticks=[], yticks=[], yticklabels=[], xticklabels=[])
@@ -505,7 +521,7 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
 
     if show_values:
         for i in range(df.shape[1]):
-            y, s = find_stretches(df.iloc[:, i])
+            y, s = find_stretches(df.iloc[:, i].values)
             x = i + 0.5
             for curr_y, curr_s in zip(list(y), s):
                 ax.text(x, curr_y, str(curr_s), va='center', ha='center')
@@ -515,7 +531,8 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
 
 numba.jit(nopython=True)
 def find_stretches(arr):
-    """Find stretches """
+    """Find stretches of equal values in ndarray"""
+    assert isinstance(arr, np.ndarray)
     stretch_value = arr[0]
     start = 0
     end = 1
@@ -582,7 +599,7 @@ def heatmap(df: pd.DataFrame,
     if ylabel:
         ax.set_ylabel(ylabel)
 
-    fig.colorbar(qm, ax=ax, shrink=0.7, orientation='horizontal', aspect=5)
+    fig.colorbar(qm, ax=ax)
 
 class Heatmap(ClusterProfilePlotPanel):
     align_vars = ['df']
@@ -590,7 +607,37 @@ class Heatmap(ClusterProfilePlotPanel):
     plotter = staticmethod(heatmap)
 
 
-def agg_line(df, cluster_ids, function):
-    pass
+def agg_line(df: pd.DataFrame, gs_tuple, ax: Axes, fig: Figure, cluster_ids: pd.Series, fn: Callable,
+             sharey=True, ylim=None):
+    agg_values = df.groupby(cluster_ids).agg(fn)
+    if sharey and ylim is None:
+        ymax = np.max(agg_values.values)
+        pad = abs(0.1 * ymax)
+        padded_ymax = ymax + pad
+        if ymax < 0 < padded_ymax:
+            padded_ymax = 0
+        ymin = np.min(agg_values.values)
+        padded_ymin = ymin - pad
+        if ymin > 0 > padded_ymin:
+            padded_ymin = 0
+        ylim = (padded_ymin, padded_ymax)
+    n_clusters = agg_values.shape[0]
+    gssub = gs_tuple.subgridspec(n_clusters, 1)
+    ax.remove()
+    for row_idx, (cluster_id, row_ser) in enumerate(agg_values.iterrows()):
+        ax = fig.add_subplot(gssub[row_idx, 0])
+        ax.set(xticks=[], xticklabels=[])
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        ax.plot(row_ser.values, marker='.', linestyle='-')
+    ax.set(xticks=[1, 2, 3], xticklabels=[1, 2, 3], xlabel='test')
+    # ax.plot([1, 2, 3], label='inline label')
+    # ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
+
+class AggLine(ClusterProfilePlotPanel):
+    align_vars = ['df']
+    supply_vars = {'df': 'main_df'}
+    plotter = staticmethod(agg_line)
+
 
 

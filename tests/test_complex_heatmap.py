@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from pandas.api.types import CategoricalDtype
-from complex_heatmap.heatmap import find_stretches
+from complex_heatmap.heatmap import find_stretches, agg_line
 from complex_heatmap import GridElement as GE
 # from complex_heatmap.heatmap import align
 from numpy.ma.testutils import assert_array_equal
@@ -18,26 +18,40 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 #-
 
+# Create 'base' test data ndarray with three clusters across rows and
+# three clusters across columns.
+# The rows and cols of each cluster are not adjacent and need to be
+# correctly arranged by applying clustering.
+# Before usage, we'll likely want to add some noise to this template
+rows_with_three_different_levels = np.tile([20, 30, 10], (5, 10)).T
+# array([[20, 20, 20, 20, 20],
+#        [30, 30, 30, 30, 30],
+#        [10, 10, 10, 10, 10],
+#        [20, 20, 20, 20, 20],
+#        ...
+cols_with_three_different_levels = np.tile([5, 10, 5, 15, 10], (30, 1))
+# array([[ 5, 10,  5, 15, 10],
+#        [ 5, 10,  5, 15, 10],
+#        ...
+data = rows_with_three_different_levels + cols_with_three_different_levels
+cluster_ids_row_df = pd.DataFrame({'strict': np.tile([2, 3, 1], 10).T,
+                                   'liberal':  np.tile([1, 2, 1], 10).T})
+
+# Create different version of the test ndarray, with different noise
+# and as DataFrames
 rng = np.random.RandomState(1)
-data = np.tile([5, 10], (5, 5)).T + np.tile(np.arange(0, 20, 4), (10, 1))
 names = 's' + pd.Series(np.arange(5)).astype(str)
-df1 = pd.DataFrame(data + rng.randn(10, 5), columns=names)
-df2 = pd.DataFrame(data + rng.randn(10, 5), columns=names)
-df3 = pd.DataFrame(rng.randn(10, 5) * 3 + 1, columns=names)
+std =  1
+df1 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
+df2 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
+df3 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
+df4 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
+df5 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
+df6 = pd.DataFrame(data + rng.randn(30, 5) * std, columns=names)
+# df7 = pd.DataFrame(rng.randn(10, 5) * 3 + 1, columns=names)
 
-def test_plot_panel():
-    def fn(x):
-        plt.plot(x)
-    class CustomPlot(ch.heatmap.ClusterProfilePlotPanel):
-        plotter = staticmethod(fn)
-        align_vars = ['data']
-    CustomPlot(x = [1, 2]).plot()
-
-def test_agg_line():
-    pass
 
 def test_heatmap_grid():
-
 
     profile_plot = (
         ch.ClusterProfilePlot(main_df=df1)
@@ -48,30 +62,70 @@ def test_heatmap_grid():
         gm = profile_plot.plot_grid(
                 old_grid=[
                     [
-                        ch.heatmap.Heatmap(cmap='YlOrBr'),
-                        ch.heatmap.Heatmap(df=df2, cmap='RdBu_r')
+                        ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                        ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
                     ],
-                    # [
-                    #     ch.heatmap.AggLine(cluster_ids, 'mean'),
-                    #     ch.heatmap.AggLine(df=df2, cluster_ids, 'mean'),
-                    #
-                    # ]
-                          ],
+                    [
+                        ch.heatmap.Heatmap(df=df3, cmap='YlOrBr'),
+                        ch.heatmap.Heatmap(df=df4, cmap='RdBu_r'),
+                    ],
+                    [
+                        ch.heatmap.Heatmap(df=df5, cmap='YlOrBr'),
+                        ch.heatmap.Heatmap(df=df6, cmap='RdBu_r'),
+                    ],
+                ],
                 row_dendrogram=True,
                 col_dendrogram=True,
-                row_annotation=pd.DataFrame({'cluster_ids1': np.repeat(np.arange(5), 2),
-                                             'cluster_ids2': np.repeat(np.arange(2), 5),
-                                             }),
-                row_anno_heatmap_args={'colors': [(1, 1, 1), (.5, .5, .5)],
-                               'show_values':    True},
+                row_annotation=cluster_ids_row_df,
+                row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                       'show_values':    True},
                 row_anno_col_width = 1/2.54,
-                figsize=(10/2.54, 5/2.54),
+                figsize=(20/2.54, 15/2.54),
                 fig_args = dict(dpi=180)
         )
-    gm.create_or_update_figure()
-    gm.fig.savefig('test.png')
+        gm.create_or_update_figure()
+        gm.fig.savefig('test.png')
     subprocess.run(['firefox', abspath('test.png')])
 
+
+
+def test_plot_panel():
+    def fn(x):
+        plt.plot(x)
+    class CustomPlot(ch.heatmap.ClusterProfilePlotPanel):
+        plotter = staticmethod(fn)
+        align_vars = ['data']
+    CustomPlot(x = [1, 2]).plot()
+
+def test_agg_line():
+
+
+    fig = plt.figure(constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0, hspace=0, wspace=0)
+    gs = fig.add_gridspec(2, 2)
+    ax = fig.add_subplot(gs[0, 1])
+    ax.set_xlabel('test')
+    fig.add_subplot(gs[1, 0])
+    fig.add_subplot(gs[1, 1])
+    ax = fig.add_subplot(gs[0, 0])
+    agg_line(df=df1, ax=ax, fig=fig,
+             cluster_ids=np.repeat([1, 2], 5), fn=np.mean)
+    fig.show()
+
+
+    # fig = plt.figure(constrained_layout=True)
+    # fig.set_constrained_layout_pads(h_pad=0, w_pad=0, hspace=0, wspace=0)
+    # gs = fig.add_gridspec(4, 2)
+    # ax = fig.add_subplot(gs[0:2, 1])
+    # ax.set_xlabel('test')
+    # fig.add_subplot(gs[2:, 0])
+    # fig.add_subplot(gs[2:, 1])
+    # ax = fig.add_subplot(gs[0, 0])
+    # ax.set(xticks=[], xticklabels=[])
+    # ax = fig.add_subplot(gs[1, 0])
+    # ax.set_xlabel('test\nnew')
+    # fig.show()
+    #
 
     # align, supply functions to warp arguments
     # pass list with variables to be supplied and list for alignments to ClusterProfilePlot or to the plotting functions
