@@ -60,8 +60,9 @@ class ClusterProfilePlotPanel(ABC):
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
-        assert isinstance(type(self).__dict__['plotter'], staticmethod), \
-        'plotter must be a static method'
+        if not isinstance(type(self).__dict__['plotter'], staticmethod):
+            raise TypeError('Error in class definition: '
+                            'plotter must be a static method')
 
     def align_and_supply(self, cluster_profile_plot):
 
@@ -531,7 +532,10 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
 
     if show_values:
         for i in range(df.shape[1]):
-            y, s = find_stretches(df.iloc[:, i].values)
+            # note: categorical_series.values is not a numpy array
+            # any series has __array__ method - so instead of values
+            # attribute, use np.array
+            y, s = find_stretches(np.array(df.iloc[:, i]))
             x = i + 0.5
             for curr_y, curr_s in zip(list(y), s):
                 ax.text(x, curr_y, str(curr_s), va='center', ha='center')
