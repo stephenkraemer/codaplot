@@ -58,8 +58,10 @@ class ClusterProfilePlotPanel(ABC):
     row_deco: bool = True
     col_deco: bool = True
 
-    def __init__(self, **kwargs):
+    def __init__(self, panel_width=1, panel_kind='rel', **kwargs):
         self.kwargs = kwargs
+        self.panel_width = panel_width
+        self.panel_kind = panel_kind
         if not isinstance(type(self).__dict__['plotter'], staticmethod):
             raise TypeError('Error in class definition: '
                             'plotter must be a static method')
@@ -234,6 +236,7 @@ class ClusterProfilePlot:
 
     def plot_grid(self, old_grid: List[List['ClusterProfilePlotPanel']],
                   figsize: Tuple[float, float],
+                  height_ratios: Optional[List[Tuple[float, str]]] = None,
                   h_pad = 1/72, w_pad = 1/72, hspace=1/72, wspace=1/72,
                   row_dendrogram = False, col_dendrogram = False,
                   row_annotation: Optional[pd.DataFrame] = None,
@@ -257,7 +260,8 @@ class ClusterProfilePlot:
         """
 
         # noinspection PyUnusedLocal
-        height_ratios = [(1, 'rel') for unused_row in old_grid]
+        if height_ratios is None:
+            height_ratios = [(1, 'rel') for unused_row in old_grid]
 
         # noinspection PyUnusedLocal
         new_grid: List[List[GridElement]] = [[[] for unused in range(len(row))] for row in old_grid]
@@ -271,6 +275,8 @@ class ClusterProfilePlot:
                     tags.append('no_col_dendrogram')
                 new_grid[row_idx][col_idx] = GridElement(f'{row_idx}_{col_idx}',
                                                          plotter=panel_element.plotter,
+                                                         width=panel_element.panel_width,
+                                                         kind=panel_element.panel_kind,
                                                          tags=tags,
                                                          **panel_element.kwargs)
 

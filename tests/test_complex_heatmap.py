@@ -209,8 +209,10 @@ def test_cluster_size_anno():
             old_grid=[
                 [
                     ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                    ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                    ch.heatmap.Heatmap(panel_width=2, panel_kind='rel', df=df2, cmap='RdBu_r'),
                     ch.heatmap.ClusterSizePlot(
+                            panel_width=2/2.54,
+                            panel_kind='abs',
                             cluster_ids=cluster_ids_row_df.iloc[:, 0],
                             bar_height=0.1,
                             xlabel='#Elements',
@@ -218,10 +220,15 @@ def test_cluster_size_anno():
                 ],
                 [
                     ch.heatmap.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
-                    ch.heatmap.ColAggPlot(df=df2, fn=np.mean, xlabel='Mean'),
-                    ch.heatmap.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
-                ]
+                    ch.heatmap.ColAggPlot(
+                            panel_width=2, panel_kind='rel',
+                            df=df2, fn=np.mean, xlabel='Mean'),
+                    ch.heatmap.ColAggPlot(
+                            panel_width=2/2.54, panel_kind='abs',
+                            df=df1, fn=np.mean, xlabel='Mean'),
+                ],
             ],
+            height_ratios=[(1, 'rel'), (2.5/2.54, 'abs')],
             row_dendrogram=True,
             col_dendrogram=True,
             row_annotation=cluster_ids_row_df,
