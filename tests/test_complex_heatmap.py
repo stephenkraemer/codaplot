@@ -24,6 +24,8 @@ import complex_heatmap as ch
 # The rows and cols of each cluster are not adjacent and need to be
 # correctly arranged by applying clustering.
 # Before usage, we'll likely want to add some noise to this template
+from complex_heatmap.heatmap import cluster_size_plot
+
 rows_with_three_different_levels = np.tile([20, 30, 10], (5, 10)).T
 # array([[20, 20, 20, 20, 20],
 #        [30, 30, 30, 30, 30],
@@ -195,6 +197,46 @@ def test_heatmap_grids():
     #                      'ytick.major.size': 0, 'ytick.minor.size': 0,
     #                      }):
 
+
+def test_cluster_size_anno():
+    profile_plot = (
+        ch.ClusterProfilePlot(main_df=df1)
+            .cluster_rows(usecols=['s0', 's1'])
+            .cluster_cols()
+    )
+
+    gm = profile_plot.plot_grid(
+            old_grid=[
+                [
+                    ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
+                    ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                    ch.heatmap.ClusterSizePlot(
+                            cluster_ids=cluster_ids_row_df.iloc[:, 0],
+                            bar_height=0.1,
+                            xlabel='#Elements',
+                    )
+                ],
+                [
+                    ch.heatmap.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
+                    ch.heatmap.ColAggPlot(df=df2, fn=np.mean, xlabel='Mean'),
+                    ch.heatmap.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
+                ]
+            ],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 12/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'cluster-size-plot.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+
 @pytest.mark.slow()
 def test_complex_grid_with_heatmaps_and_deco_plots():
 
@@ -317,3 +359,12 @@ def test_categorical_heatmap():
                            'b': ['a', 'b']})
         fig, ax = plt.subplots(1, 1)
         ch.categorical_heatmap(df, ax=ax)
+
+def test_cluster_size_plot():
+    rng = np.random.RandomState(1)
+    cluster_ids = pd.Series(rng.choice([1, 2, 3], 20, replace=True))
+    fig, ax = plt.subplots(1, 1)
+    cluster_size_plot(cluster_ids, ax=ax, xlabel='Cluster sizes')
+    fp = output_dir / 'cluster-size-plot.png'
+    fig.savefig(fp)
+    subprocess.run(['firefox', fp])

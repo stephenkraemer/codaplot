@@ -665,3 +665,74 @@ class SimpleLine(ClusterProfilePlotPanel):
     col_deco = False
     plotter = staticmethod(simple_line)
 
+def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
+                      bar_height = 0.6, xlabel=None):
+    """Horizontal cluster size barplot
+
+    Currently, this assumes that the cluster IDs can be sorted directly
+    to get the correct ordering desired in the plot. This means that
+    either:
+    1. The cluster IDs are numerical OR
+    2. The cluster IDs are ordered categorical OR
+    3. The cluster IDs are strings, which can be ordered correctly *by
+       alphabetic sorting*
+
+    Args:
+        cluster_ids: index does not have to be the same as for the dfs
+            used in a ClusterProfile plot. This may change in the future.
+            Best practice is to use the same index for the data and the cluster
+            IDs.
+        bar_height: between 0 and 1
+        xlabel: x-Axis label for the plot
+    """
+    cluster_sizes = cluster_ids.value_counts()
+    cluster_sizes.sort_index(inplace=True)
+    ax.barh(y=np.arange(0.5, cluster_sizes.shape[0]),
+            width=cluster_sizes.values,
+            height=bar_height)
+    ax.set_ylim(0, cluster_sizes.shape[0])
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    remove_axis(ax, x=False)
+
+class ClusterSizePlot(ClusterProfilePlotPanel):
+    """Wrapper for cluster_size_plot
+
+    No alignment is performed. The cluster_ids are supplied if necessary
+    and possible.
+    """
+    align_vars = []
+    supply_vars = {'cluster_ids': 'cluster_ids'}
+    row_deco = False
+    col_deco = False
+    plotter = staticmethod(cluster_size_plot)
+
+def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes,
+                 xlabel=None):
+    """Plot aggregate statistic as line plot
+
+    Args:
+        fn: function which will be passed to pd.DataFrame.agg
+    """
+    agg_stat = df.agg(fn)
+    ax.plot(np.arange(0.5, df.shape[1]),
+            agg_stat.values)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+
+class ColAggPlot(ClusterProfilePlotPanel):
+    """Wrapper around col_agg_plot"""
+    align_vars = ['df']
+    supply_vars = {'df': 'main_df'}
+    row_deco = False
+    col_deco = True
+    plotter = staticmethod(col_agg_plot)
+
+
+def remove_axis(ax: Axes, y=True, x=True):
+    if y:
+        ax.set(yticks=[], yticklabels=[])
+        sns.despine(ax=ax, left=True)
+    if x:
+        ax.set(xticks=[], xticklabels=[])
+        sns.despine(ax=ax, bottom=True)
