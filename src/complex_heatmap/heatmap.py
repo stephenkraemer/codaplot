@@ -234,7 +234,7 @@ class ClusterProfilePlot:
         self.col_int_idx = leaves_list(self.col_linkage)
         return self
 
-    def plot_grid(self, old_grid: List[List['ClusterProfilePlotPanel']],
+    def plot_grid(self, old_grid: List[List[Union['ClusterProfilePlotPanel', GridElement]]],
                   figsize: Tuple[float, float],
                   height_ratios: Optional[List[Tuple[float, str]]] = None,
                   h_pad = 1/72, w_pad = 1/72, hspace=1/72, wspace=1/72,
@@ -266,19 +266,24 @@ class ClusterProfilePlot:
         # noinspection PyUnusedLocal
         new_grid: List[List[GridElement]] = [[[] for unused in range(len(row))] for row in old_grid]
         for row_idx, row in enumerate(old_grid):
-            for col_idx, panel_element in enumerate(row):
-                panel_element.align_and_supply(self)
-                tags = []
-                if not panel_element.row_deco:
-                    tags.append('no_row_dendrogram')
-                if not panel_element.col_deco:
-                    tags.append('no_col_dendrogram')
-                new_grid[row_idx][col_idx] = GridElement(f'{row_idx}_{col_idx}',
-                                                         plotter=panel_element.plotter,
-                                                         width=panel_element.panel_width,
-                                                         kind=panel_element.panel_kind,
-                                                         tags=tags,
-                                                         **panel_element.kwargs)
+            for col_idx, panel_or_grid_element in enumerate(row):
+                if isinstance(panel_or_grid_element, GridElement):
+                    new_grid[row_idx][col_idx] = panel_or_grid_element
+                else:
+                    # This is a PanelElement and we need to convert it into a
+                    # GridElement
+                    panel_or_grid_element.align_and_supply(self)
+                    tags = []
+                    if not panel_or_grid_element.row_deco:
+                        tags.append('no_row_dendrogram')
+                    if not panel_or_grid_element.col_deco:
+                        tags.append('no_col_dendrogram')
+                    new_grid[row_idx][col_idx] = GridElement(f'{row_idx}_{col_idx}',
+                                                             plotter=panel_or_grid_element.plotter,
+                                                             width=panel_or_grid_element.panel_width,
+                                                             kind=panel_or_grid_element.panel_kind,
+                                                             tags=tags,
+                                                             **panel_or_grid_element.kwargs)
 
         # noinspection PyUnusedLocal
         gm = GridManager(new_grid, height_ratios=height_ratios,

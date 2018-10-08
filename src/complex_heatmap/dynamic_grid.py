@@ -16,12 +16,37 @@ from complex_heatmap.utils import warn
 
 
 class GridElement:
+    """Represents Axes to be created in a plot grid
+
+    To create a grid of plots, GridElements are arranged in a matrix,
+    specified as a list of lists (like a numpy array).
+    This matrix (called grid in the following) is passed to a GridManager
+    instance, which computes the corresponding GridSpec and creates a
+    Figure with the corresponding Axes.
+
+    Attributes:
+        name: The Axes will be available under GridManager.axes_dict[name]
+        width: relative or absolute (in inches) width of the Axes (see kind)
+        kind: 'rel' or 'abs', specifies which kind of width is given
+        plotter: optionally, a function may be given. This function should have
+            an ax argument, a fig argument, or both. These arguments must be visible
+            by inspecting the function signature. Such a plotting function can
+            then automatically be called by the GridManager, which provides the
+            correct Axes to the ax argument, as well as a reference to the Figure
+            instance if necessary.
+        tags: Arbitrary tags are possible. The GridManager checks for the following
+              tags
+              - no_col_dendrogram: if this plot is in the top row, no row decoration
+                    will be added before it
+              - no_row_dendrogram: if this plot is in the first or last column, no
+              column decoration will be added before resp. after it
+
+    """
     def __init__(self,
                  name: str,
                  width: float = 1,
                  kind: str = 'rel',
                  plotter: Optional[Callable] = None,
-                 metadata: Optional[Dict] = None,
                  tags: Optional[List[str]] = None,
                  *args: List[Any],
                  **kwargs: Dict[Any, Any],
@@ -32,19 +57,41 @@ class GridElement:
         self.plotter = plotter
         self.args = args
         self.kwargs = kwargs
-        self.metadata = {} if metadata is None else metadata
         self.tags = [] if tags is None else tags
 GE = GridElement
+
+
+# noinspection PyMissingConstructor
+class Spacer(GridElement):
+    """Spacer is a GridElement which creates an empty Axes"""
+
+    # The name of a GridElement can be repeated across rows to tell GridManager
+    # that a GridElement stretches across multiple rows. To avoid merging spacers
+    # across multiple rows, we give each spacer a unique name. This is achieved
+    # by counting the Spacer instantiations
+    instantiation_count = [0]
+
+    def __init__(self, width: float = 1, kind: str = 'rel'):
+        self.instantiation_count[0] += 1
+        # IMPORTANT: We rely on Spacer names starting with 'spacer' in this
+        # package. Don't change the prefix.
+        self.name = f'spacer_{self.instantiation_count[0]}'
+        self.width = width
+        self.kind = kind
+        self.tags = None
+        self.plotter = None
+        self.args = []
+        self.kwargs = {}
 
 @dataclass
 class GridManager:
     # noinspection PyUnresolvedReferences
     """
-        Args:
-            figsize: Optional if all sizes are relative or all are absolute.
-                Must be given if absolute and relative sizes are mixed.
-            grid: 2D arrangement of GridElements
-        """
+    Args:
+        figsize: Optional if all sizes are relative or all are absolute.
+            Must be given if absolute and relative sizes are mixed.
+        grid: 2D arrangement of GridElements
+    """
     grid: List[List[GridElement]]
     height_ratios: List[Tuple[float, str]]
     figsize: Tuple[float, float]
@@ -59,8 +106,6 @@ class GridManager:
     axes_dict: Dict[str, Axes] = field(init=False)
     gs: gridspec.GridSpec = field(init=False)
 
-    def __post_init__(self):
-        self.spacer_count = 0
 
     def _compute_height_ratios(self):
         heights = np.array([t[0] for t in self.height_ratios]).astype(float)
@@ -168,8 +213,8 @@ class GridManager:
         times_used = 0
         for row_idx, row_list in enumerate(self.grid):
             if only_rows is not None and row_idx not in only_rows:
-                row_list.insert(0, GridElement(self._get_spacer_id(), width=grid_element.width,
-                                               kind=grid_element.kind))
+                row_list.insert(0, Spacer(width=grid_element.width,
+                                          kind=grid_element.kind))
             else:
                 times_used += 1
                 curr_grid_element = deepcopy(grid_element)
@@ -207,15 +252,10 @@ class GridManager:
         self.grid.insert(i, new_row)
         self.height_ratios.insert(i, height)
 
-    def _get_spacer_id(self):
-        spacer_id = f'spacer_{self.spacer_count}'
-        self.spacer_count += 1
-        return spacer_id
 
     def _spacer_like(self, grid_element: GridElement):
-        return GridElement(self._get_spacer_id(),
-                    width=grid_element.width,
-                    kind=grid_element.kind)
+        return Spacer(width=grid_element.width, kind=grid_element.kind)
+
 
     def create_or_update_figure(self):
 
@@ -264,7 +304,6 @@ class GridManager:
                     # ax.plot([1, 2, 3])
                     # agg_line(**ge.kwargs)
                     # ge.kwargs['ax'].plot([1, 2, 3])
-
 
 # def agg_line(df: pd.DataFrame, ax, cluster_ids: pd.Series, fn: Callable,
 #              sharey=True, ylim=None):

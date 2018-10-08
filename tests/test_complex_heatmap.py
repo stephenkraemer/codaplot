@@ -223,9 +223,7 @@ def test_cluster_size_anno():
                     ch.heatmap.ColAggPlot(
                             panel_width=2, panel_kind='rel',
                             df=df2, fn=np.mean, xlabel='Mean'),
-                    ch.heatmap.ColAggPlot(
-                            panel_width=2/2.54, panel_kind='abs',
-                            df=df1, fn=np.mean, xlabel='Mean'),
+                    ch.dynamic_grid.Spacer(width=2/2.54, kind='abs')
                 ],
             ],
             height_ratios=[(1, 'rel'), (2.5/2.54, 'abs')],
