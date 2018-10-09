@@ -1,9 +1,10 @@
 #-
 from abc import ABC
 from functools import partial
-from typing import Optional, List, Tuple, Union, Callable, Dict, Any
+from typing import Optional, List, Tuple, Union, Dict, Any
 
 import matplotlib as mpl
+
 mpl.use('Agg') # import before pyplot import!
 import numpy as np
 import pandas as pd
@@ -11,15 +12,17 @@ from dataclasses import dataclass
 from scipy.cluster.hierarchy import linkage, leaves_list
 
 from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer
-from complex_heatmap.plotting import categorical_heatmap, dendrogram_wrapper, heatmap, simple_line, cluster_size_plot, col_agg_plot
+from complex_heatmap.plotting import (
+    categorical_heatmap, dendrogram_wrapper, heatmap, simple_line,
+    cluster_size_plot, col_agg_plot)
 
 MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
 #-
 
 class ClusteredDataGridElement(ABC):
     align_vars: List[str] = []
-    supply_vars: Dict[str, str] = []
-    plotter: Callable = None
+    supply_vars: Dict[str, str] = {}
+    plotter: Optional[staticmethod] = None
     row_deco: bool = True
     col_deco: bool = True
 
@@ -150,8 +153,8 @@ class ClusteredDataGrid:
                 if omitted, all rows are plotted with equal heights
         """
 
-        # noinspection PyUnusedLocal
         if height_ratios is None:
+            # noinspection PyUnusedLocal
             height_ratios = [(1, 'rel') for unused_row in grid]
 
         processed_grid = self._convert_panel_element_to_grid_element(grid)
@@ -161,7 +164,8 @@ class ClusteredDataGrid:
 
         # noinspection PyUnusedLocal
         gm = GridManager(processed_grid, height_ratios=height_ratios,
-                         figsize=figsize, fig_args=fig_args,
+                         figsize=figsize,
+                         fig_args={} if fig_args is None else fig_args,
                          h_pad=h_pad, w_pad=w_pad, hspace=hspace, wspace=wspace)
 
         self._add_row_decoration(gm, row_anno_col_width, row_anno_heatmap_args,
@@ -213,7 +217,7 @@ class ClusteredDataGrid:
                     linkage_mat=self.row_linkage, orientation='left',
                     tags=['no_col_dendrogram'])
         if row_dendrogram or row_annotation is not None:
-            for row_idx, row in enumerate(gm.grid):
+            for row in gm.grid:
                 for row_grid_element in row:
                     if row_grid_element.name.startswith('spacer'):
                         continue
@@ -253,8 +257,10 @@ class ClusteredDataGrid:
         PanelElement instances use their align and supply methods, before
         their relevant attributes and their arguments are transferred to a GridElement.
         """
+
         # noinspection PyUnusedLocal
-        processed_grid: List[List[GridElement]] = [[[] for unused in range(len(row))] for row in grid]
+        processed_grid: List[List[GridElement]] = [
+            [[] for unused in range(len(row))] for row in grid]
         for row_idx, row in enumerate(grid):
             for col_idx, panel_or_grid_element in enumerate(row):
                 if isinstance(panel_or_grid_element, GridElement):
@@ -275,12 +281,13 @@ class ClusteredDataGrid:
                         if name.startswith('Unnamed_'):
                             raise ValueError('Element names starting with'
                                              '"Unnamed_" are reserved for internal use.')
-                    processed_grid[row_idx][col_idx] = GridElement(name=name,
-                                                                   plotter=panel_or_grid_element.plotter,
-                                                                   width=panel_or_grid_element.panel_width,
-                                                                   kind=panel_or_grid_element.panel_kind,
-                                                                   tags=tags,
-                                                                   **panel_or_grid_element.kwargs)
+                    processed_grid[row_idx][col_idx] = GridElement(  # type: ignore
+                            name=name,
+                            plotter=panel_or_grid_element.plotter,
+                            width=panel_or_grid_element.panel_width,
+                            kind=panel_or_grid_element.panel_kind,
+                            tags=tags,
+                            **panel_or_grid_element.kwargs)
         return processed_grid
 
 
@@ -324,8 +331,8 @@ class Heatmap(ClusteredDataGridElement):
 
 
 class SimpleLine(ClusteredDataGridElement):
-    align_vars = []
-    supply_vars = {}
+    align_vars: List[str] = []
+    supply_vars: Dict[str, str] = {}
     row_deco = False
     col_deco = False
     plotter = staticmethod(simple_line)
@@ -337,7 +344,7 @@ class ClusterSizePlot(ClusteredDataGridElement):
     No alignment is performed. The cluster_ids are supplied if necessary
     and possible.
     """
-    align_vars = []
+    align_vars: List[str] = []
     supply_vars = {'cluster_ids': 'cluster_ids'}
     row_deco = False
     col_deco = False

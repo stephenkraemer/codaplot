@@ -1,18 +1,17 @@
 from collections import defaultdict
 from copy import deepcopy
 from inspect import getfullargspec
-from typing import Optional, List, Tuple, Callable, Any, Dict, DefaultDict
+from typing import Optional, List, Tuple, Any, Dict, DefaultDict
 
 import matplotlib.gridspec as gridspec
 # mpl.use('Agg') # import before pyplot import!
 import matplotlib.pyplot as plt
-import numpy as np
-from dataclasses import dataclass
-from dataclasses import field
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-
+import numpy as np
 from complex_heatmap.utils import warn
+from dataclasses import dataclass
+from dataclasses import field
 
 
 class GridElement:
@@ -46,11 +45,11 @@ class GridElement:
                  name: str,
                  width: float = 1,
                  kind: str = 'rel',
-                 plotter: Optional[Callable] = None,
+                 plotter: Optional[staticmethod] = None,
                  tags: Optional[List[str]] = None,
-                 *args: List[Any],
+                 *args: Any,
                  **kwargs: Dict[Any, Any],
-                 ):
+                 ) -> None:
         self.name = name
         self.width = width
         self.kind = kind
@@ -61,7 +60,6 @@ class GridElement:
 GE = GridElement
 
 
-# noinspection PyMissingConstructor
 class Spacer(GridElement):
     """Spacer is a GridElement which creates an empty Axes"""
 
@@ -71,17 +69,19 @@ class Spacer(GridElement):
     # by counting the Spacer instantiations
     instantiation_count = [0]
 
-    def __init__(self, width: float = 1, kind: str = 'rel'):
+    def __init__(self, width: float = 1, kind: str = 'rel') -> None:
         self.instantiation_count[0] += 1
+        super().__init__(
+                name = f'spacer_{self.instantiation_count[0]}',
+                width = width,
+                kind = kind,
+                tags = [],
+                plotter = None,
+                args = tuple(),
+                kwargs = {},
+        )
         # IMPORTANT: We rely on Spacer names starting with 'spacer' in this
         # package. Don't change the prefix.
-        self.name = f'spacer_{self.instantiation_count[0]}'
-        self.width = width
-        self.kind = kind
-        self.tags = None
-        self.plotter = None
-        self.args = []
-        self.kwargs = {}
 
 @dataclass
 class GridManager:
@@ -105,6 +105,11 @@ class GridManager:
     axes_list: List[Axes] = field(init=False)
     axes_dict: Dict[str, Axes] = field(init=False)
     gs: gridspec.GridSpec = field(init=False)
+    _height_ratios: np.ndarray = field(init=False)
+    abs_grid_line_positions_per_row: List[List[float]] = field(init=False)
+    all_unique_abs_grid_line_positions_sorted: np.ndarray = field(init=False)
+    width_ratios: np.ndarray = field(init=False)
+    elem_gs: DefaultDict[str, Dict[str, Any]] = field(init=False)
 
 
     def _compute_height_ratios(self):
@@ -191,11 +196,13 @@ class GridManager:
                 np.insert(self.all_unique_abs_grid_line_positions_sorted, 0, 0))
 
     def _compute_element_gridspec_slices(self):
-        self.elem_gs: DefaultDict[str, Dict[str, Any]] = defaultdict(dict)
-        for row_idx, (curr_grid_row, curr_row_boundaries) in enumerate(zip(self.grid, self.abs_grid_line_positions_per_row)):
+        self.elem_gs = defaultdict(dict)
+        for row_idx, (curr_grid_row, curr_row_boundaries) in enumerate(
+                zip(self.grid, self.abs_grid_line_positions_per_row)):
             last_column = 0
             for elem, boundary in zip(curr_grid_row, curr_row_boundaries):
-                curr_column = np.argmax(self.all_unique_abs_grid_line_positions_sorted == boundary)
+                curr_column = np.argmax(
+                        self.all_unique_abs_grid_line_positions_sorted == boundary)
                 col_slice = (last_column, curr_column + 1)
                 if elem.name in self.elem_gs:
                     assert self.elem_gs[elem.name]['col'] == col_slice
@@ -209,7 +216,8 @@ class GridManager:
                                                }
                 last_column = curr_column + 1
 
-    def prepend_col_from_element(self, grid_element: GridElement, only_rows: Optional[List[int]] = None):
+    def prepend_col_from_element(
+            self,grid_element: GridElement, only_rows: Optional[List[int]] = None):
         times_used = 0
         for row_idx, row_list in enumerate(self.grid):
             if only_rows is not None and row_idx not in only_rows:
@@ -260,11 +268,14 @@ class GridManager:
         self.height_ratios.insert(i, height)
 
 
-    def _spacer_like(self, grid_element: GridElement):
+    @staticmethod
+    def _spacer_like(grid_element: GridElement):
+        """Return Spacer with same dimensions as the GridElement"""
         return Spacer(width=grid_element.width, kind=grid_element.kind)
 
 
     def create_or_update_figure(self):
+        """Update GridSpec for self.fig and call all defined GridElement.plotter"""
 
         self._compute_width_ratios()
         self._compute_height_ratios()

@@ -4,19 +4,17 @@ import time
 from os.path import expanduser
 from pathlib import Path
 
+import complex_heatmap as ch
 import complex_heatmap.clustered_data_grid
 import complex_heatmap.plotting
+from complex_heatmap.plotting import cluster_size_plot
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.testing import assert_array_equal
 import pandas as pd
+from pandas.api.types import CategoricalDtype
 import pytest
 import seaborn as sns
-
-from numpy.testing import assert_array_equal
-from pandas.api.types import CategoricalDtype
-
-import complex_heatmap as ch
-
 #-
 
 # Test data setup
@@ -26,7 +24,6 @@ import complex_heatmap as ch
 # The rows and cols of each cluster are not adjacent and need to be
 # correctly arranged by applying clustering.
 # Before usage, we'll likely want to add some noise to this template
-from complex_heatmap.plotting import cluster_size_plot
 
 rows_with_three_different_levels = np.tile([20, 30, 10], (5, 10)).T
 # array([[20, 20, 20, 20, 20],

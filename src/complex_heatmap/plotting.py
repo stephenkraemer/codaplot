@@ -1,17 +1,18 @@
 from typing import List, Optional, Callable
 
 import matplotlib as mpl
+from matplotlib import pyplot as plt, patches as mpatches
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import numpy as np
 import numba
 import pandas as pd
 import seaborn as sns
-from matplotlib import pyplot as plt, patches as mpatches
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 from scipy.cluster.hierarchy import dendrogram
 
 
 def remove_axis(ax: Axes, y=True, x=True):
+    """Remove spines, ticks, labels, ..."""
     if y:
         ax.set(yticks=[], yticklabels=[])
         sns.despine(ax=ax, left=True)
@@ -32,7 +33,7 @@ def dendrogram_wrapper(linkage_mat, ax: Axes, orientation: str):
 
 
 def categorical_heatmap(df: pd.DataFrame, ax: Axes,
-                        cmap: str = 'Set1', colors: List = None,
+                        cmap: str = 'Set1', colors: Optional[List] = None,
                         show_values = True,
                         show_legend = False,
                         legend_ax: Optional[Axes] = None,
@@ -67,11 +68,11 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
     n_levels = len(levels)
 
     if colors is None:
-        colors = sns.color_palette(cmap, n_levels)
+        color_list = sns.color_palette(cmap, n_levels)
     else:
         # tile colors to get n_levels color list
-        colors = (np.ceil(n_levels / len(colors)).astype(int) * colors)[:n_levels]
-    cmap = mpl.colors.ListedColormap(colors)
+        color_list = (np.ceil(n_levels / len(colors)).astype(int) * colors)[:n_levels]
+    cmap = mpl.colors.ListedColormap(color_list)
 
 
     # Get integer codes matrix for pcolormesh, ie levels are represented by
@@ -93,7 +94,7 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         ax.set(yticks=[], yticklabels=[])
 
     # Create dummy patches for legend
-    patches = [mpatches.Patch(facecolor=c, edgecolor='black') for c in colors]
+    patches = [mpatches.Patch(facecolor=c, edgecolor='black') for c in color_list]
     if show_legend:
         if legend_ax is not None:
             legend_ax.legend(patches, levels)
@@ -163,9 +164,8 @@ def heatmap(df: pd.DataFrame,
             ):
 
     if midpoint_normalize:
-        norm = MidpointNormalize(vmin=df.min().min(),
-                                 vmax=df.max().max(),
-                                 midpoint=0)
+        norm: Optional[mpl.colors.Normalize] = MidpointNormalize(
+                vmin=df.min().min(), vmax=df.max().max(), midpoint=0)
     else:
         norm = None
 
