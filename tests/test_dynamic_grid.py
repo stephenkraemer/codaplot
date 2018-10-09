@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import complex_heatmap as ch
@@ -48,7 +49,7 @@ def test_prepend_col():
     ],
             height_ratios=[(1, 'rel'), (1, 'abs')],
             figsize=(4, 4))
-    gm.prepend_col(GE('g', plotter=fn, width=10, kind='abs'), only_rows=[1, 2])
+    gm.prepend_col_from_element(GE('g', plotter=fn, width=10, kind='abs'), only_rows=[1, 2])
     assert gm.grid[0][0].name.startswith('spacer')
     assert gm.grid[0][0].width == 10
     assert gm.grid[0][0].kind == 'abs'
@@ -58,6 +59,30 @@ def test_prepend_col():
     assert gm.grid[2][0].name == 'g_2'
     assert gm.grid[2][0].width == 10
     assert gm.grid[2][0].kind == 'abs'
+
+def test_prepend_col_from_sequence():
+    GE = ch.GridElement
+    gm = ch.GridManager(
+            grid = [
+                [
+                    GE('spacer', 4, 'abs'), GE('col_dendro1', 2),
+                ],
+                [
+                    GE('row_dendro1', 2, 'abs'), GE('anno1', 2, 'abs'), GE('var1', 2),
+                ],
+                [
+                    GE('row_dendro1', 2, 'abs'), GE('anno1', 2, 'abs'), GE('var3', 2),
+                ],
+            ],
+            figsize = (10, 5),
+            height_ratios=((1, 'rel'), (1, 'rel'), (1, 'rel'))
+    )
+    gm.prepend_col_from_sequence([GE('row0'), GE('row1'), GE('row2')])
+    gm.create_or_update_figure()
+    assert gm.grid[0][0].name == 'row0'
+    assert gm.grid[1][0].name == 'row1'
+    assert gm.grid[2][0].name == 'row2'
+
 
 
 def test_grid_manager_without_plotting(tmpdir):
@@ -80,7 +105,9 @@ def test_grid_manager_without_plotting(tmpdir):
     )
     gm.create_or_update_figure()
     gm.axes_dict['anno1'].scatter([1, 2, 3], [1, 2, 3])
-    gm.fig.savefig(tmpdir / 'test.png')
+    fp = tmpdir / 'test.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
 
 def test_grid_manager_with_mixed_plotting(tmpdir):
     tmpdir = Path(tmpdir)

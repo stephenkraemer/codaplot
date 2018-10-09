@@ -1,5 +1,6 @@
 #-
 from abc import ABC
+from functools import partial
 from inspect import getfullargspec
 from typing import Optional, List, Tuple, Union, Callable, Dict, Any
 
@@ -17,7 +18,9 @@ from scipy.cluster.hierarchy import linkage, dendrogram, leaves_list
 mpl.use('Agg') # import before pyplot import!
 import seaborn as sns
 
-from complex_heatmap.dynamic_grid import GridManager, GridElement
+from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer
+
+
 #-
 
 
@@ -58,10 +61,11 @@ class ClusterProfilePlotPanel(ABC):
     row_deco: bool = True
     col_deco: bool = True
 
-    def __init__(self, panel_width=1, panel_kind='rel', **kwargs):
+    def __init__(self, panel_width=1, panel_kind='rel', name=None, **kwargs):
         self.kwargs = kwargs
         self.panel_width = panel_width
         self.panel_kind = panel_kind
+        self.name = name
         if not isinstance(type(self).__dict__['plotter'], staticmethod):
             raise TypeError('Error in class definition: '
                             'plotter must be a static method')
@@ -278,7 +282,14 @@ class ClusterProfilePlot:
                         tags.append('no_row_dendrogram')
                     if not panel_or_grid_element.col_deco:
                         tags.append('no_col_dendrogram')
-                    new_grid[row_idx][col_idx] = GridElement(f'{row_idx}_{col_idx}',
+                    if panel_or_grid_element.name is None:
+                        name = f'Unnamed_{row_idx}-{col_idx}'
+                    else:
+                        name = panel_or_grid_element.name
+                        if name.startswith('Unnamed_'):
+                            raise ValueError('Element names starting with'
+                                             '"Unnamed_" are reserved for internal use.')
+                    new_grid[row_idx][col_idx] = GridElement(name=name,
                                                              plotter=panel_or_grid_element.plotter,
                                                              width=panel_or_grid_element.panel_width,
                                                              kind=panel_or_grid_element.panel_kind,
@@ -294,28 +305,56 @@ class ClusterProfilePlot:
             assert isinstance(row_annotation, pd.DataFrame)
             if self.row_int_idx is not None:
                 row_annotation = row_annotation.iloc[self.row_int_idx, :]
-            anno_ge = GridElement('row_anno', width=row_anno_col_width, kind='abs',
-                                  tags=['no_col_dendrogram'],
-                                  plotter=categorical_heatmap,
-                                  df=row_annotation, **row_anno_heatmap_args)
-            row_annotation_only_rows = [row_idx for row_idx, row in enumerate(gm.grid)
-                                        if not 'no_row_dendrogram' in row[0].tags]
-            gm.prepend_col(anno_ge, only_rows=row_annotation_only_rows)
+            row_anno_width_kind = 'abs'
+            row_anno_col = []
+            row_anno_partial_constructor = partial(
+                    GridElement, width=row_anno_col_width, kind=row_anno_width_kind,
+                    tags=['no_col_dendrogram'],
+                    plotter=categorical_heatmap,
+                    df=row_annotation, **row_anno_heatmap_args)
 
         if row_dendrogram:
-            row_dendro_ge = GridElement('row_dendrogram', width=1/2.54,
-                                        kind='abs', plotter=dendrogram_wrapper,
-                                        linkage_mat=self.row_linkage,
-                                        orientation='left',
-                                        tags=['no_col_dendrogram'])
-            row_dendro_only_rows = []
+            row_dendrogram_width = 1/2.54
+            row_dendrogram_width_kind = 'abs'
+            row_dendro_col = []
+            row_dendro_ge_partial_constructor = partial(
+                    GridElement,
+                    width=row_dendrogram_width, kind=row_dendrogram_width_kind,
+                    plotter=dendrogram_wrapper,
+                    linkage_mat=self.row_linkage, orientation='left',
+                    tags=['no_col_dendrogram'])
+
+        if row_dendrogram or row_annotation:
             for row_idx, row in enumerate(gm.grid):
                 for row_grid_element in row:
                     if row_grid_element.name.startswith('spacer'):
                         continue
-                    if not 'no_row_dendrogram' in row_grid_element.tags:
-                        row_dendro_only_rows.append(row_idx)
-            gm.prepend_col(row_dendro_ge, only_rows=row_dendro_only_rows)
+                    if 'no_row_dendrogram' in row_grid_element.tags:
+                        if row_annotation is not None:
+                            row_anno_col.append(Spacer(width=row_anno_col_width,
+                                                         kind=row_anno_width_kind))
+                        if row_dendrogram:
+                            row_dendro_col.append(Spacer(width=row_dendrogram_width,
+                                                         kind=row_dendrogram_width_kind))
+                        break
+                    else:
+                        if row_annotation is not None:
+                            row_anno_col.append(row_anno_partial_constructor(
+                                    name=row_grid_element.name + '_row-anno'
+                            ))
+                        if row_dendrogram:
+                            row_dendro_col.append(row_dendro_ge_partial_constructor(
+                                    name=row_grid_element.name + '_row-dendrogram'
+                            ))
+                        break
+                else:
+                    raise ValueError('There is a row which only consists of Spacers.'
+                                     'Cant insert dendrograms'
+                                     '- please remove this row and try again')
+            if row_annotation is not None:
+                gm.prepend_col_from_sequence(row_anno_col)
+            if row_dendrogram:
+                gm.prepend_col_from_sequence(row_dendro_col)
 
         if col_dendrogram:
             col_dendro_ge = GridElement('col_dendrogram', plotter=dendrogram_wrapper,

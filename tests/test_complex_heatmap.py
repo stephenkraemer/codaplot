@@ -242,6 +242,47 @@ def test_cluster_size_anno():
     subprocess.run(['firefox', fp])
 
 
+def test_merge_grid_element_across_rows():
+    profile_plot = (
+        ch.ClusterProfilePlot(main_df=df1)
+            .cluster_rows(usecols=['s0', 's1'])
+            .cluster_cols()
+    )
+
+    gm = profile_plot.plot_grid(
+            old_grid=[
+                [
+                    ch.heatmap.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
+                    ch.heatmap.ColAggPlot(
+                            panel_width=2/2.54, panel_kind='abs',
+                            df=df1, fn=np.mean, xlabel='Mean'),
+                ],
+                [
+                    ch.heatmap.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
+                    ch.heatmap.ClusterSizePlot(
+                            panel_width=2/2.54,
+                            panel_kind='abs',
+                            cluster_ids=cluster_ids_row_df.iloc[:, 0],
+                            bar_height=0.1,
+                            xlabel='#Elements',
+                    )
+                ],
+            ],
+            height_ratios=[(1, 'rel'), (2.5/2.54, 'abs')],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 12/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'heatmap-merged-cols-plot.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
 @pytest.mark.slow()
 def test_complex_grid_with_heatmaps_and_deco_plots():
 

@@ -209,7 +209,7 @@ class GridManager:
                                                }
                 last_column = curr_column + 1
 
-    def prepend_col(self, grid_element: GridElement, only_rows: Optional[List[int]] = None):
+    def prepend_col_from_element(self, grid_element: GridElement, only_rows: Optional[List[int]] = None):
         times_used = 0
         for row_idx, row_list in enumerate(self.grid):
             if only_rows is not None and row_idx not in only_rows:
@@ -220,6 +220,13 @@ class GridManager:
                 curr_grid_element = deepcopy(grid_element)
                 curr_grid_element.name += f'_{times_used}'
                 row_list.insert(0, curr_grid_element)
+
+    def prepend_col_from_sequence(self, grid_elements):
+        if not len(grid_elements) == len(self.grid):
+            raise ValueError('Argument grid elements must provide one '
+                             'GridElement per row')
+        for row, grid_element in zip(self.grid, grid_elements):
+            row.insert(0, grid_element)
 
     def insert_matched_row(self, i, grid_element: GridElement,
                            height: Tuple[float, str],
