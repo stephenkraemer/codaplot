@@ -1,7 +1,6 @@
 #-
 from abc import ABC
 from functools import partial
-from inspect import getfullargspec
 from typing import Optional, List, Tuple, Union, Callable, Dict, Any
 
 import matplotlib as mpl
@@ -20,40 +19,9 @@ import seaborn as sns
 
 from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer
 
-
+MixedGrid = List[List[Union['ClusterProfilePlotPanel', GridElement]]]
 #-
 
-
-
-
-# def align(vars: List[str]):
-#     def decorate(f):
-#         @wraps(f)
-#         def wrapper(cluster_profile_plot, **kwargs):
-#             for var in vars:
-#                 kwargs[var] = (kwargs[var]
-#                                 .iloc[slice(cluster_profile_plot.row_int_idx),
-#                                       slice(cluster_profile_plot.col_int_idx)]
-#                                 .copy()
-#                                 )
-#             return f(**kwargs)
-#         return wrapper
-#     return decorate
-#
-# aligned_heatmap = align(['df'])
-#
-# def delayed(f):
-#     @wraps(f)
-#     def wrapped(*args, **kwargs):
-#         def delayed():
-#             return f(*args, **kwargs)
-#         return delayed
-#     return wrapped
-#
-# def f1(a, b, c):
-#     return a + b + c
-#
-#-
 class ClusterProfilePlotPanel(ABC):
     align_vars: List[str] = []
     supply_vars: Dict[str, str] = []
@@ -92,96 +60,6 @@ class ClusterProfilePlotPanel(ABC):
         self.plotter(**self.kwargs)
 #-
 
-class SnsHeatmap(ClusterProfilePlotPanel):
-    align_vars = ['data']
-    plotter = staticmethod(sns.heatmap)
-#
-#
-# h = SnsHeatmap(x=[1, 2, 3, 1])
-# h.plot()
-#
-# def align_data(f):
-#     class NoName(Plot):
-#         plotter = staticmethod(f)
-#         align_vars = ['data']
-#     return NoName
-#
-# def align(f, align_vars = None, supply_vars = None):
-#     class NoName(Plot):
-#         plotter = staticmethod(f)
-#         align_vars = align_vars
-#         supply_vars = supply_vars
-#     return NoName
-#
-#
-# a1 = align_data(fn)
-# a1(x = [1, 2]).plot()
-# a2 = align_data(lambda x, y: x / y)
-# a1.plot(1, 2, 3)
-# a2.plot(1, 3)
-#
-#
-# res = delayed(f1)
-# res2 = res(a=1, b=2, c=3)
-
-@dataclass
-class UnusedHeatmap:
-    df: pd.DataFrame
-    title: Optional[str] = None
-    cmap: Optional[str] = None
-    cmap_class: str = 'auto'
-    cmap_divergent: str = 'RdBu_r'
-    cmap_sequential: str = 'YlOrBr'
-    cmap_qualitative: str = 'Set1'
-    cmap_norm: Optional[Union[str, mpl.colors.Normalize]] = None
-    is_main: bool = False
-    cluster_cols: bool = True
-    cluster_use_cols: Optional[List[str]] = None
-    cluster_cols_method: str = 'complete'
-    cluster_cols_metric: str = 'euclidean'
-    col_linkage_matrix: Optional[np.ndarray] = None
-    col_dendrogram_height: float = 2.0
-    col_dendrogram_show: bool = True
-    col_labels_show: bool = True
-    cluster_rows: bool = True
-    row_anno: pd.DataFrame = None
-    row_anno_width_per_col: float = 1/2.54
-    cluster_rows_method: str = 'complete'
-    cluster_rows_metric: str = 'euclidean'
-    row_linkage_matrix: Optional[np.ndarray] = None
-    row_dendrogram_width: float = 2.0
-    row_dendrogram_show: bool = True
-    row_labels_show: bool = False
-    col_show_list: Optional[List[str]] = None
-    xlabel: Optional[str] = None
-    ylabel: Optional[str] = None
-    rel_width: int = 1
-    rel_height: int = 1
-
-    def __post_init__(self):
-        if self.col_show_list is not None and self.col_dendrogram_show:
-            raise NotImplementedError()
-        if self.row_anno is not None:
-            assert isinstance(self.row_anno, pd.DataFrame)
-            self.row_anno_width = self.row_anno.shape[1] * self.row_anno_width_per_col
-
-    def plot(self) -> Figure:
-        raise NotImplementedError()
-
-class Plotter:
-    def __init__(self, plotter: Callable, align_targets: Optional[List[str]], **kwargs):
-        assert 'ax' in getfullargspec(plotter).args
-        self.plotter = plotter
-        self.align_targets = align_targets
-        self.kwargs = kwargs
-    def plot(self, ax, idx):
-        if self.align_targets is not None:
-            for align_target in self.align_targets:
-                if not self.kwargs[align_target].index.equals(idx):
-                    self.kwargs[align_target] = self.kwargs[align_target].loc[idx]
-        self.plotter(ax=ax, **self.kwargs)
-
-
 @dataclass
 class ClusterProfilePlot:
     """
@@ -195,8 +73,6 @@ class ClusterProfilePlot:
     main_df: pd.DataFrame
     supp_dfs: Optional[List[pd.DataFrame]] = None
     cluster_ids: Optional[pd.DataFrame] = None
-    row_anno: Optional[List[Plotter]] = None
-    col_anno: Optional[List[Plotter]] = None
     row_linkage: Optional[np.ndarray] = None
     col_linkage: Optional[np.ndarray] = None
     col_int_idx: Optional[np.ndarray] = None
@@ -238,11 +114,11 @@ class ClusterProfilePlot:
         self.col_int_idx = leaves_list(self.col_linkage)
         return self
 
-    def plot_grid(self, old_grid: List[List[Union['ClusterProfilePlotPanel', GridElement]]],
+    def plot_grid(self, grid: MixedGrid,
                   figsize: Tuple[float, float],
                   height_ratios: Optional[List[Tuple[float, str]]] = None,
                   h_pad = 1/72, w_pad = 1/72, hspace=1/72, wspace=1/72,
-                  row_dendrogram = False, col_dendrogram = False,
+                  row_dendrogram: bool = False, col_dendrogram: bool = False,
                   row_annotation: Optional[pd.DataFrame] = None,
                   row_anno_heatmap_args: Optional[Dict[str, Any]] = None,
                   row_anno_col_width: float = 0.6/2.54,
@@ -254,53 +130,65 @@ class ClusterProfilePlot:
         or be placed in the grid for finer control.
 
         If the clustering of the data was computed using the GridManager
-        cluster_{cols,rows} methods or by passing the respective linkage
-        matrices from outside, plots can optionally be aligned based on the
+        cluster_{cols,rows} methods or if the respective linkage
+        matrices are passed from outside, plots can optionally be aligned based on the
         clustering.
 
         Plots are aligned if they are given as ClusterProfilePlotPanel
         subclass with variables to be aligned indicated in the align_vars
         class variable.
+
+        Args:
+            figsize: must be specified so that GridManager can compute
+                the appropriate width and height ratios. Actually, this is only
+                necessary if some widths or heights are given with absolute
+                size. Therefore, figsize may become optional in the future,
+                for cases where only relative sizes are required.
+            height_ratios: in the form [(1, 'abs'), (2, 'rel'), (1, 'rel')]
+                if omitted, all rows are plotted with equal heights
         """
 
         # noinspection PyUnusedLocal
         if height_ratios is None:
-            height_ratios = [(1, 'rel') for unused_row in old_grid]
+            height_ratios = [(1, 'rel') for unused_row in grid]
+
+        processed_grid = self.convert_panel_element_to_grid_element(grid)
+
+        # Create a GridManager from the 'base grid', then use the GridManager
+        # grid manipulation functions to add the decoration rows and columns
 
         # noinspection PyUnusedLocal
-        new_grid: List[List[GridElement]] = [[[] for unused in range(len(row))] for row in old_grid]
-        for row_idx, row in enumerate(old_grid):
-            for col_idx, panel_or_grid_element in enumerate(row):
-                if isinstance(panel_or_grid_element, GridElement):
-                    new_grid[row_idx][col_idx] = panel_or_grid_element
-                else:
-                    # This is a PanelElement and we need to convert it into a
-                    # GridElement
-                    panel_or_grid_element.align_and_supply(self)
-                    tags = []
-                    if not panel_or_grid_element.row_deco:
-                        tags.append('no_row_dendrogram')
-                    if not panel_or_grid_element.col_deco:
-                        tags.append('no_col_dendrogram')
-                    if panel_or_grid_element.name is None:
-                        name = f'Unnamed_{row_idx}-{col_idx}'
-                    else:
-                        name = panel_or_grid_element.name
-                        if name.startswith('Unnamed_'):
-                            raise ValueError('Element names starting with'
-                                             '"Unnamed_" are reserved for internal use.')
-                    new_grid[row_idx][col_idx] = GridElement(name=name,
-                                                             plotter=panel_or_grid_element.plotter,
-                                                             width=panel_or_grid_element.panel_width,
-                                                             kind=panel_or_grid_element.panel_kind,
-                                                             tags=tags,
-                                                             **panel_or_grid_element.kwargs)
-
-        # noinspection PyUnusedLocal
-        gm = GridManager(new_grid, height_ratios=height_ratios,
+        gm = GridManager(processed_grid, height_ratios=height_ratios,
                          figsize=figsize, fig_args=fig_args,
                          h_pad=h_pad, w_pad=w_pad, hspace=hspace, wspace=wspace)
 
+        self.add_row_decoration(gm, row_anno_col_width, row_anno_heatmap_args,
+                                row_annotation, row_dendrogram)
+
+        self.add_column_decoration(col_dendrogram, gm)
+
+
+        return gm
+
+    def add_column_decoration(self, col_dendrogram, gm):
+        """Add column dendrogram if required
+
+        Column annotation heatmaps will be implemented soon.
+        """
+        if col_dendrogram:
+            col_dendro_ge = GridElement('col_dendrogram', plotter=dendrogram_wrapper,
+                                        linkage_mat=self.col_linkage,
+                                        orientation='top',
+                                        tags=['no_row_dendrogram']
+                                        )
+            col_dendro_only_cols = [i for i, ge in enumerate(gm.grid[0])
+                                    if not 'no_col_dendrogram' in ge.tags]
+            gm.insert_matched_row(0, col_dendro_ge, height=(1 / 2.54, 'abs'),
+                                  only_cols=col_dendro_only_cols)
+
+    def add_row_decoration(self, gm, row_anno_col_width, row_anno_heatmap_args,
+                           row_annotation, row_dendrogram):
+        """Add row annotation and dendrogram if required"""
         if row_annotation is not None:
             assert isinstance(row_annotation, pd.DataFrame)
             if self.row_int_idx is not None:
@@ -312,9 +200,8 @@ class ClusterProfilePlot:
                     tags=['no_col_dendrogram'],
                     plotter=categorical_heatmap,
                     df=row_annotation, **row_anno_heatmap_args)
-
         if row_dendrogram:
-            row_dendrogram_width = 1/2.54
+            row_dendrogram_width = 1 / 2.54
             row_dendrogram_width_kind = 'abs'
             row_dendro_col = []
             row_dendro_ge_partial_constructor = partial(
@@ -323,8 +210,7 @@ class ClusterProfilePlot:
                     plotter=dendrogram_wrapper,
                     linkage_mat=self.row_linkage, orientation='left',
                     tags=['no_col_dendrogram'])
-
-        if row_dendrogram or row_annotation:
+        if row_dendrogram or row_annotation is not None:
             for row_idx, row in enumerate(gm.grid):
                 for row_grid_element in row:
                     if row_grid_element.name.startswith('spacer'):
@@ -332,7 +218,7 @@ class ClusterProfilePlot:
                     if 'no_row_dendrogram' in row_grid_element.tags:
                         if row_annotation is not None:
                             row_anno_col.append(Spacer(width=row_anno_col_width,
-                                                         kind=row_anno_width_kind))
+                                                       kind=row_anno_width_kind))
                         if row_dendrogram:
                             row_dendro_col.append(Spacer(width=row_dendrogram_width,
                                                          kind=row_dendrogram_width_kind))
@@ -351,112 +237,50 @@ class ClusterProfilePlot:
                     raise ValueError('There is a row which only consists of Spacers.'
                                      'Cant insert dendrograms'
                                      '- please remove this row and try again')
+
             if row_annotation is not None:
                 gm.prepend_col_from_sequence(row_anno_col)
             if row_dendrogram:
                 gm.prepend_col_from_sequence(row_dendro_col)
 
-        if col_dendrogram:
-            col_dendro_ge = GridElement('col_dendrogram', plotter=dendrogram_wrapper,
-                                        linkage_mat=self.col_linkage,
-                                        orientation='top',
-                                        tags=['no_row_dendrogram']
-                                        )
-            col_dendro_only_cols = [i for i, ge in enumerate(gm.grid[0])
-                                    if not 'no_col_dendrogram' in ge.tags]
-            gm.insert_matched_row(0, col_dendro_ge, height=(1/2.54, 'abs'),
-                                  only_cols=col_dendro_only_cols)
+    def convert_panel_element_to_grid_element(self, grid: MixedGrid):
+        """Convert PanelElement in grid into GridElement
 
+        Grid may contain PanelElement or GridElement instances.
 
-        return gm
+        PanelElement instances use their align and supply methods, before
+        their relevant attributes and their arguments are transferred to a GridElement.
+        """
+        # noinspection PyUnusedLocal
+        processed_grid: List[List[GridElement]] = [[[] for unused in range(len(row))] for row in grid]
+        for row_idx, row in enumerate(grid):
+            for col_idx, panel_or_grid_element in enumerate(row):
+                if isinstance(panel_or_grid_element, GridElement):
+                    processed_grid[row_idx][col_idx] = panel_or_grid_element
+                else:
+                    # This is a PanelElement and we need to convert it into a
+                    # GridElement
+                    panel_or_grid_element.align_and_supply(self)
+                    tags = []
+                    if not panel_or_grid_element.row_deco:
+                        tags.append('no_row_dendrogram')
+                    if not panel_or_grid_element.col_deco:
+                        tags.append('no_col_dendrogram')
+                    if panel_or_grid_element.name is None:
+                        name = f'Unnamed_{row_idx}-{col_idx}'
+                    else:
+                        name = panel_or_grid_element.name
+                        if name.startswith('Unnamed_'):
+                            raise ValueError('Element names starting with'
+                                             '"Unnamed_" are reserved for internal use.')
+                    processed_grid[row_idx][col_idx] = GridElement(name=name,
+                                                                   plotter=panel_or_grid_element.plotter,
+                                                                   width=panel_or_grid_element.panel_width,
+                                                                   kind=panel_or_grid_element.panel_kind,
+                                                                   tags=tags,
+                                                                   **panel_or_grid_element.kwargs)
+        return processed_grid
 
-
-
-    # def unused_plot(self):
-    #
-    #     main_hmap = [hmap for hmap in self.hmaps if hmap.is_main]
-    #     assert len(main_hmap) == 1
-    #     main_hmap = main_hmap[0]
-    #     main_hmap.title += '\n(main)'
-    #     show_cols = main_hmap.col_show_list
-    #
-    #     # GridManager currently requires names for each GridElement
-    #     assert all(hmap.title is not None for hmap in self.hmaps)
-    #
-    #     col_Z, row_Z = self._determine_linkage(main_hmap)
-    #
-    #     heatmap_row = [
-    #         GridElement(hmap.title, 1, plotter=self.heatmap,
-    #                     hmap=hmap, col_Z=col_Z, row_Z=row_Z, show_cols=show_cols)
-    #         for hmap in self.hmaps]
-    #
-    #     heights = [(1, 'rel')]
-    #     col_dendro_row = None
-    #     if col_Z is not None and main_hmap.col_dendrogram_show:
-    #         col_dendro_row = [GridElement(f'col_dendro_{i}', 1, 'rel',
-    #                                       self.dendrogram, row_Z, orientation='top')
-    #                           for i in range(len(self.hmaps))]
-    #         heights.insert(0, (main_hmap.col_dendrogram_height, 'abs'))
-    #     if main_hmap.row_anno is not None:
-    #         heatmap_row.insert(0, GridElement(
-    #                 'row_anno', main_hmap.row_anno_width, 'abs',
-    #                 self._anno_bar, anno_df=main_hmap.row_anno
-    #         ))
-    #         if col_dendro_row is not None:
-    #             col_dendro_row.insert(0,
-    #                   GridElement('spacer2', main_hmap.row_anno_width, 'abs'))
-    #     if row_Z is not None and main_hmap.row_dendrogram_show:
-    #         heatmap_row.insert(0, GridElement(
-    #                 'row_dendrogram', main_hmap.row_dendrogram_width, 'abs',
-    #                 self.dendrogram, row_Z, orientation='left')
-    #                            )
-    #         if col_dendro_row is not None:
-    #             col_dendro_row.insert(0,
-    #                                   GridElement('spacer1',main_hmap.row_dendrogram_width, 'abs'))
-    #
-    #     if col_dendro_row is not None:
-    #         grid = [col_dendro_row, heatmap_row]
-    #     else:
-    #         grid = [heatmap_row]
-    #     gm = GridManager(grid, height_ratios=heights, figsize=self.figsize)
-    #
-    #     title_axes = gm.axes_list[0][-len(self.hmaps):]
-    #
-    #     for ax, hmap in zip(title_axes, self.hmaps):
-    #         if hmap.title:
-    #             ax.set_title(hmap.title)
-    #
-    #     return gm.fig
-
-
-    @staticmethod
-    def _anno_bar(anno_df, ax):
-        pass
-
-        # listed_colormap = ListedColormap(
-        #         pd.Series(CMAP_DICT['cluster_id_to_color'])
-        #             .loc[sorted(main_cluster_ids_ser.unique())])
-        # ax.pcolormesh(C, cmap=listed_colormap)
-        # ax.set(yticks=[], yticklabels=[])
-        #
-        # if other_cluster_ids_df is not None:
-        #     ax.set_xticklabels(C.columns, rotation=90)
-        # else:
-        #     ax.set(xticks=[], xticklabels=[])
-        #
-        # value_counts = main_cluster_ids_ser.value_counts().sort_index()
-        # cluster_labels_ys = (value_counts.cumsum() - value_counts / 2).round().astype(int)
-        # cluster_labels_xs = [0.5] * cluster_labels_ys.shape[0]
-        # cluster_labels_text = main_cluster_ids_ser.unique().astype(str)
-        #
-        # for x,y,t in zip(cluster_labels_xs, cluster_labels_ys, cluster_labels_text):
-        #     ax.text(x,y,t,
-        #             horizontalalignment='center',
-        #             verticalalignment='center')
-        #
-        # # ax.set_xlim([-2, 2])
-        # # ax.set_ylim([0, 1000])
-        # sns.despine(ax=ax, left=True, bottom=True)
 
     @staticmethod
     def _determine_linkage(main_hmap):
@@ -487,16 +311,6 @@ class ClusterProfilePlot:
             row_Z = None
         return col_Z, row_Z
 
-    # def compute_grid_ratios(self, ratios: List[Tuple[float, str]]) -> np.ndarray:
-    #     width_float, width_anno = zip(*ratios)
-    #     width_float = np.array(width_float)
-    #     width_anno = np.array(width_anno)
-    #     absolute_width = width_float[width_anno == 'absolute'].sum()
-    #     remaining_figsize = self.figsize[0] - absolute_width
-    #     rel_widths= width_float[width_anno == 'relative']
-    #     width_float[width_anno == 'relative'] = rel_widths / rel_widths.sum() * remaining_figsize
-    #     return width_float
-
 
 def dendrogram_wrapper(linkage_mat, ax: Axes, orientation: str):
     """Wrapper around scipy dendrogram - nicer plot
@@ -507,8 +321,6 @@ def dendrogram_wrapper(linkage_mat, ax: Axes, orientation: str):
                above_threshold_color='black', orientation=orientation)
     ax.set(xticks=[], yticks=[], yticklabels=[], xticklabels=[])
     sns.despine(ax=ax, bottom=True, left=True)
-
-
 
 
 def categorical_heatmap(df: pd.DataFrame, ax: Axes,
@@ -632,7 +444,6 @@ class MidpointNormalize(mpl.colors.Normalize):
         return np.ma.masked_array(np.interp(value, x, y))
 
 
-
 def heatmap(df: pd.DataFrame,
             ax: Axes, fig: Figure,
             cmap: str,
@@ -674,38 +485,6 @@ class Heatmap(ClusterProfilePlotPanel):
     plotter = staticmethod(heatmap)
 
 
-def agg_line(df: pd.DataFrame, gs_tuple, ax: Axes, fig: Figure, cluster_ids: pd.Series, fn: Callable,
-             sharey=True, ylim=None):
-    agg_values = df.groupby(cluster_ids).agg(fn)
-    if sharey and ylim is None:
-        ymax = np.max(agg_values.values)
-        pad = abs(0.1 * ymax)
-        padded_ymax = ymax + pad
-        if ymax < 0 < padded_ymax:
-            padded_ymax = 0
-        ymin = np.min(agg_values.values)
-        padded_ymin = ymin - pad
-        if ymin > 0 > padded_ymin:
-            padded_ymin = 0
-        ylim = (padded_ymin, padded_ymax)
-    n_clusters = agg_values.shape[0]
-    gssub = gs_tuple.subgridspec(n_clusters, 1)
-    ax.remove()
-    for row_idx, (cluster_id, row_ser) in enumerate(agg_values.iterrows()):
-        ax = fig.add_subplot(gssub[row_idx, 0])
-        ax.set(xticks=[], xticklabels=[])
-        if ylim is not None:
-            ax.set_ylim(ylim)
-        ax.plot(row_ser.values, marker='.', linestyle='-')
-    ax.set(xticks=[1, 2, 3], xticklabels=[1, 2, 3], xlabel='test')
-    # ax.plot([1, 2, 3], label='inline label')
-    # ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
-
-class AggLine(ClusterProfilePlotPanel):
-    align_vars = ['df']
-    supply_vars = {'df': 'main_df'}
-    plotter = staticmethod(agg_line)
-
 def simple_line(ax):
     ax.plot([1, 2, 3, 4, 5])
 class SimpleLine(ClusterProfilePlotPanel):
@@ -714,6 +493,7 @@ class SimpleLine(ClusterProfilePlotPanel):
     row_deco = False
     col_deco = False
     plotter = staticmethod(simple_line)
+
 
 def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
                       bar_height = 0.6, xlabel=None):
@@ -769,6 +549,7 @@ def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes,
             agg_stat.values)
     if xlabel is not None:
         ax.set_xlabel(xlabel)
+
 
 class ColAggPlot(ClusterProfilePlotPanel):
     """Wrapper around col_agg_plot"""

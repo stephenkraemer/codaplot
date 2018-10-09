@@ -77,7 +77,7 @@ def test_heatmap_grids():
     # vanilla
     # -------
     gm = profile_plot.plot_grid(
-            old_grid=[[
+            grid=[[
                 ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                 ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
                 ch.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
@@ -94,7 +94,7 @@ def test_heatmap_grids():
     # with dendrograms
     # ----------------
     gm = profile_plot.plot_grid(
-            old_grid=[[
+            grid=[[
                 ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                 ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
                 ch.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
@@ -111,7 +111,7 @@ def test_heatmap_grids():
     # dendrograms plus annotation, with colors and text
     # -------------------------------------------------
     gm = profile_plot.plot_grid(
-            old_grid=[[
+            grid=[[
                 ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                 ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
                 ch.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
@@ -131,7 +131,7 @@ def test_heatmap_grids():
 
     # simple grid
     gm = profile_plot.plot_grid(
-            old_grid=[
+            grid=[
                 [
                     ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                     ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
@@ -163,7 +163,7 @@ def test_heatmap_grids():
          sns.axes_style('darkgrid'):
         # simple grid
         gm = profile_plot.plot_grid(
-                old_grid=[
+                grid=[
                     [
                         ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                         ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
@@ -206,7 +206,7 @@ def test_cluster_size_anno():
     )
 
     gm = profile_plot.plot_grid(
-            old_grid=[
+            grid=[
                 [
                     ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                     ch.heatmap.Heatmap(panel_width=2, panel_kind='rel', df=df2, cmap='RdBu_r'),
@@ -250,7 +250,7 @@ def test_merge_grid_element_across_rows():
     )
 
     gm = profile_plot.plot_grid(
-            old_grid=[
+            grid=[
                 [
                     ch.heatmap.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
                     ch.heatmap.ColAggPlot(
@@ -294,7 +294,7 @@ def test_complex_grid_with_heatmaps_and_deco_plots():
 
     plot_count = 0
     gm = profile_plot.plot_grid(
-            old_grid=[
+            grid=[
                 [
                     ch.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
                     ch.heatmap.Heatmap(df=df2, cmap='RdBu_r'),

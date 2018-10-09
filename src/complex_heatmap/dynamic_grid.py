@@ -307,34 +307,3 @@ class GridManager:
                         ge.kwargs['gs_tuple'] = gs_tuple
 
                     ge.plotter(*ge.args, **ge.kwargs)
-
-                    # ax.plot([1, 2, 3])
-                    # agg_line(**ge.kwargs)
-                    # ge.kwargs['ax'].plot([1, 2, 3])
-
-# def agg_line(df: pd.DataFrame, ax, cluster_ids: pd.Series, fn: Callable,
-#              sharey=True, ylim=None):
-    # agg_values = df.groupby(cluster_ids).agg(fn)
-    # if sharey and ylim is None:
-    #     ymax = np.max(agg_values.values)
-    #     pad = abs(0.1 * ymax)
-    #     padded_ymax = ymax + pad
-    #     if ymax < 0 < padded_ymax:
-    #         padded_ymax = 0
-    #     ymin = np.min(agg_values.values)
-    #     padded_ymin = ymin - pad
-    #     if ymin > 0 > padded_ymin:
-    #         padded_ymin = 0
-    #     ylim = (padded_ymin, padded_ymax)
-    # n_clusters = agg_values.shape[0]
-    # gssub = ax.get_gridspec()[0].subgridspec(n_clusters, 1)
-    # ax.remove()
-    # for row_idx, (cluster_id, row_ser) in enumerate(agg_values.iterrows()):
-    #     ax = fig.add_subplot(gssub[row_idx, 0])
-    #     ax.set(xticks=[], xticklabels=[])
-    #     if ylim is not None:
-    #         ax.set_ylim(ylim)
-    #     ax.plot(row_ser.values, marker='.', linestyle='-')
-    # ax.set(xticks=[1, 2, 3], xticklabels=[1, 2, 3], xlabel='test')
-    # ax.plot([1, 2, 3], label='inline label')
-    # ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
