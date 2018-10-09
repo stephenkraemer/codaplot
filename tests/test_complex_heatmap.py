@@ -4,7 +4,7 @@ import time
 from os.path import expanduser
 from pathlib import Path
 
-import complex_heatmap.heatmap
+import complex_heatmap.clustered_data_grid
 import complex_heatmap.plotting
 import matplotlib.pyplot as plt
 import numpy as np
@@ -68,7 +68,7 @@ def test_heatmap_grids():
 
 
     profile_plot = (
-        ch.ClusterProfilePlot(main_df=df1)
+        ch.ClusteredDataGrid(main_df=df1)
             .cluster_rows(usecols=['s0', 's1'])
             .cluster_cols()
     )
@@ -80,9 +80,9 @@ def test_heatmap_grids():
     # -------
     gm = profile_plot.plot_grid(
             grid=[[
-                complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                complex_heatmap.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
-                complex_heatmap.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=False,
             col_dendrogram=False,
@@ -97,9 +97,9 @@ def test_heatmap_grids():
     # ----------------
     gm = profile_plot.plot_grid(
             grid=[[
-                complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                complex_heatmap.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
-                complex_heatmap.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=True,
             col_dendrogram=True,
@@ -114,9 +114,9 @@ def test_heatmap_grids():
     # -------------------------------------------------
     gm = profile_plot.plot_grid(
             grid=[[
-                complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                complex_heatmap.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
-                complex_heatmap.heatmap.Heatmap(df=df3, cmap='RdBu_r'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=True,
             col_dendrogram=True,
@@ -135,16 +135,16 @@ def test_heatmap_grids():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
                 ],
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df3, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(df=df4, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
                 ],
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df5, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(df=df6, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
                 ],
             ],
             row_dendrogram=True,
@@ -167,16 +167,16 @@ def test_heatmap_grids():
         gm = profile_plot.plot_grid(
                 grid=[
                     [
-                        complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                        complex_heatmap.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
+                        complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                        complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
                     ],
                     [
-                        complex_heatmap.heatmap.Heatmap(df=df3, cmap='YlOrBr'),
-                        complex_heatmap.heatmap.Heatmap(df=df4, cmap='RdBu_r'),
+                        complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
+                        complex_heatmap.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
                     ],
                     [
-                        complex_heatmap.heatmap.Heatmap(df=df5, cmap='YlOrBr'),
-                        complex_heatmap.heatmap.Heatmap(df=df6, cmap='RdBu_r'),
+                        complex_heatmap.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
+                        complex_heatmap.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
                     ],
                 ],
                 row_dendrogram=True,
@@ -202,7 +202,7 @@ def test_heatmap_grids():
 
 def test_cluster_size_anno():
     profile_plot = (
-        ch.ClusterProfilePlot(main_df=df1)
+        ch.ClusteredDataGrid(main_df=df1)
             .cluster_rows(usecols=['s0', 's1'])
             .cluster_cols()
     )
@@ -210,9 +210,9 @@ def test_cluster_size_anno():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(panel_width=2, panel_kind='rel', df=df2, cmap='RdBu_r'),
-                    complex_heatmap.heatmap.ClusterSizePlot(
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(panel_width=2, panel_kind='rel', df=df2, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.ClusterSizePlot(
                             panel_width=2/2.54,
                             panel_kind='abs',
                             cluster_ids=cluster_ids_row_df.iloc[:, 0],
@@ -221,8 +221,8 @@ def test_cluster_size_anno():
                     )
                 ],
                 [
-                    complex_heatmap.heatmap.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
-                    complex_heatmap.heatmap.ColAggPlot(
+                    complex_heatmap.clustered_data_grid.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
+                    complex_heatmap.clustered_data_grid.ColAggPlot(
                             panel_width=2, panel_kind='rel',
                             df=df2, fn=np.mean, xlabel='Mean'),
                     ch.dynamic_grid.Spacer(width=2/2.54, kind='abs')
@@ -246,7 +246,7 @@ def test_cluster_size_anno():
 
 def test_merge_grid_element_across_rows():
     profile_plot = (
-        ch.ClusterProfilePlot(main_df=df1)
+        ch.ClusteredDataGrid(main_df=df1)
             .cluster_rows(usecols=['s0', 's1'])
             .cluster_cols()
     )
@@ -254,14 +254,14 @@ def test_merge_grid_element_across_rows():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.heatmap.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.ColAggPlot(
+                    complex_heatmap.clustered_data_grid.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.ColAggPlot(
                             panel_width=2/2.54, panel_kind='abs',
                             df=df1, fn=np.mean, xlabel='Mean'),
                 ],
                 [
-                    complex_heatmap.heatmap.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.ClusterSizePlot(
+                    complex_heatmap.clustered_data_grid.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.ClusterSizePlot(
                             panel_width=2/2.54,
                             panel_kind='abs',
                             cluster_ids=cluster_ids_row_df.iloc[:, 0],
@@ -289,7 +289,7 @@ def test_merge_grid_element_across_rows():
 def test_complex_grid_with_heatmaps_and_deco_plots():
 
     profile_plot = (
-        ch.ClusterProfilePlot(main_df=df1)
+        ch.ClusteredDataGrid(main_df=df1)
             .cluster_rows(usecols=['s0', 's1'])
             .cluster_cols()
     )
@@ -298,31 +298,31 @@ def test_complex_grid_with_heatmaps_and_deco_plots():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(df=df2, cmap='RdBu_r'),
-                    complex_heatmap.heatmap.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df3, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(df=df4, cmap='RdBu_r'),
-                    complex_heatmap.heatmap.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.heatmap.Heatmap(df=df5, cmap='YlOrBr'),
-                    complex_heatmap.heatmap.Heatmap(df=df6, cmap='RdBu_r'),
-                    complex_heatmap.heatmap.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.heatmap.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.heatmap.SimpleLine(),
-                    complex_heatmap.heatmap.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.heatmap.SimpleLine(),
-                    complex_heatmap.heatmap.SimpleLine(),
-                    complex_heatmap.heatmap.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    complex_heatmap.clustered_data_grid.SimpleLine(),
                 ]
             ],
             row_dendrogram=True,
@@ -347,7 +347,7 @@ class TestClusterProfilePlotPanel:
     def test_raises_when_plotter_is_not_staticmethod(self):
         def fn(x):
             plt.plot(x)
-        class CustomPlot(ch.heatmap.ClusterProfilePlotPanel):
+        class CustomPlot(ch.clustered_data_grid.ClusteredDataGridElement):
             plotter = fn
             align_vars = ['data']
         with pytest.raises(TypeError):

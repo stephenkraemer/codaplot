@@ -13,10 +13,10 @@ from scipy.cluster.hierarchy import linkage, leaves_list
 from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer
 from complex_heatmap.plotting import categorical_heatmap, dendrogram_wrapper, heatmap, simple_line, cluster_size_plot, col_agg_plot
 
-MixedGrid = List[List[Union['ClusterProfilePlotPanel', GridElement]]]
+MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
 #-
 
-class ClusterProfilePlotPanel(ABC):
+class ClusteredDataGridElement(ABC):
     align_vars: List[str] = []
     supply_vars: Dict[str, str] = []
     plotter: Callable = None
@@ -54,8 +54,16 @@ class ClusterProfilePlotPanel(ABC):
         self.plotter(**self.kwargs)
 #-
 
+# Note: in principle, this class can also be useful to plot data which
+# need to be aligned with an index with no relation to any clustering
+# If this use case becomes relevant, it may make sense to provide to
+# different classes: ClusteredDataGrid and AlignedDataGridPlot
+# They could both inherit from a DataGridPlot super class
+# The ClusteredDataGrid would define methods for clustering and
+# plotting dendrograms, which are not necessary in the AlignedDataGridPlot
+
 @dataclass
-class ClusterProfilePlot:
+class ClusteredDataGrid:
     """
     general kwargs for all plotting functions
 
@@ -74,7 +82,7 @@ class ClusterProfilePlot:
 
     def cluster_rows(self, method='average', metric='euclidean',
                      usecols: Optional[List[str]] = None,
-                     ) -> 'ClusterProfilePlot':
+                     ) -> 'ClusteredDataGrid':
         """Cluster rows using hierarchical clustering
 
         Args:
@@ -92,7 +100,7 @@ class ClusterProfilePlot:
 
     def cluster_cols(self, method='average', metric='euclidean',
                      userows: Optional[List[str]] = None,
-                     ) -> 'ClusterProfilePlot':
+                     ) -> 'ClusteredDataGrid':
         """Cluster columns using hierarchical clustering
 
         Args:
@@ -128,7 +136,7 @@ class ClusterProfilePlot:
         matrices are passed from outside, plots can optionally be aligned based on the
         clustering.
 
-        Plots are aligned if they are given as ClusterProfilePlotPanel
+        Plots are aligned if they are given as ClusteredDataGridElement
         subclass with variables to be aligned indicated in the align_vars
         class variable.
 
@@ -146,7 +154,7 @@ class ClusterProfilePlot:
         if height_ratios is None:
             height_ratios = [(1, 'rel') for unused_row in grid]
 
-        processed_grid = self.convert_panel_element_to_grid_element(grid)
+        processed_grid = self._convert_panel_element_to_grid_element(grid)
 
         # Create a GridManager from the 'base grid', then use the GridManager
         # grid manipulation functions to add the decoration rows and columns
@@ -156,15 +164,15 @@ class ClusterProfilePlot:
                          figsize=figsize, fig_args=fig_args,
                          h_pad=h_pad, w_pad=w_pad, hspace=hspace, wspace=wspace)
 
-        self.add_row_decoration(gm, row_anno_col_width, row_anno_heatmap_args,
-                                row_annotation, row_dendrogram)
+        self._add_row_decoration(gm, row_anno_col_width, row_anno_heatmap_args,
+                                 row_annotation, row_dendrogram)
 
-        self.add_column_decoration(col_dendrogram, gm)
+        self._add_column_decoration(col_dendrogram, gm)
 
 
         return gm
 
-    def add_column_decoration(self, col_dendrogram, gm):
+    def _add_column_decoration(self, col_dendrogram, gm):
         """Add column dendrogram if required
 
         Column annotation heatmaps will be implemented soon.
@@ -180,8 +188,8 @@ class ClusterProfilePlot:
             gm.insert_matched_row(0, col_dendro_ge, height=(1 / 2.54, 'abs'),
                                   only_cols=col_dendro_only_cols)
 
-    def add_row_decoration(self, gm, row_anno_col_width, row_anno_heatmap_args,
-                           row_annotation, row_dendrogram):
+    def _add_row_decoration(self, gm, row_anno_col_width, row_anno_heatmap_args,
+                            row_annotation, row_dendrogram):
         """Add row annotation and dendrogram if required"""
         if row_annotation is not None:
             assert isinstance(row_annotation, pd.DataFrame)
@@ -237,7 +245,7 @@ class ClusterProfilePlot:
             if row_dendrogram:
                 gm.prepend_col_from_sequence(row_dendro_col)
 
-    def convert_panel_element_to_grid_element(self, grid: MixedGrid):
+    def _convert_panel_element_to_grid_element(self, grid: MixedGrid):
         """Convert PanelElement in grid into GridElement
 
         Grid may contain PanelElement or GridElement instances.
@@ -306,13 +314,16 @@ class ClusterProfilePlot:
         return col_Z, row_Z
 
 
-class Heatmap(ClusterProfilePlotPanel):
+# Ready-made DataGridplotElements
+# ###############################
+
+class Heatmap(ClusteredDataGridElement):
     align_vars = ['df']
     supply_vars = {'df': 'main_df'}
     plotter = staticmethod(heatmap)
 
 
-class SimpleLine(ClusterProfilePlotPanel):
+class SimpleLine(ClusteredDataGridElement):
     align_vars = []
     supply_vars = {}
     row_deco = False
@@ -320,7 +331,7 @@ class SimpleLine(ClusterProfilePlotPanel):
     plotter = staticmethod(simple_line)
 
 
-class ClusterSizePlot(ClusterProfilePlotPanel):
+class ClusterSizePlot(ClusteredDataGridElement):
     """Wrapper for cluster_size_plot
 
     No alignment is performed. The cluster_ids are supplied if necessary
@@ -333,7 +344,7 @@ class ClusterSizePlot(ClusterProfilePlotPanel):
     plotter = staticmethod(cluster_size_plot)
 
 
-class ColAggPlot(ClusterProfilePlotPanel):
+class ColAggPlot(ClusteredDataGridElement):
     """Wrapper around col_agg_plot"""
     align_vars = ['df']
     supply_vars = {'df': 'main_df'}
