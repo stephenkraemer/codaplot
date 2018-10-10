@@ -195,10 +195,14 @@ class ClusteredDataGrid:
             gm.insert_matched_row(0, col_dendro_ge, height=(1 / 2.54, 'abs'),
                                   only_cols=col_dendro_only_cols)
 
-    def _add_row_decoration(self, gm, row_anno_col_width, row_anno_heatmap_args,
+    def _add_row_decoration(self, gm, row_anno_col_width,
+                            row_anno_heatmap_args: Optional[Dict],
                             row_annotation, row_dendrogram):
         """Add row annotation and dendrogram if required"""
+
         if row_annotation is not None:
+            if row_anno_heatmap_args is None:
+                row_anno_heatmap_args = {}
             assert isinstance(row_annotation, pd.DataFrame)
             if self.row_int_idx is not None:
                 row_annotation = row_annotation.iloc[self.row_int_idx, :]
