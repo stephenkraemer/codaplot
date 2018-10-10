@@ -62,7 +62,7 @@ GE = GridElement
 
 
 class Spacer(GridElement):
-    """Spacer is a GridElement which creates an empty Axes"""
+    """Empty Axes inserted for appropriate alignment of other elements"""
 
     # The name of a GridElement can be repeated across rows to tell GridManager
     # that a GridElement stretches across multiple rows. To avoid merging spacers
@@ -83,7 +83,13 @@ class Spacer(GridElement):
         # package. Don't change the prefix.
 
 class FacetedGridElement(GridElement):
-    """Draw facets within a Grid"""
+    """GridElement managing several axes according to faceting scheme
+
+    The FacetedGridElement defines the placement and size of the element
+    as a whole. Within this area of the figure, several axes are created
+    according to the facetting scheme.
+    """
+
     def __init__(self,
                  name: str,
                  data: pd.DataFrame,
@@ -91,8 +97,6 @@ class FacetedGridElement(GridElement):
                  kind: str = 'rel',
                  plotter: Optional[staticmethod] = None,
                  row: Optional[str] = None,
-                 col: Optional[str] = None,
-                 hue: Optional[str] = None,
                  tags: Optional[List[str]] = None,
                  *args: Tuple[Any],
                  **kwargs: Dict[str, Any],
@@ -107,8 +111,6 @@ class FacetedGridElement(GridElement):
                 **kwargs,
         )
         self.row = row
-        self.col = col
-        self.hue = hue
         self.data = data
         self._nrow = None
 
@@ -128,6 +130,28 @@ class GridManager:
             Must be given if absolute and relative sizes are mixed.
         grid: 2D arrangement of GridElements
     """
+
+    # Implementation notes
+    # ====================
+    #
+    # FacetedGridElement
+    # ------------------
+    # - currently, *only row* facetting is implemented. The rest will follow if
+    #   someone needs it.
+    # - the axes within the element area are *not* inserted as subgridspec.
+    #   This would break the alignment of this element and its contained axes
+    #   with the rest of the plot. This is due to a current limitation in
+    #   the constrained_layout solver. If the solver evolves to align subgridspecs,
+    #   the implementation of this class could be significantly simplified...
+    #   Instead of using a subgridspec, the gridspec for the figure is further
+    #   subdivided. For each facet, a corresponding gridspec row or column is added.
+    # - the SubplotSpec for the individual GridElements can then - as with the
+    #   other GridElements - be determined by recording the absolute positions
+    #   for each axes in the FacetedGridElement and using it to retrieve the
+    #   corresponding line in the gridspec.
+    # - this behavior is coded in GridManager._compute_height_ratios,
+    #   GridManager._compute_width_ratios, GridManager._compute_element_gridspec_slices
+
     grid: List[List[GridElement]]
     height_ratios: List[Tuple[float, str]]
     figsize: Tuple[float, float]
@@ -149,6 +173,15 @@ class GridManager:
 
 
     def _compute_height_ratios(self):
+        """Compute height ratios for GridSpec and stats required for \
+           assigning SubgridSpecs to the individual grid elements
+
+           Similar to _compute_width_ratios.
+
+           This function is a bit more complex because it can deal with
+           FacetedGridElements.
+        """
+
         heights = np.array([t[0] for t in self.height_ratios]).astype(float)
         anno = np.array([t[1] for t in self.height_ratios])
         total_abs_heights = heights[anno == 'abs'].sum()
@@ -193,12 +226,16 @@ class GridManager:
 
 
     def _compute_width_ratios(self):
-        """Given figsize and row-wise width specs
+        """ Compute width ratios for GridSpec and stats required for\
+        assigning SubgridSpecs to the individual grid elements
 
-        For each row, compute the absolute gridline positions that this row
-        requires (values depend on figsize).
+        Given figsize and row-wise width specs for each element,
+        compute the absolute gridline positions that the elements
+        require (values depend on figsize).
         Use the set of all gridline positions collected across the rows
         to calculate the width_ratios for the gridspec.
+        Record the absolute start and end boundaries of each element in each
+        row to be able to find the correct SubgridSpec slices for each element
 
         Fills these attributes:
           - abs_grid_line_positions_per_row: List of sequences specifying
