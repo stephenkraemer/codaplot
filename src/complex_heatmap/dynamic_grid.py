@@ -78,8 +78,6 @@ class Spacer(GridElement):
                 kind = kind,
                 tags = [],
                 plotter = None,
-                args = tuple(),
-                kwargs = {},
         )
         # IMPORTANT: We rely on Spacer names starting with 'spacer' in this
         # package. Don't change the prefix.
