@@ -5,7 +5,7 @@ from pathlib import Path
 
 import complex_heatmap as ch
 from complex_heatmap import GridElement as GE
-from complex_heatmap.clustered_data_grid import agg_plot
+from complex_heatmap.plotting import row_group_agg_plot
 
 
 def test_insert_matched_row():
@@ -195,7 +195,7 @@ def test_faceted_grid_with_plotters():
                             row='variable',
                             width=4, kind='abs',
                             fn='median',
-                            plotter=agg_plot,
+                            plotter=row_group_agg_plot,
                     ),
                     GE('plot01', 1), GE('plot12', 2),
                 ],

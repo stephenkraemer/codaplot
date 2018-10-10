@@ -212,7 +212,7 @@ def test_row_faceted_grid():
             grid=[
                 [
                     complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.FacetedEmptyElement(
+                    complex_heatmap.clustered_data_grid.RowGroupAggPlot(
                             fn='mean',
                             row='variable',
                             data=df_with_group_var,
@@ -222,7 +222,7 @@ def test_row_faceted_grid():
                 ],
                 [
                     complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.FacetedEmptyElement(
+                    complex_heatmap.clustered_data_grid.RowGroupAggPlot(
                             fn='mean',
                             row='variable',
                             data=df_with_group_var,
