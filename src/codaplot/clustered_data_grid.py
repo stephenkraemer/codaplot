@@ -12,8 +12,8 @@ import pandas as pd
 from dataclasses import dataclass
 from scipy.cluster.hierarchy import linkage, leaves_list
 
-from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer, FacetedGridElement
-from complex_heatmap.plotting import (
+from codaplot.dynamic_grid import GridManager, GridElement, Spacer, FacetedGridElement
+from codaplot.plotting import (
     categorical_heatmap, dendrogram_wrapper, heatmap, simple_line,
     cluster_size_plot, col_agg_plot, row_group_agg_plot,
 )

@@ -3,9 +3,9 @@ import numpy as np
 import subprocess
 from pathlib import Path
 
-import complex_heatmap as ch
-from complex_heatmap import GridElement as GE
-from complex_heatmap.plotting import row_group_agg_plot
+import codaplot as ch
+from codaplot import GridElement as GE
+from codaplot.plotting import row_group_agg_plot
 
 
 def test_insert_matched_row():

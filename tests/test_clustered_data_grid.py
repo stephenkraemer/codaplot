@@ -4,10 +4,10 @@ import time
 from os.path import expanduser
 from pathlib import Path
 
-import complex_heatmap as ch
-import complex_heatmap.clustered_data_grid
-import complex_heatmap.plotting
-from complex_heatmap.plotting import cluster_size_plot
+import codaplot as ch
+import codaplot.clustered_data_grid
+import codaplot.plotting
+from codaplot.plotting import cluster_size_plot
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.testing import assert_array_equal
@@ -77,9 +77,9 @@ def test_heatmap_grids():
     # -------
     gm = profile_plot.plot_grid(
             grid=[[
-                complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
-                complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=False,
             col_dendrogram=False,
@@ -94,9 +94,9 @@ def test_heatmap_grids():
     # ----------------
     gm = profile_plot.plot_grid(
             grid=[[
-                complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
-                complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=True,
             col_dendrogram=True,
@@ -111,9 +111,9 @@ def test_heatmap_grids():
     # -------------------------------------------------
     gm = profile_plot.plot_grid(
             grid=[[
-                complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
-                complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=True,
             col_dendrogram=True,
@@ -132,16 +132,16 @@ def test_heatmap_grids():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
                 ],
             ],
             row_dendrogram=True,
@@ -164,16 +164,16 @@ def test_heatmap_grids():
         gm = profile_plot.plot_grid(
                 grid=[
                     [
-                        complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                        complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                        codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                        codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
                     ],
                     [
-                        complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
-                        complex_heatmap.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
+                        codaplot.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
+                        codaplot.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
                     ],
                     [
-                        complex_heatmap.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
-                        complex_heatmap.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
+                        codaplot.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
+                        codaplot.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
                     ],
                 ],
                 row_dendrogram=True,
@@ -211,8 +211,8 @@ def test_row_faceted_grid():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.RowGroupAggPlot(
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
                             fn='mean',
                             row='variable',
                             data=df_with_group_var,
@@ -221,8 +221,8 @@ def test_row_faceted_grid():
                     )
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.RowGroupAggPlot(
+                    codaplot.clustered_data_grid.Heatmap(df=df2, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
                             fn='mean',
                             row='variable',
                             data=df_with_group_var,
@@ -251,9 +251,9 @@ def test_cluster_size_anno():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(panel_width=2, panel_kind='rel', df=df2, cmap='RdBu_r'),
-                    complex_heatmap.clustered_data_grid.ClusterSizePlot(
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(panel_width=2, panel_kind='rel', df=df2, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.ClusterSizePlot(
                             panel_width=2/2.54,
                             panel_kind='abs',
                             cluster_ids=cluster_ids_row_df.iloc[:, 0],
@@ -262,8 +262,8 @@ def test_cluster_size_anno():
                     )
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
-                    complex_heatmap.clustered_data_grid.ColAggPlot(
+                    codaplot.clustered_data_grid.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
+                    codaplot.clustered_data_grid.ColAggPlot(
                             panel_width=2, panel_kind='rel',
                             df=df2, fn=np.mean, xlabel='Mean'),
                     ch.dynamic_grid.Spacer(width=2/2.54, kind='abs')
@@ -295,14 +295,14 @@ def test_merge_grid_element_across_rows():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.ColAggPlot(
+                    codaplot.clustered_data_grid.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.ColAggPlot(
                             panel_width=2/2.54, panel_kind='abs',
                             df=df1, fn=np.mean, xlabel='Mean'),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.ClusterSizePlot(
+                    codaplot.clustered_data_grid.Heatmap(name='h1', df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.ClusterSizePlot(
                             panel_width=2/2.54,
                             panel_kind='abs',
                             cluster_ids=cluster_ids_row_df.iloc[:, 0],
@@ -339,31 +339,31 @@ def test_complex_grid_with_heatmaps_and_deco_plots():
     gm = profile_plot.plot_grid(
             grid=[
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.Heatmap(df=df3, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df4, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
-                    complex_heatmap.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.Heatmap(df=df5, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df6, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.SimpleLine(),
                 ],
                 [
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
-                    complex_heatmap.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.SimpleLine(),
+                    codaplot.clustered_data_grid.SimpleLine(),
                 ]
             ],
             row_dendrogram=True,
@@ -399,7 +399,7 @@ def test_find_stretches():
     df = pd.DataFrame({'strict': [1, 1, 2, 2, 3, 3],
                        'less strict': [1, 2, 3, 4, 5, 6],
                        })
-    stretches = [complex_heatmap.plotting.find_stretches(df[colname].values) for colname in df]
+    stretches = [codaplot.plotting.find_stretches(df[colname].values) for colname in df]
 
     assert_array_equal(stretches[0][0], np.array([1, 3, 5], dtype='f8'))
     assert_array_equal(stretches[0][1], np.array([1, 2, 3], dtype='i8'))
@@ -418,8 +418,8 @@ def test_categorical_heatmap():
                        })
 
     fig, ax = plt.subplots(1, 1)
-    complex_heatmap.plotting.categorical_heatmap(df, ax, colors=colors, show_values=True,
-                                                 show_legend=False, despine=False)
+    codaplot.plotting.categorical_heatmap(df, ax, colors=colors, show_values=True,
+                                          show_legend=False, despine=False)
     fp = output_dir / 'categorical-heatmap_two-colors.png'
     fig.savefig(fp)
     subprocess.run(['firefox', fp])
@@ -432,8 +432,8 @@ def test_categorical_heatmap():
                        'varC': list('ddd')}, dtype=cat_type)
 
     fig, ax = plt.subplots(1, 1)
-    complex_heatmap.plotting.categorical_heatmap(df, ax, cmap='Set1', show_values=True,
-                                                 show_legend=True, despine=False)
+    codaplot.plotting.categorical_heatmap(df, ax, cmap='Set1', show_values=True,
+                                          show_legend=True, despine=False)
     fp = output_dir / 'categorical-heatmap_set1.png'
     fig.savefig(fp)
     subprocess.run(['firefox', fp])
@@ -441,13 +441,13 @@ def test_categorical_heatmap():
     with pytest.raises(ValueError):
         df = pd.DataFrame({'a': [np.nan, 1]})
         fig, ax = plt.subplots(1, 1)
-        complex_heatmap.plotting.categorical_heatmap(df, ax=ax)
+        codaplot.plotting.categorical_heatmap(df, ax=ax)
 
     with pytest.raises(ValueError):
         df = pd.DataFrame({'a': [1, 1],
                            'b': ['a', 'b']})
         fig, ax = plt.subplots(1, 1)
-        complex_heatmap.plotting.categorical_heatmap(df, ax=ax)
+        codaplot.plotting.categorical_heatmap(df, ax=ax)
 
 def test_cluster_size_plot():
     rng = np.random.RandomState(1)

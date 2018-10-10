@@ -10,7 +10,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
-from complex_heatmap.utils import warn
+from codaplot.utils import warn
 from dataclasses import dataclass
 from dataclasses import field
 
