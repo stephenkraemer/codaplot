@@ -101,6 +101,8 @@ class FacetedGridElement(GridElement):
                  *args: Tuple[Any],
                  **kwargs: Dict[str, Any],
                  ) -> None:
+        kwargs['row'] = row
+        kwargs['data'] = data
         super().__init__(
                 *args,
                 name=name,
@@ -117,7 +119,10 @@ class FacetedGridElement(GridElement):
     @property
     def nrow(self):
         if self._nrow is None:
-            self._nrow = self.data[self.row].nunique()
+            if self.row in self.data:
+                self._nrow = self.data[self.row].nunique()
+            else:
+                self._nrow = self.data.index.get_level_values(self.row).nunique()
         return self._nrow
 
 

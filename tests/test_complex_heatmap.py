@@ -196,6 +196,50 @@ def test_heatmap_grids():
     #                      'ytick.major.size': 0, 'ytick.minor.size': 0,
     #                      }):
 
+def test_row_faceted_grid():
+
+    profile_plot = (
+        ch.ClusteredDataGrid(main_df=df1)
+            .cluster_rows()
+            .cluster_cols()
+    )
+
+    df_with_group_var = df1.copy()
+    df_with_group_var['variable'] = cluster_ids_row_df['strict']
+    df_with_group_var.set_index('variable', inplace=True)
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.FacetedEmptyElement(
+                            fn='mean',
+                            row='variable',
+                            data=df_with_group_var,
+                            color='darkgray',
+
+                    )
+                ],
+                [
+                    complex_heatmap.clustered_data_grid.Heatmap(df=df2, cmap='YlOrBr'),
+                    complex_heatmap.clustered_data_grid.FacetedEmptyElement(
+                            fn='mean',
+                            row='variable',
+                            data=df_with_group_var,
+                            sharey=False,
+                    )
+                ]
+            ],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            figsize=(20/2.54, 15/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / 'row-faceted-grid.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
 
 def test_cluster_size_anno():
     profile_plot = (

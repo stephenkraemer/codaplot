@@ -5,6 +5,7 @@ from pathlib import Path
 
 import complex_heatmap as ch
 from complex_heatmap import GridElement as GE
+from complex_heatmap.clustered_data_grid import agg_plot
 
 
 def test_insert_matched_row():
@@ -176,14 +177,11 @@ def test_faceted_grid_with_plotters():
     tmpdir = Path('/home/stephen/temp')
     GE = ch.GridElement
 
-    def faceted_plotting_fn(df, ax):
-        for ax, (var_name, group_df) in zip(ax, df.groupby('variable')):
-            ax.plot(group_df['value'])
-
     faceted_grid_data = pd.DataFrame({
         'variable': list('aaabbb'),
-        'value': np.arange(6),
-    })
+        'value1': np.arange(6),
+        'value2': np.arange(0, 12, 2),
+    }).set_index('variable')
 
     gm = ch.GridManager(
             grid = [
@@ -196,8 +194,8 @@ def test_faceted_grid_with_plotters():
                             data=faceted_grid_data,
                             row='variable',
                             width=4, kind='abs',
-                            plotter=faceted_plotting_fn,
-                            df=faceted_grid_data,
+                            fn='median',
+                            plotter=agg_plot,
                     ),
                     GE('plot01', 1), GE('plot12', 2),
                 ],

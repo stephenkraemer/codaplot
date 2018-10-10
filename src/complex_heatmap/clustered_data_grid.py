@@ -1,17 +1,19 @@
 #-
 from abc import ABC
 from functools import partial
-from typing import Optional, List, Tuple, Union, Dict, Any
+from typing import Optional, List, Tuple, Union, Dict, Any, Sequence
 
 import matplotlib as mpl
-
+from matplotlib.axes import Axes
 mpl.use('Agg') # import before pyplot import!
+import seaborn as sns
+
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from scipy.cluster.hierarchy import linkage, leaves_list
 
-from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer
+from complex_heatmap.dynamic_grid import GridManager, GridElement, Spacer, FacetedGridElement
 from complex_heatmap.plotting import (
     categorical_heatmap, dendrogram_wrapper, heatmap, simple_line,
     cluster_size_plot, col_agg_plot)
@@ -31,7 +33,8 @@ class ClusteredDataGridElement(ABC):
         self.panel_width = panel_width
         self.panel_kind = panel_kind
         self.name = name
-        if not isinstance(type(self).__dict__['plotter'], staticmethod):
+        plotter = type(self).__dict__['plotter']
+        if plotter is not None and not isinstance(plotter, staticmethod):
             raise TypeError('Error in class definition: '
                             'plotter must be a static method')
 
@@ -281,7 +284,11 @@ class ClusteredDataGrid:
                         if name.startswith('Unnamed_'):
                             raise ValueError('Element names starting with'
                                              '"Unnamed_" are reserved for internal use.')
-                    processed_grid[row_idx][col_idx] = GridElement(  # type: ignore
+                    if 'row' in panel_or_grid_element.kwargs:
+                        klass = FacetedGridElement
+                    else:
+                        klass = GridElement
+                    processed_grid[row_idx][col_idx] = klass(  # type: ignore
                             name=name,
                             plotter=panel_or_grid_element.plotter,
                             width=panel_or_grid_element.panel_width,
@@ -358,3 +365,53 @@ class ColAggPlot(ClusteredDataGridElement):
     row_deco = False
     col_deco = True
     plotter = staticmethod(col_agg_plot)
+
+def agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence]], ax: List[Axes],
+             marker='o', linestyle='-', color='black', linewidth=None,
+             sharey=True, ylim=None):
+
+    axes = ax
+
+    if isinstance(row, str):
+        if row in data:
+            levels = data[row].unique()
+        elif row in data.index.names:
+            levels = data.index.get_level_values(row).unique()
+        else:
+            raise ValueError()
+    else:
+        levels = pd.Series(row).unique()
+
+    agg_values = data.groupby(row).agg(fn).loc[levels, :]
+    if sharey and ylim is None:
+        ymax = np.max(agg_values.values)
+        pad = abs(0.1 * ymax)
+        padded_ymax = ymax + pad
+        if ymax < 0 < padded_ymax:
+            padded_ymax = 0
+        ymin = np.min(agg_values.values)
+        padded_ymin = ymin - pad
+        if ymin > 0 > padded_ymin:
+            padded_ymin = 0
+        ylim = (padded_ymin, padded_ymax)
+
+    ncol = data.shape[1]
+    x = np.arange(0.5, ncol)
+    for curr_ax, (name, row) in zip(axes[::-1], agg_values.iterrows()):
+        curr_ax.plot(x, row.values, marker=marker, linestyle=linestyle,
+                     linewidth=linewidth, color=color)
+        if ylim is not None:
+            curr_ax.set_ylim(ylim)
+        curr_ax.set(xticks=[], xticklabels=[])
+        sns.despine(ax=curr_ax)
+
+    # Add xticks and xticklabels to the bottom Axes
+    axes[-1].set_xticks(x)
+    axes[-1].set_xticklabels(data.columns, rotation=90)
+
+
+class FacetedEmptyElement(ClusteredDataGridElement):
+    row_deco = False
+    col_deco = True
+    plotter = staticmethod(agg_plot)
+    align_vars = ['data']
