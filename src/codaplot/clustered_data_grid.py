@@ -1,7 +1,8 @@
 #-
 from abc import ABC
 from functools import partial
-from typing import Optional, List, Tuple, Union, Dict, Any
+from itertools import chain
+from typing import Optional, List, Tuple, Union, Dict, Any, Type
 
 import matplotlib as mpl
 
@@ -207,7 +208,7 @@ class ClusteredDataGrid:
             if self.row_int_idx is not None:
                 row_annotation = row_annotation.iloc[self.row_int_idx, :]
             row_anno_width_kind = 'abs'
-            row_anno_col = []
+            row_anno_col: List[GridElement] = []
             row_anno_partial_constructor = partial(
                     GridElement, width=row_anno_col_width, kind=row_anno_width_kind,
                     tags=['no_col_dendrogram'],
@@ -216,7 +217,7 @@ class ClusteredDataGrid:
         if row_dendrogram:
             row_dendrogram_width = 1 / 2.54
             row_dendrogram_width_kind = 'abs'
-            row_dendro_col = []
+            row_dendro_col: List[GridElement] = []
             row_dendro_ge_partial_constructor = partial(
                     GridElement,
                     width=row_dendrogram_width, kind=row_dendrogram_width_kind,
@@ -266,8 +267,8 @@ class ClusteredDataGrid:
         """
 
         # noinspection PyUnusedLocal
-        processed_grid: List[List[GridElement]] = [
-            [[] for unused in range(len(row))] for row in grid]
+        processed_grid: List[List[Optional[GridElement]]] = [
+            [None for unused in range(len(row))] for row in grid]
         for row_idx, row in enumerate(grid):
             for col_idx, panel_or_grid_element in enumerate(row):
                 if isinstance(panel_or_grid_element, GridElement):
@@ -288,6 +289,7 @@ class ClusteredDataGrid:
                         if name.startswith('Unnamed_'):
                             raise ValueError('Element names starting with'
                                              '"Unnamed_" are reserved for internal use.')
+                    klass: Type[GridElement]
                     if 'row' in panel_or_grid_element.kwargs:
                         klass = FacetedGridElement
                     else:
@@ -299,6 +301,7 @@ class ClusteredDataGrid:
                             kind=panel_or_grid_element.panel_kind,
                             tags=tags,
                             **panel_or_grid_element.kwargs)
+        assert all(x is not None for x in chain(*processed_grid))
         return processed_grid
 
 

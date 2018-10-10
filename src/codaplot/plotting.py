@@ -268,8 +268,8 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
 
     ncol = data.shape[1]
     x = np.arange(0.5, ncol)
-    for curr_ax, (name, row) in zip(axes[::-1], agg_values.iterrows()):
-        curr_ax.plot(x, row.values, marker=marker, linestyle=linestyle,
+    for curr_ax, (unused_name, agg_row) in zip(axes[::-1], agg_values.iterrows()):
+        curr_ax.plot(x, agg_row.values, marker=marker, linestyle=linestyle,
                      linewidth=linewidth, color=color)
         if ylim is not None:
             curr_ax.set_ylim(ylim)

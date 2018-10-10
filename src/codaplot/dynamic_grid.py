@@ -1,7 +1,7 @@
 from collections import defaultdict
 from copy import deepcopy
 from inspect import getfullargspec
-from typing import Optional, List, Tuple, Any, Dict, DefaultDict
+from typing import Optional, List, Tuple, Any, Dict, DefaultDict, Union
 
 import matplotlib.gridspec as gridspec
 # mpl.use('Agg') # import before pyplot import!
@@ -48,14 +48,12 @@ class GridElement:
                  kind: str = 'rel',
                  plotter: Optional[staticmethod] = None,
                  tags: Optional[List[str]] = None,
-                 *args: Any,
-                 **kwargs: Dict[Any, Any],
+                 **kwargs: Any,
                  ) -> None:
         self.name = name
         self.width = width
         self.kind = kind
         self.plotter = plotter
-        self.args = args
         self.kwargs = kwargs
         self.tags = [] if tags is None else tags
 GE = GridElement
@@ -98,13 +96,11 @@ class FacetedGridElement(GridElement):
                  plotter: Optional[staticmethod] = None,
                  row: Optional[str] = None,
                  tags: Optional[List[str]] = None,
-                 *args: Tuple[Any],
-                 **kwargs: Dict[str, Any],
+                 **kwargs: Any,
                  ) -> None:
         kwargs['row'] = row
         kwargs['data'] = data
         super().__init__(
-                *args,
                 name=name,
                 width=width,
                 kind=kind,
@@ -171,11 +167,14 @@ class GridManager:
     axes_dict: Dict[str, Axes] = field(init=False)
     gs: gridspec.GridSpec = field(init=False)
     _height_ratios: np.ndarray = field(init=False)
+    all_unique_heights: np.ndarray = field(init=False)
     abs_grid_line_positions_per_row: List[List[float]] = field(init=False)
     all_unique_abs_grid_line_positions_sorted: np.ndarray = field(init=False)
     width_ratios: np.ndarray = field(init=False)
     elem_gs: DefaultDict[str, Dict[str, Any]] = field(init=False)
-
+    height_boundaries: List[List[Union[Tuple[float, float],
+                                       List[Tuple[float, float]]
+    ]]] = field(init=False)
 
     def _compute_height_ratios(self):
         """Compute height ratios for GridSpec and stats required for \
@@ -195,6 +194,7 @@ class GridManager:
         heights[anno == 'rel'] = rel_heights / rel_heights.sum() * remaining_height
         height_cs = np.cumsum(heights)
 
+        # noinspection PyUnusedLocal
         height_boundaries = [[[] for col in row] for row in self.grid]
         all_unique_heights = list(height_cs)
         for row_idx, row in enumerate(self.grid):
@@ -473,7 +473,7 @@ class GridManager:
                         if 'gs_tuple' in plotter_args:
                             ge.kwargs['gs_tuple'] = gs_tuple
 
-                        ge.plotter(*ge.args, **ge.kwargs)
+                        ge.plotter(**ge.kwargs)
                 else:
                     axes = []
                     for row_start, row_end in zip(coord['row']['start'], coord['row']['end']):
@@ -492,5 +492,5 @@ class GridManager:
                         if 'fig' in plotter_args:
                             ge.kwargs['fig'] = self.fig
 
-                        ge.plotter(*ge.args, **ge.kwargs)
+                        ge.plotter(**ge.kwargs)
 
