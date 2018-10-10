@@ -1,3 +1,5 @@
+import pandas as pd
+import numpy as np
 import subprocess
 from pathlib import Path
 
@@ -138,3 +140,72 @@ def test_grid_manager_with_mixed_plotting(tmpdir):
 
     gm.axes_dict['var1'].plot([1, 2, 3], [1, 2, 3])
     gm.fig.savefig(tmpdir / 'test.png')
+
+def test_faceted_grid_wo_plotters():
+    tmpdir = Path('/home/stephen/temp')
+    GE = ch.GridElement
+
+    faceted_grid_data = pd.DataFrame({
+        'variable': list('aaabbb'),
+        'value': np.arange(6),
+    })
+
+    gm = ch.GridManager(
+            grid = [
+                [
+                    GE('spacer', 4, 'abs'), GE('plot01', 1), GE('plot02', 2),
+                ],
+                [
+                    ch.dynamic_grid.FacetedGridElement(
+                            name='faceted_grid',
+                            data=faceted_grid_data,
+                            row='variable',
+                            width=4, kind='abs'),
+                    GE('plot01', 1), GE('plot12', 2),
+                ],
+            ],
+            figsize = (15/2.54, 15/2.54),
+            height_ratios=((1, 'abs'), (1, 'rel'))
+    )
+    gm.create_or_update_figure()
+    fp = tmpdir / 'faceted-grid_no-plotter.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+def test_faceted_grid_with_plotters():
+    tmpdir = Path('/home/stephen/temp')
+    GE = ch.GridElement
+
+    def faceted_plotting_fn(df, ax):
+        for ax, (var_name, group_df) in zip(ax, df.groupby('variable')):
+            ax.plot(group_df['value'])
+
+    faceted_grid_data = pd.DataFrame({
+        'variable': list('aaabbb'),
+        'value': np.arange(6),
+    })
+
+    gm = ch.GridManager(
+            grid = [
+                [
+                    GE('spacer', 4, 'abs'), GE('plot01', 1), GE('plot02', 2),
+                ],
+                [
+                    ch.dynamic_grid.FacetedGridElement(
+                            name='faceted_grid',
+                            data=faceted_grid_data,
+                            row='variable',
+                            width=4, kind='abs',
+                            plotter=faceted_plotting_fn,
+                            df=faceted_grid_data,
+                    ),
+                    GE('plot01', 1), GE('plot12', 2),
+                ],
+            ],
+            figsize = (15/2.54, 15/2.54),
+            height_ratios=((1, 'abs'), (1, 'rel'))
+    )
+    gm.create_or_update_figure()
+    fp = tmpdir / 'faceted-gird_w-plotter.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])

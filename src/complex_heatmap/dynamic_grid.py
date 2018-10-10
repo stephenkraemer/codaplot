@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 import numpy as np
+import pandas as pd
 from complex_heatmap.utils import warn
 from dataclasses import dataclass
 from dataclasses import field
@@ -83,6 +84,43 @@ class Spacer(GridElement):
         # IMPORTANT: We rely on Spacer names starting with 'spacer' in this
         # package. Don't change the prefix.
 
+class FacetedGridElement(GridElement):
+    """Draw facets within a Grid"""
+    def __init__(self,
+                 name: str,
+                 data: pd.DataFrame,
+                 width: float = 1,
+                 kind: str = 'rel',
+                 plotter: Optional[staticmethod] = None,
+                 row: Optional[str] = None,
+                 col: Optional[str] = None,
+                 hue: Optional[str] = None,
+                 tags: Optional[List[str]] = None,
+                 *args: Tuple[Any],
+                 **kwargs: Dict[str, Any],
+                 ) -> None:
+        super().__init__(
+                *args,
+                name=name,
+                width=width,
+                kind=kind,
+                plotter=plotter,
+                tags=[] if tags is None else tags,
+                **kwargs,
+        )
+        self.row = row
+        self.col = col
+        self.hue = hue
+        self.data = data
+        self._nrow = None
+
+    @property
+    def nrow(self):
+        if self._nrow is None:
+            self._nrow = self.data[self.row].nunique()
+        return self._nrow
+
+
 @dataclass
 class GridManager:
     # noinspection PyUnresolvedReferences
@@ -119,7 +157,41 @@ class GridManager:
         remaining_height = self.figsize[1] - total_abs_heights
         rel_heights = heights[anno == 'rel']
         heights[anno == 'rel'] = rel_heights / rel_heights.sum() * remaining_height
-        self._height_ratios = heights
+        height_cs = np.cumsum(heights)
+
+        height_boundaries = [[[] for col in row] for row in self.grid]
+        all_unique_heights = list(height_cs)
+        for row_idx, row in enumerate(self.grid):
+            for col_idx, grid_element in enumerate(row):
+                if not isinstance(grid_element, FacetedGridElement):
+                    height_boundaries[row_idx][col_idx] = (
+                        height_cs[row_idx - 1] if row_idx != 0 else 0,
+                        height_cs[row_idx])
+                elif isinstance(grid_element, FacetedGridElement):
+                    height_boundaries[row_idx][col_idx] = []
+                    if row_idx == 0:
+                        top_boundary = 0
+                    else:
+                        top_boundary = height_cs[row_idx - 1]
+                    row_height = heights[row_idx]
+                    new_height_candidates = (
+                            top_boundary + row_height / grid_element.nrow
+                            * np.arange(1, grid_element.nrow + 1))
+                    last_height = top_boundary
+                    for curr_height in new_height_candidates:
+                        for previous_height in all_unique_heights:
+                            if np.isclose(curr_height, previous_height):
+                                curr_height = previous_height
+                                break
+                        else:
+                            all_unique_heights.append(curr_height)
+                        height_boundaries[row_idx][col_idx].append((last_height, curr_height))
+                        last_height = curr_height
+                else:
+                    raise TypeError()
+        self.all_unique_heights = np.insert(np.sort(all_unique_heights), 0, 0)
+        self.height_boundaries = height_boundaries
+        self._height_ratios = np.diff(self.all_unique_heights)
 
 
     def _compute_width_ratios(self):
@@ -169,6 +241,7 @@ class GridManager:
             # positions must be matched to each other to avoid duplicates due to
             # floating point precision.
             precision_matched_widths = []
+            last_width = 0
             for curr_width in abs_width_cumsums:
                 for curr_column in all_unique_abs_grid_line_positions:
                     if np.isclose(curr_width, curr_column):
@@ -177,11 +250,21 @@ class GridManager:
                 else:
                     all_unique_abs_grid_line_positions = np.append(
                             all_unique_abs_grid_line_positions, curr_width)
-                precision_matched_widths.append(curr_width)
+                precision_matched_widths.append((last_width, curr_width))
+                last_width = curr_width
             self.abs_grid_line_positions_per_row.append(precision_matched_widths)
 
-        self.all_unique_abs_grid_line_positions_sorted = np.sort(
-                all_unique_abs_grid_line_positions)
+        # for row_idx, row in enumerate(self.grid):
+        #     for col_idx, grid_element in enumerate(row):
+        #         if isinstance(grid_element, FacetedGridElement):
+                    # if col_idx == 0:
+                    #     left_gridline = 0
+                    # else:
+                    #     left_gridline = self.abs_grid_line_positions_per_row[row_idx][col_idx - 1]
+                    # right_gridline = self.abs_grid_line_positions_per_row[row_idx][col_idx]
+
+        self.all_unique_abs_grid_line_positions_sorted = np.concatenate(
+                (np.array([0]), np.sort(all_unique_abs_grid_line_positions)), axis=0)
 
         # The float gridline position matching code is experimental
         # Therefore, we add an overly cautios warning
@@ -192,29 +275,61 @@ class GridManager:
                  f'width smaller than {width_warn_threshold}')
             raise ValueError
 
-        self.width_ratios = np.diff(
-                np.insert(self.all_unique_abs_grid_line_positions_sorted, 0, 0))
+        self.width_ratios = np.diff(self.all_unique_abs_grid_line_positions_sorted)
 
     def _compute_element_gridspec_slices(self):
         self.elem_gs = defaultdict(dict)
-        for row_idx, (curr_grid_row, curr_row_boundaries) in enumerate(
-                zip(self.grid, self.abs_grid_line_positions_per_row)):
-            last_column = 0
-            for elem, boundary in zip(curr_grid_row, curr_row_boundaries):
-                curr_column = np.argmax(
-                        self.all_unique_abs_grid_line_positions_sorted == boundary)
-                col_slice = (last_column, curr_column + 1)
-                if elem.name in self.elem_gs:
-                    assert self.elem_gs[elem.name]['col'] == col_slice
-                    assert row_idx == self.elem_gs[elem.name]['row']['end']
-                    self.elem_gs[elem.name]['row']['end'] += 1
+        for row_idx, row in enumerate(self.grid):
+            for col_idx, grid_element in enumerate(row):
+                seen = grid_element.name in self.elem_gs
+                curr_row_bounds = self.abs_grid_line_positions_per_row[row_idx][col_idx]
+                left_grid_col_line = np.argmax(
+                        self.all_unique_abs_grid_line_positions_sorted
+                        == curr_row_bounds[0])
+                right_grid_col_line = np.argmax(
+                        self.all_unique_abs_grid_line_positions_sorted
+                        == curr_row_bounds[1])
+                col_slice = (left_grid_col_line, right_grid_col_line)
+                if seen:
+                    assert self.elem_gs[grid_element.name]['col'] == col_slice
                 else:
-                    self.elem_gs[elem.name] = {'row': {'start': row_idx,
-                                                       'end': row_idx + 1},
-                                               'col': col_slice,
-                                               'grid_element': elem,
-                                               }
-                last_column = curr_column + 1
+                    self.elem_gs[grid_element.name] = {
+                        'col': col_slice,
+                        'grid_element': grid_element,
+                    }
+                curr_col_bounds = self.height_boundaries[row_idx][col_idx]
+                if isinstance(curr_col_bounds, tuple):
+                    upper_grid_row_line = np.argmax(
+                            self.all_unique_heights == curr_col_bounds[0]
+                    )
+                    lower_grid_row_line = np.argmax(
+                            self.all_unique_heights == curr_col_bounds[1]
+                    )
+                    if seen:
+                        self.elem_gs[grid_element.name]['row']['end'] = lower_grid_row_line
+                    else:
+                        self.elem_gs[grid_element.name]['row'] = {
+                            'start': upper_grid_row_line,
+                            'end': lower_grid_row_line,
+                        }
+                else:
+                    upper_grid_row_lines = []
+                    lower_grid_row_lines = []
+                    for curr_col_bounds_tuple in curr_col_bounds:
+                        upper_grid_row_lines.append(np.argmax(
+                                self.all_unique_heights == curr_col_bounds_tuple[0]
+                        ))
+                        lower_grid_row_lines.append(np.argmax(
+                                self.all_unique_heights == curr_col_bounds_tuple[1]
+                        ))
+                    if seen:
+                        raise ValueError()
+                    else:
+                        self.elem_gs[grid_element.name]['row'] = {
+                            'start': upper_grid_row_lines,
+                            'end': lower_grid_row_lines,
+                        }
+
 
     def prepend_col_from_element(
             self,grid_element: GridElement, only_rows: Optional[List[int]] = None):
@@ -291,7 +406,7 @@ class GridManager:
             #         h_pad=self.h_pad, w_pad=self.w_pad,
             #         hspace=self.hspace, wspace=self.wspace)
         self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
-                                    ncols=len(self.all_unique_abs_grid_line_positions_sorted),
+                                    ncols=len(self.width_ratios),
                                     width_ratios=self.width_ratios,
                                     height_ratios=self._height_ratios,
                                     figure=self.fig,
@@ -301,20 +416,41 @@ class GridManager:
         self.axes_list = [[] for unused in self._height_ratios]
         for name, coord in self.elem_gs.items():
             if not name.startswith('spacer'):
-                gs_tuple = self.gs[coord['row']['start']:coord['row']['end'], slice(*coord['col'])]
-                ax = self.fig.add_subplot(gs_tuple)
-                self.axes_dict[name] = ax
-                self.axes_list[coord['row']['start']].append(ax)
-                ge: GridElement = self.elem_gs[name]['grid_element']
-                if ge.plotter is not None:
-                    plotter_args = getfullargspec(ge.plotter).args
-                    if 'ax' not in plotter_args and 'fig' not in plotter_args:
-                        raise ValueError('plotter function must have kwarg ax, fig or both')
-                    if 'ax' in plotter_args:
-                        ge.kwargs['ax'] = self.axes_dict[name]
-                    if 'fig' in plotter_args:
-                        ge.kwargs['fig'] = self.fig
-                    if 'gs_tuple' in plotter_args:
-                        ge.kwargs['gs_tuple'] = gs_tuple
+                if not isinstance(coord['row']['start'], list):
+                    gs_tuple = self.gs[coord['row']['start']:coord['row']['end'], slice(*coord['col'])]
+                    ax = self.fig.add_subplot(gs_tuple)
+                    self.axes_dict[name] = ax
+                    self.axes_list[coord['row']['start']].append(ax)
+                    ge: GridElement = self.elem_gs[name]['grid_element']
+                    if ge.plotter is not None:
+                        plotter_args = getfullargspec(ge.plotter).args
+                        if 'ax' not in plotter_args and 'fig' not in plotter_args:
+                            raise ValueError('plotter function must have kwarg ax, fig or both')
+                        if 'ax' in plotter_args:
+                            ge.kwargs['ax'] = self.axes_dict[name]
+                        if 'fig' in plotter_args:
+                            ge.kwargs['fig'] = self.fig
+                        if 'gs_tuple' in plotter_args:
+                            ge.kwargs['gs_tuple'] = gs_tuple
 
-                    ge.plotter(*ge.args, **ge.kwargs)
+                        ge.plotter(*ge.args, **ge.kwargs)
+                else:
+                    axes = []
+                    for row_start, row_end in zip(coord['row']['start'], coord['row']['end']):
+                        gs_tuple = self.gs[row_start:row_end, slice(*coord['col'])]
+                        axes.append(self.fig.add_subplot(gs_tuple))
+                    self.axes_dict[name] = axes
+                    self.axes_list[coord['row']['start'][0]].append(axes)
+
+                    ge: GridElement = self.elem_gs[name]['grid_element']
+                    if ge.plotter is not None:
+                        plotter_args = getfullargspec(ge.plotter).args
+                        if 'ax' not in plotter_args and 'fig' not in plotter_args:
+                            raise ValueError('plotter function must have kwarg ax, fig or both')
+                        if 'ax' in plotter_args:
+                            ge.kwargs['ax'] = self.axes_dict[name]
+                        if 'fig' in plotter_args:
+                            ge.kwargs['fig'] = self.fig
+
+                        ge.plotter(*ge.args, **ge.kwargs)
+
