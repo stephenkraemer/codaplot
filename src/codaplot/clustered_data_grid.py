@@ -104,6 +104,12 @@ class ClusteredDataGrid:
     col_int_idx: Optional[np.ndarray] = None
     row_int_idx: Optional[np.ndarray] = None
 
+    def __post_init__(self):
+        if self.row_linkage is not None:
+            self.row_int_idx = leaves_list(self.row_linkage)
+        if self.col_linkage is not None:
+            self.col_int_idx = leaves_list(self.col_linkage)
+
     def cluster_rows(self, method='average', metric='euclidean',
                      usecols: Optional[List[str]] = None,
                      ) -> 'ClusteredDataGrid':
