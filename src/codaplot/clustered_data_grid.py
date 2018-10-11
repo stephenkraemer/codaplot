@@ -20,6 +20,7 @@ from codaplot.plotting import (
     grouped_rows_violin,
     grouped_rows_line_collections,
     cut_dendrogram,
+    grouped_rows_heatmap,
 )
 
 MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
@@ -430,3 +431,12 @@ class Dendrogram(ClusteredDataGridElement):
     align_vars = []
     supply_vars = {}
     plotter = staticmethod(cut_dendrogram)
+
+class AggHeatmap(ClusteredDataGridElement):
+    row_deco = False
+    col_deco = True
+    align_vars = ['df']
+    align_maybe = ['row_']
+    supply_vars = {'df': 'main_df'}
+    plotter = staticmethod(grouped_rows_heatmap)
+

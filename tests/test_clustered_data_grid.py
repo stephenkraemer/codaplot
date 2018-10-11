@@ -672,3 +672,42 @@ def test_grid_heatmap_cut_dendrogram():
     fp = output_dir / f'heatmaps_cut-dendrogram-inspection.png'
     gm.fig.savefig(fp)
     subprocess.run(['firefox', fp])
+
+def test_heatmap_w_grouped_rows_heatmap():
+
+    profile_plot = (
+        ch.ClusteredDataGrid(main_df=df1)
+            .cluster_cols()
+            .cluster_rows()
+    )
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                ],
+                [
+                    codaplot.clustered_data_grid.AggHeatmap(
+                            df=df1, row_=cluster_ids_row_df.iloc[:, 0],
+                            fn='median', cmap='YlOrBr'),
+                ],
+                [
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
+                            data=df1, fn='mean', sharey=True, row=cluster_ids_row_df.iloc[:, 0]),
+                ]
+
+            ],
+            height_ratios=[(1, 'rel'), (3/2.54, 'abs'), (6/2.54, 'abs')],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 20/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'heatmap_w_agg-heatmap.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])

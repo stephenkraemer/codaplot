@@ -686,3 +686,22 @@ def cut_dendrogram(linkage_mat: np.ndarray,
                 min_height=min_height
         )
 
+
+def grouped_rows_heatmap(df: pd.DataFrame, row_: Union[str, Iterable],
+                         fn: Union[str, Callable],
+                         cmap: str, ax: Axes, fig=Figure, sort=False,
+                         **kwargs):
+    agg_df = df.groupby(row_).agg(fn)
+    levels = get_groupby_levels_in_order_of_appearance(df, row_)
+    if sort:
+        levels = np.sort(levels)
+    agg_df = agg_df.loc[levels, :]
+    heatmap(df=agg_df, ax=ax, fig=fig, cmap=cmap, **kwargs)
+
+    # xticks = np.arange(0.5, df.shape[1])
+    # xticklabels = df.columns.values
+    # ax.set_xticks(xticks)
+    # ax.set_xticklabels(xticklabels, rotation=90)
+    # ax.set_xlabel(xlabel if xlabel is not None else '')
+
+

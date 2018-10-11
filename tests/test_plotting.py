@@ -9,7 +9,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from codaplot.plotting import grouped_rows_violin, grouped_rows_line_collections, cut_dendrogram
+from codaplot.plotting import grouped_rows_violin, grouped_rows_line_collections, cut_dendrogram, grouped_rows_heatmap
 # Test data setup
 # ######################################################################
 # Create 'base' test data ndarray with three clusters across rows and
@@ -96,3 +96,10 @@ def test_cut_dendrogram_inspection():
     subprocess.run(['firefox', fp])
 
 
+def test_grouped_rows_heatmap():
+    fig, ax = plt.subplots(1, 1)
+    grouped_rows_heatmap(df=large_data, row_=large_data_cluster_ids_arr,
+                         fn='mean', cmap='YlOrBr', ax=ax, fig=fig)
+    fp = output_dir / 'grouped-rows-heatmap.png'
+    fig.savefig(fp)
+    subprocess.run(['firefox', fp])
