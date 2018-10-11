@@ -17,6 +17,7 @@ from codaplot.dynamic_grid import GridManager, GridElement, Spacer, FacetedGridE
 from codaplot.plotting import (
     categorical_heatmap, dendrogram_wrapper, heatmap, simple_line,
     cluster_size_plot, col_agg_plot, row_group_agg_plot,
+    grouped_rows_violin,
 )
 
 MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
@@ -25,6 +26,7 @@ MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
 class ClusteredDataGridElement(ABC):
     align_vars: List[str] = []
     supply_vars: Dict[str, str] = {}
+    align_maybe: List[str] = []
     plotter: Optional[staticmethod] = None
     row_deco: bool = True
     col_deco: bool = True
@@ -45,17 +47,31 @@ class ClusteredDataGridElement(ABC):
             if target not in self.kwargs:
                 self.kwargs[target] = getattr(cluster_profile_plot, value)
 
+        row_slice = cluster_profile_plot.row_int_idx
+        if row_slice is None:
+            row_slice = slice(None)
+        col_slice = cluster_profile_plot.col_int_idx
+        if col_slice is None:
+            col_slice = slice(None)
+
         for var in self.align_vars:
-            row_slice = cluster_profile_plot.row_int_idx
-            if row_slice is None:
-                row_slice = slice(None)
-            col_slice = cluster_profile_plot.col_int_idx
-            if col_slice is None:
-                col_slice = slice(None)
             self.kwargs[var] = (self.kwargs[var]
                                 .iloc[row_slice, col_slice]
                                 .copy()
                                 )
+
+        for var in self.align_maybe:
+            var_value = self.kwargs[var]
+            if isinstance(var_value, pd.DataFrame):
+                self.kwargs[var] = (var_value
+                                    .iloc[row_slice, col_slice]
+                                    .copy()
+                                    )
+            elif isinstance(var_value, pd.Series):
+                self.kwargs[var] = (var_value
+                                    .iloc[row_slice]
+                                    .copy()
+                                    )
 
     def plot(self):
         self.plotter(**self.kwargs)
@@ -360,7 +376,7 @@ class ClusterSizePlot(ClusteredDataGridElement):
     """
     align_vars: List[str] = []
     supply_vars = {'cluster_ids': 'cluster_ids'}
-    row_deco = False
+    row_deco = True
     col_deco = False
     plotter = staticmethod(cluster_size_plot)
 
@@ -379,3 +395,14 @@ class RowGroupAggPlot(ClusteredDataGridElement):
     col_deco = True
     plotter = staticmethod(row_group_agg_plot)
     align_vars = ['data']
+    align_maybe = ['row']
+    supply_vars = {'data': 'main_df'}
+
+
+class Violin(ClusteredDataGridElement):
+    row_deco = False
+    col_deco = True
+    align_vars = ['data']
+    align_maybe = ['row']
+    supply_vars = {'data': 'main_df'}
+    plotter = staticmethod(grouped_rows_violin)

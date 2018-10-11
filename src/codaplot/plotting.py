@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable, Union, Sequence
+from typing import List, Optional, Callable, Union, Sequence, Iterable
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt, patches as mpatches
@@ -8,6 +8,7 @@ import numpy as np
 import numba
 import pandas as pd
 import seaborn as sns
+from pandas.core.groupby import GroupBy
 from scipy.cluster.hierarchy import dendrogram
 
 
@@ -239,6 +240,7 @@ def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes,
 
 def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence]], ax: List[Axes],
                        marker='o', linestyle='-', color='black', linewidth=None,
+                       show_all_xticklabels=False, xlabel=None,
                        sharey=True, ylim=None):
 
     axes = ax
@@ -255,27 +257,100 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
 
     agg_values = data.groupby(row).agg(fn).loc[levels, :]
     if sharey and ylim is None:
-        ymax = np.max(agg_values.values)
-        pad = abs(0.1 * ymax)
-        padded_ymax = ymax + pad
-        if ymax < 0 < padded_ymax:
-            padded_ymax = 0
-        ymin = np.min(agg_values.values)
-        padded_ymin = ymin - pad
-        if ymin > 0 > padded_ymin:
-            padded_ymin = 0
-        ylim = (padded_ymin, padded_ymax)
+        ylim = compute_shared_ylim(agg_values)
 
     ncol = data.shape[1]
     x = np.arange(0.5, ncol)
+    xlim = (0, ncol)
     for curr_ax, (unused_name, agg_row) in zip(axes[::-1], agg_values.iterrows()):
         curr_ax.plot(x, agg_row.values, marker=marker, linestyle=linestyle,
                      linewidth=linewidth, color=color)
+        curr_ax.set_xlim(xlim)
         if ylim is not None:
             curr_ax.set_ylim(ylim)
-        curr_ax.set(xticks=[], xticklabels=[])
+        if not show_all_xticklabels:
+            curr_ax.set(xticks=[], xticklabels=[], xlabel='')
+        else:
+            curr_ax.set_xticks(x)
+            curr_ax.set_xticklabels(data.columns, rotation=90)
+            curr_ax.set_xlabel('')
         sns.despine(ax=curr_ax)
 
     # Add xticks and xticklabels to the bottom Axes
     axes[-1].set_xticks(x)
     axes[-1].set_xticklabels(data.columns, rotation=90)
+    axes[-1].set_xlabel(xlabel if xlabel is not None else '')
+
+
+def compute_shared_ylim(df):
+    ymax = np.max(df.values)
+    pad = abs(0.1 * ymax)
+    padded_ymax = ymax + pad
+    if ymax < 0 < padded_ymax:
+        padded_ymax = 0
+    ymin = np.min(df.values)
+    padded_ymin = ymin - pad
+    if ymin > 0 > padded_ymin:
+        padded_ymin = 0
+    ylim = (padded_ymin, padded_ymax)
+    return ylim
+
+
+def grouped_rows_violin(data: pd.DataFrame, row: Union[str, Iterable],
+                        ax: List[Axes], n_per_group=2000, sort=False,
+                        sharey=False, ylim=None, show_all_xticklabels=False,
+                        xlabel=None) -> None:
+    # axes list called ax because currently only ax kwarg recognized by Grid
+    # currently, axes are given in top down order, but we want to fill them
+    # in bottom up order (aka the pcolormesh plotting direction)
+    axes = ax[::-1]
+    grouped: GroupBy = data.groupby(row)
+    levels = get_groupby_levels_in_order_of_appearance(data, row)
+    if sort:
+        levels = np.sort(levels)
+    if sharey and ylim is None:
+        ylim = compute_shared_ylim(data)
+
+    # seaborn violin places center of first violin above x=0
+    xticks = np.arange(0, data.shape[1])
+    xticklabels = data.columns.values
+    for curr_ax, curr_level in zip(axes, levels):
+        group_df: pd.DataFrame = sample_n(grouped.get_group(curr_level), n_per_group)
+        group_df.columns.name = 'x'
+        long_group_df = group_df.stack().to_frame('y').reset_index()
+        sns.violinplot(x='x', y='y', data=long_group_df, ax=curr_ax)
+        if ylim:
+            curr_ax.set_ylim(ylim)
+        curr_ax.set_xlabel('')
+        if not show_all_xticklabels:
+            curr_ax.set(xticks=[], xticklabels=[], xlabel='')
+        else:
+            # sns.violinplot already sets the same labels (data.columns.values),
+            # but does not rotate them
+            curr_ax.set_xticklabels(xticklabels, rotation=90)
+            curr_ax.set_xlabel('')
+
+    axes[0].set_xticks(xticks)
+    axes[0].set_xticklabels(xticklabels, rotation=90)
+    axes[0].set_xlabel('' if xlabel is None else xlabel)
+
+
+def sample_n(df, n):
+    if df.shape[0] < 50:
+        print('Warning: less than 50 elements for calculating violin plot')
+    if df.shape[0] <= n:
+        return df
+    else:
+        return df.sample(n=n)
+
+def get_groupby_levels_in_order_of_appearance(df, groupby_var) -> np.ndarray:
+    if isinstance(groupby_var, str):
+        if groupby_var in df:
+            levels = df[groupby_var].unique()
+        elif groupby_var in df.index.names:
+            levels = df.index.get_level_values(groupby_var).unique()
+        else:
+            raise ValueError(f'Can not find {groupby_var} in df')
+    else:
+        levels = pd.Series(groupby_var).unique()
+    return levels

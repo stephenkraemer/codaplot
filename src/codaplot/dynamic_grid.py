@@ -116,10 +116,13 @@ class FacetedGridElement(GridElement):
     @property
     def nrow(self):
         if self._nrow is None:
-            if self.row in self.data:
-                self._nrow = self.data[self.row].nunique()
+            if isinstance(self.row, str):
+                if self.row in self.data:
+                    self._nrow = self.data[self.row].nunique()
+                else:
+                    self._nrow = self.data.index.get_level_values(self.row).nunique()
             else:
-                self._nrow = self.data.index.get_level_values(self.row).nunique()
+                self._nrow = pd.Series(self.row).nunique()
         return self._nrow
 
 

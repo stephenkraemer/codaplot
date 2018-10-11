@@ -457,3 +457,105 @@ def test_cluster_size_plot():
     fp = output_dir / 'cluster-size-plot.png'
     fig.savefig(fp)
     subprocess.run(['firefox', fp])
+
+
+def test_grid_with_heatmap_and_violin_and_grouped_row_agg():
+    profile_plot = (
+        ch.ClusteredDataGrid(main_df=df1)
+            .cluster_rows(usecols=['s0', 's1'])
+            .cluster_cols()
+    )
+
+    groupby_var = cluster_ids_row_df.iloc[:, 0]
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    codaplot.clustered_data_grid.ClusterSizePlot(
+                            panel_width=2/2.54,
+                            panel_kind='abs',
+                            cluster_ids=cluster_ids_row_df.iloc[:, 0],
+                            bar_height=0.1,
+                            xlabel='#Elements',
+                    ),
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(
+                            df=df2, cmap='RdBu_r'),
+                    codaplot.clustered_data_grid.Violin(
+                            data=df1, sharey=True, row=groupby_var,
+                            panel_width=5/2.54, panel_kind='abs'),
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
+                            data=df1, fn='mean', sharey=True, row=groupby_var),
+                ],
+                # [
+                #     codaplot.clustered_data_grid.Spacer(width=2/2.54, kind='abs'),
+                #     codaplot.clustered_data_grid.ColAggPlot(df=df1, fn=np.mean, xlabel='Mean'),
+                #     codaplot.clustered_data_grid.ColAggPlot(df=df2, fn=np.mean, xlabel='Mean'),
+                #     codaplot.clustered_data_grid.Spacer(width=5/2.54, kind='abs'),
+                # ],
+                [
+                    codaplot.clustered_data_grid.Spacer(width=2/2.54, kind='abs'),
+                    # codaplot.clustered_data_grid.RowGroupAggPlot(
+                    #         data=df1, fn='mean', sharey=True, row=groupby_var),
+                    # codaplot.clustered_data_grid.RowGroupAggPlot(
+                    #         data=df2, fn='mean', sharey=True, row=groupby_var),
+                    codaplot.clustered_data_grid.Violin(
+                            data=df1, sharey=True, row=groupby_var,
+                            show_all_xticklabels=True),
+                    codaplot.clustered_data_grid.Violin(
+                            data=df2, sharey=False, row=groupby_var,
+                            show_all_xticklabels=True),
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
+                            data=df1, fn='mean', sharey=True, row=groupby_var,
+                            panel_width=5/2.54, panel_kind='abs',
+                            show_all_xticklabels=True),
+                    codaplot.clustered_data_grid.Spacer()
+                ]
+            ],
+            height_ratios=[(1, 'rel'), (4, 'rel')],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 30/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'heatmaps-with-violin-and-grouped-row-agg.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+def test_violin_without_heatmap():
+
+    profile_plot = (
+        ch.ClusteredDataGrid(main_df=df1)
+            .cluster_cols()
+    )
+
+    groupby_var = cluster_ids_row_df.iloc[:, 0]
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    codaplot.clustered_data_grid.Violin(
+                            data=df1, sharey=True, row=groupby_var,
+                            show_all_xticklabels=True),
+                    codaplot.clustered_data_grid.Violin(
+                            data=df2, sharey=False, row=groupby_var,
+                            show_all_xticklabels=True),
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
+                            data=df1, fn='mean', sharey=True, row=groupby_var,
+                            show_all_xticklabels=True),
+                ]
+            ],
+            height_ratios=[(1, 'rel')],
+            col_dendrogram=True,
+            figsize=(20/2.54, 30/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'violin-no-heatmap.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
