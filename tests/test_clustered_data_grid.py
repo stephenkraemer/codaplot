@@ -559,3 +559,44 @@ def test_violin_without_heatmap():
     fp = output_dir / f'violin-no-heatmap.png'
     gm.fig.savefig(fp)
     subprocess.run(['firefox', fp])
+
+
+def test_grid_with_heatmap_and_line_collection():
+    profile_plot = (
+        ch.ClusteredDataGrid(main_df=df1)
+            .cluster_rows()
+            .cluster_cols()
+    )
+
+    groupby_var = cluster_ids_row_df.iloc[:, 0]
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.MultiLine(
+                            data=df1, sharey=False, row=groupby_var,
+                            alpha=1),
+                    codaplot.clustered_data_grid.RowGroupAggPlot(
+                            data=df1, fn='mean', sharey=True, row=groupby_var),
+                ],
+                [
+                    codaplot.clustered_data_grid.MultiLine(
+                            data=df1, sharey=True, row=groupby_var,
+                            alpha=0.2),
+                ]
+            ],
+            height_ratios=[(1, 'rel'), (1, 'rel')],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 30/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'heatmaps-with-violin-and-grouped-row-agg.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])

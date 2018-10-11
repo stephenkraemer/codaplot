@@ -3,12 +3,13 @@ from typing import List, Optional, Callable, Union, Sequence, Iterable
 import matplotlib as mpl
 from matplotlib import pyplot as plt, patches as mpatches
 from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 import numpy as np
 import numba
 import pandas as pd
-import seaborn as sns
 from pandas.core.groupby import GroupBy
+import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram
 
 
@@ -257,7 +258,7 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
 
     agg_values = data.groupby(row).agg(fn).loc[levels, :]
     if sharey and ylim is None:
-        ylim = compute_shared_ylim(agg_values)
+        ylim = compute_padded_ylim(agg_values)
 
     ncol = data.shape[1]
     x = np.arange(0.5, ncol)
@@ -282,7 +283,7 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
     axes[-1].set_xlabel(xlabel if xlabel is not None else '')
 
 
-def compute_shared_ylim(df):
+def compute_padded_ylim(df):
     ymax = np.max(df.values)
     pad = abs(0.1 * ymax)
     padded_ymax = ymax + pad
@@ -309,7 +310,7 @@ def grouped_rows_violin(data: pd.DataFrame, row: Union[str, Iterable],
     if sort:
         levels = np.sort(levels)
     if sharey and ylim is None:
-        ylim = compute_shared_ylim(data)
+        ylim = compute_padded_ylim(data)
 
     # seaborn violin places center of first violin above x=0
     xticks = np.arange(0, data.shape[1])
@@ -335,13 +336,62 @@ def grouped_rows_violin(data: pd.DataFrame, row: Union[str, Iterable],
     axes[0].set_xlabel('' if xlabel is None else xlabel)
 
 
+def grouped_rows_line_collections(data: pd.DataFrame, row: Union[str, Iterable],
+                                  ax: List[Axes], n_per_group=2000, sort=False,
+                                  sharey=False, ylim=None, show_all_xticklabels=False,
+                                  xlabel=None, alpha=0.01):
+    axes = ax[::-1]
+    grouped: GroupBy = data.groupby(row)
+    levels = get_groupby_levels_in_order_of_appearance(data, row)
+    if sort:
+        levels = np.sort(levels)
+    if ylim is not None:
+        shared_ylim = ylim
+    elif sharey:
+        shared_ylim = compute_padded_ylim(data)
+    else:
+        shared_ylim = None
+
+    xticks = np.arange(0.5, data.shape[1])
+    xticklabels = data.columns.values
+
+    for curr_ax, curr_level in zip(axes, levels):
+        group_df: pd.DataFrame = sample_n(grouped.get_group(curr_level), n_per_group)
+        segments = np.zeros(group_df.shape + (2,))
+        segments[:, :, 1] = group_df.values
+        segments[:, :, 0] = np.arange(0.5, group_df.shape[1])
+        line_collection = LineCollection(segments, color='black', alpha=alpha)
+        curr_ax.add_collection(line_collection)
+        curr_ax.plot([1, 2, 3])
+
+        # need to set plot limits, they will not autoscale
+        curr_ax.set_xlim(0, data.shape[1])
+        if shared_ylim is None:
+            curr_ylim = compute_padded_ylim(group_df)
+        else:
+            curr_ylim = shared_ylim
+        curr_ax.set_ylim(curr_ylim)
+
+        if show_all_xticklabels:
+            curr_ax.set_xticks(xticks)
+            curr_ax.set_xticklabels(xticklabels, rotation=90)
+            curr_ax.set_xlabel('')
+        else:
+            curr_ax.set(xticks=[], xticklabels=[], xlabel='')
+
+    axes[0].set_xticks(xticks)
+    axes[0].set_xticklabels(xticklabels, rotation=90)
+    axes[0].set_xlabel(xlabel if xlabel is not None else '')
+
+
+
+
 def sample_n(df, n):
     if df.shape[0] < 50:
         print('Warning: less than 50 elements for calculating violin plot')
     if df.shape[0] <= n:
         return df
-    else:
-        return df.sample(n=n)
+    return df.sample(n=n)
 
 def get_groupby_levels_in_order_of_appearance(df, groupby_var) -> np.ndarray:
     if isinstance(groupby_var, str):

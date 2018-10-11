@@ -18,6 +18,7 @@ from codaplot.plotting import (
     categorical_heatmap, dendrogram_wrapper, heatmap, simple_line,
     cluster_size_plot, col_agg_plot, row_group_agg_plot,
     grouped_rows_violin,
+    grouped_rows_line_collections,
 )
 
 MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
@@ -305,6 +306,7 @@ class ClusteredDataGrid:
                         if name.startswith('Unnamed_'):
                             raise ValueError('Element names starting with'
                                              '"Unnamed_" are reserved for internal use.')
+                    # noinspection PyUnusedLocal
                     klass: Type[GridElement]
                     if 'row' in panel_or_grid_element.kwargs:
                         klass = FacetedGridElement
@@ -406,3 +408,12 @@ class Violin(ClusteredDataGridElement):
     align_maybe = ['row']
     supply_vars = {'data': 'main_df'}
     plotter = staticmethod(grouped_rows_violin)
+
+class MultiLine(ClusteredDataGridElement):
+    row_deco = False
+    col_deco = True
+    align_vars = ['data']
+    align_maybe = ['row']
+    supply_vars = {'data': 'main_df'}
+    plotter = staticmethod(grouped_rows_line_collections)
+
