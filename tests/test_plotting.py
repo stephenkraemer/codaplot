@@ -1,20 +1,15 @@
 #-
 import subprocess
+import time
 from os.path import expanduser
+from pathlib import Path
 
-import numpy as np
-import pandas as pd
 # import matplotlib as mpl
 # mpl.use('Agg')
 import matplotlib.pyplot as plt
-import time
-from pathlib import Path
-
-from codaplot.plotting import grouped_rows_violin, grouped_rows_line_collections
-
-#-
-
-
+import numpy as np
+import pandas as pd
+from codaplot.plotting import grouped_rows_violin, grouped_rows_line_collections, cut_dendrogram
 # Test data setup
 # ######################################################################
 # Create 'base' test data ndarray with three clusters across rows and
@@ -22,6 +17,9 @@ from codaplot.plotting import grouped_rows_violin, grouped_rows_line_collections
 # The rows and cols of each cluster are not adjacent and need to be
 # correctly arranged by applying clustering.
 # Before usage, we'll likely want to add some noise to this template
+from scipy.cluster.hierarchy import linkage
+
+# -
 
 rows_with_three_different_levels = np.tile([20, 30, 10], (5, 10)).T
 # array([[20, 20, 20, 20, 20],
@@ -70,3 +68,31 @@ def test_grouped_rows_line_collections():
     fp = output_dir / 'grouped-row-line-collection.png'
     fig.savefig(fp)
     subprocess.run(['firefox', fp])
+
+def test_cut_dendrogram_cluster_level():
+    fig, ax = plt.subplots(1, 1)
+    rng = np.random.RandomState(1)
+    int_idx = rng.choice(large_data.shape[0], 1000)
+    Z = linkage(large_data.iloc[int_idx, :])
+    cut_dendrogram(linkage_mat=Z,
+                   cluster_ids_data_order=pd.Series(large_data_cluster_ids_arr[int_idx]),
+                   ax=ax, pretty=True)
+    fp = output_dir / 'cut-dendrogram_cluster-level.png'
+    fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+def test_cut_dendrogram_inspection():
+    fig, ax = plt.subplots(1, 1)
+    rng = np.random.RandomState(1)
+    int_idx = rng.choice(large_data.shape[0], 1000)
+    Z = linkage(large_data.iloc[int_idx, :])
+    cut_dendrogram(linkage_mat=Z,
+                   cluster_ids_data_order=pd.Series(large_data_cluster_ids_arr[int_idx]),
+                   ax=ax, pretty=True,
+                   stop_at_cluster_level=False,
+                   min_cluster_size=30)
+    fp = output_dir / 'cut-dendrogram_inspection.png'
+    fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+

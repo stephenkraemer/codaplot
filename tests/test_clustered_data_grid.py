@@ -4,6 +4,8 @@ import time
 from os.path import expanduser
 from pathlib import Path
 
+from scipy.cluster.hierarchy import linkage
+
 import codaplot as ch
 import codaplot.clustered_data_grid
 import codaplot.plotting
@@ -598,5 +600,75 @@ def test_grid_with_heatmap_and_line_collection():
     )
     gm.create_or_update_figure()
     fp = output_dir / f'heatmaps-with-violin-and-grouped-row-agg.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+def test_grid_heatmap_cut_dendrogram():
+
+    row_linkage = linkage(df1)
+    cluster_ids_ser = cluster_ids_row_df.iloc[:, 0]
+
+    profile_plot = (
+        ch.ClusteredDataGrid(main_df=df1,
+                             row_linkage=row_linkage)
+            .cluster_cols()
+    )
+
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    codaplot.clustered_data_grid.Dendrogram(
+                            panel_width=1.5/2.54, panel_kind='abs',
+                            linkage_mat=row_linkage,
+                            cluster_ids_data_order=cluster_ids_ser,
+                            pretty=True
+                    ),
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df2, cmap='YlOrBr'),
+                ],
+            ],
+            height_ratios=[(1, 'rel'), (1, 'rel')],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 30/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'heatmaps_cut-dendrogram-cluster-level.png'
+    gm.fig.savefig(fp)
+    subprocess.run(['firefox', fp])
+
+    gm = profile_plot.plot_grid(
+            grid=[
+                [
+                    codaplot.clustered_data_grid.Dendrogram(
+                            panel_width=1.5/2.54, panel_kind='abs',
+                            linkage_mat=row_linkage,
+                            cluster_ids_data_order=cluster_ids_ser,
+                            pretty=True,
+                            stop_at_cluster_level=False,
+                            min_height=0,
+                    ),
+                    codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
+                    codaplot.clustered_data_grid.Heatmap(df=df2, cmap='YlOrBr'),
+                ],
+            ],
+            height_ratios=[(1, 'rel'), (1, 'rel')],
+            row_dendrogram=True,
+            col_dendrogram=True,
+            row_annotation=cluster_ids_row_df,
+            row_anno_heatmap_args={'colors': [(.8, .8, .8), (.5, .5, .5)],
+                                   'show_values': True},
+            row_anno_col_width = 1/2.54,
+            figsize=(20/2.54, 30/2.54),
+            fig_args = dict(dpi=180)
+    )
+    gm.create_or_update_figure()
+    fp = output_dir / f'heatmaps_cut-dendrogram-inspection.png'
     gm.fig.savefig(fp)
     subprocess.run(['firefox', fp])

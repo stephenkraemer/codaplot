@@ -19,6 +19,7 @@ from codaplot.plotting import (
     cluster_size_plot, col_agg_plot, row_group_agg_plot,
     grouped_rows_violin,
     grouped_rows_line_collections,
+    cut_dendrogram,
 )
 
 MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
@@ -423,3 +424,9 @@ class MultiLine(ClusteredDataGridElement):
     supply_vars = {'data': 'main_df'}
     plotter = staticmethod(grouped_rows_line_collections)
 
+class Dendrogram(ClusteredDataGridElement):
+    row_deco = False
+    col_deco = False
+    align_vars = []
+    supply_vars = {}
+    plotter = staticmethod(cut_dendrogram)

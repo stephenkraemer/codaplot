@@ -1,6 +1,7 @@
-from typing import List, Optional, Callable, Union, Sequence, Iterable
+from typing import List, Optional, Callable, Union, Sequence, Iterable, Dict
 
 import matplotlib as mpl
+from dataclasses import dataclass
 from matplotlib import pyplot as plt, patches as mpatches
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
@@ -12,6 +13,15 @@ from pandas.core.groupby import GroupBy
 import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram
 
+
+CMAP_DICT = dict(
+        divergent_meth_heatmap = plt.get_cmap('RdBu_r'),
+        sequential_meth_heatmap = plt.get_cmap('YlOrBr'),
+        cluster_id_to_color = dict(zip(np.arange(1,101),
+                                       sns.color_palette('Set1', 100))),
+)
+CMAP_DICT['cluster_id_to_color'][-1] = (0,0,0)
+CMAP_DICT['cluster_id_to_color'][0] = (0,0,0)
 
 def remove_axis(ax: Axes, y=True, x=True):
     """Remove spines, ticks, labels, ..."""
@@ -404,3 +414,275 @@ def get_groupby_levels_in_order_of_appearance(df, groupby_var) -> np.ndarray:
     else:
         levels = pd.Series(groupby_var).unique()
     return levels
+
+
+@dataclass
+class CutDendrogram:
+    """Plot dendrogram with link filtering, coloring and downsampling"""
+
+    Z: np.ndarray
+    cluster_ids_data_order: pd.Series
+    ax: Axes
+    pretty: bool = False
+    orientation: str = 'horizontal'
+
+
+    def __post_init__(self):
+        self._args_processed = False
+
+
+    def plot_links_until_clusters(self):
+
+        if not self._args_processed:
+            self._process_args()
+
+        def get_cluster_ids(obs_idx, link_cluster_ids, leave_cluster_ids):
+            n_obs = leave_cluster_ids.shape[0]
+            if obs_idx < n_obs:
+                return leave_cluster_ids[obs_idx]
+            link_idx = obs_idx - n_obs
+            return link_cluster_ids[link_idx]
+
+        for i in range(-1, -self.Z.shape[0] - 1, -1):
+            if self.link_cluster_ids[i] != -1:
+                continue
+            x, y = self.xcoords.iloc[i, :].copy(), self.ycoords.iloc[i, :].copy()
+            left_child_idx, right_child_idx = self.Z_df[['left_child', 'right_child']].iloc[i]
+            left_cluster_id = get_cluster_ids(left_child_idx,
+                                              self.link_cluster_ids, self.cluster_ids_data_order)
+            right_cluster_id = get_cluster_ids(right_child_idx,
+                                               self.link_cluster_ids, self.cluster_ids_data_order)
+            if left_cluster_id != -1:
+                y['ylow_left'] = 0
+            if right_cluster_id != -1:
+                y['ylow_right'] = 0
+
+            if self.orientation == 'horizontal':
+                self.ax.plot(y, x, color='black')
+            else:
+                self.ax.plot(x, y, color='black')
+
+
+        self._plot_post_processing()
+
+
+    def plot_links_with_cluster_inspection(self, show_cluster_points: bool = False,
+                                           point_params: Optional[Dict] = None,
+                                           min_cluster_size: Optional[int] = None,
+                                           min_height: str = 'auto'):
+
+        if not self._args_processed:
+            self._process_args()
+
+        if point_params is None:
+            point_params = {'s': 2, 'marker': 'x', 'c': 'black'}
+        if min_height == 'auto':
+            min_height = self._linkage_estimate_min_height()
+        if min_cluster_size is None:
+            min_cluster_size = self.n_leaves * 0.02
+        link_colors = pd.Series(self.link_cluster_ids).map(CMAP_DICT['cluster_id_to_color'])
+        # cluster_ids_ser, link_colors = linkage_get_link_cluster_ids(Z, cluster_ids_ser)
+        # ys = []
+        # _linkage_get_child_y_coords(Z, ys, Z.shape[0] * 2, 3)
+        point_xs = []
+        point_ys = []
+        for i in range(self.Z.shape[0]):
+            x = self.xcoords.loc[i, :].copy()
+            y = self.ycoords.loc[i, :].copy()
+
+            if self.Z[i, 3] < min_cluster_size:
+                continue
+            if y['yhigh1'] < min_height:
+                continue
+
+            try:
+                left_child_size = self.Z[int(self.Z[i, 0]) - self.n_leaves, 3]
+            except IndexError:
+                left_child_size = 1
+            try:
+                right_child_size = self.Z[int(self.Z[i, 1]) - self.n_leaves, 3]
+            except IndexError:
+                right_child_size = 1
+
+            if (left_child_size < min_cluster_size
+                    and right_child_size < min_cluster_size):
+                y['ylow_left'] = 0
+                y['ylow_right'] = 0
+                if self.orientation == 'vertical':
+                    self.ax.plot(x, y, color=link_colors[i])
+                else:
+                    self.ax.plot(y, x, color=link_colors[i])
+
+            else:
+                if y['ylow_left'] < min_height or left_child_size < min_cluster_size:
+                    y['ylow_left'] = 0
+
+                    curr_point_x = x['xleft1']
+                    obs_idx = self.Z[i, 0]
+
+                    if obs_idx > self.Z.shape[0]:
+                        lookup_idx = int(obs_idx - (self.Z.shape[0] + 1))
+                        point_ys.append(self.Z[lookup_idx, 2])
+                        point_xs.append(curr_point_x)
+                        # curr_size = self.Z[lookup_idx, 3]
+                        curr_ys: List[float] = []
+                        curr_ys = self._linkage_get_child_y_coords(curr_ys, obs_idx, 8)
+                        point_ys += curr_ys
+                        point_xs += [curr_point_x] * len(curr_ys)
+                    else:
+                        curr_size = 1
+
+                if y['ylow_right'] < min_height or right_child_size < min_cluster_size:
+                    y['ylow_right'] = 0
+                    curr_point_x = x['xright1']
+                    obs_idx = self.Z[i, 1]
+                    if obs_idx > self.Z.shape[0]:
+                        lookup_idx = int(obs_idx - (self.Z.shape[0] + 1))
+                        point_ys.append(self.Z[lookup_idx, 2])
+                        point_xs.append(curr_point_x)
+                        curr_ys = []
+                        curr_ys = self._linkage_get_child_y_coords(curr_ys, obs_idx, 4)
+                        point_ys += curr_ys
+                        point_xs += [curr_point_x] * len(curr_ys)
+
+                if self.orientation == 'vertical':
+                    self.ax.plot(x, y, color=link_colors[i])
+                else:
+                    self.ax.plot(y, x, color=link_colors[i])
+
+            if show_cluster_points:
+                if self.orientation == 'vertical':
+                    self.ax.scatter(point_xs, point_ys, **point_params, zorder=20_000)
+                else:
+                    self.ax.scatter(point_ys, point_xs, **point_params, zorder=20_000)
+
+
+    def _process_args(self):
+        self.n_leaves = self.Z.shape[0] + 1
+        self.link_cluster_ids = self._linkage_get_link_cluster_ids(self.Z, self.cluster_ids_data_order)
+        self.Z_df = self._linkage_get_df(self.Z)
+        self.Z_df['cluster_ids'] = self.link_cluster_ids
+        self.xcoords, self.ycoords = self._linkage_get_coord_dfs()
+
+        assert self.orientation in ['horizontal', 'vertical']
+
+        if self.orientation == 'horizontal':
+            self.ax.invert_xaxis()
+            #     self.ax.invert_yaxis()
+            self.ax.margins(0)
+
+        self._args_processed = True
+
+
+    def _plot_post_processing(self):
+        """Orientation, axis limits, despine..."""
+
+        max_xcoord = self.xcoords.max().max()
+        xcoord_axis = 'x' if self.orientation == 'vertical' else 'y'
+        self.ax.set(**{f'{xcoord_axis}lim': [0, max_xcoord]})
+
+        if self.pretty:
+            self.ax.margins(0)
+            self.ax.set(xticks=[], yticks=[], xticklabels=[], yticklabels=[])
+            sns.despine(ax=self.ax, left=True, bottom=True)
+
+    @staticmethod
+    def _linkage_get_df(Z) -> pd.DataFrame:
+        return pd.DataFrame(
+                Z,
+                columns=['left_child', 'right_child', 'height', 'n_elements']).astype(
+                dtype={'left_child': int, 'right_child': int,
+                       'height': float, 'n_elements': int})
+
+    @staticmethod
+    def _linkage_get_link_cluster_ids(Z, leave_cluster_ids):
+        """ Assign cluster ids to links defined in a linkage matrix
+
+        - cluster ids are assigned to links, not to branches of links
+        - links with children in more than one cluster are assigned id -1
+        """
+        n_leaves = Z.shape[0] + 1
+
+        link_cluster_ids = -2 * np.ones(Z.shape[0])
+
+        # noinspection PyShadowingNames
+        def get_cluster_ids(obs_idx, Z, n, link_cluster_ids, leave_cluster_ids):
+            if obs_idx < n:
+                return leave_cluster_ids[obs_idx]
+            link_idx = obs_idx - n
+            if link_cluster_ids[link_idx] != -2:
+                return link_cluster_ids[link_idx]
+            left_cluster_id = get_cluster_ids(int(Z[link_idx, 0]), Z, n,
+                                              link_cluster_ids, leave_cluster_ids)
+            right_cluster_id = get_cluster_ids(int(Z[link_idx, 1]), Z, n,
+                                               link_cluster_ids, leave_cluster_ids)
+            if left_cluster_id == right_cluster_id:
+                link_cluster_ids[link_idx] = left_cluster_id
+                return left_cluster_id
+            link_cluster_ids[link_idx] = -1
+            return -1
+        get_cluster_ids(Z.shape[0] * 2, Z, n_leaves, link_cluster_ids, leave_cluster_ids)
+
+        return link_cluster_ids
+
+
+    def _linkage_estimate_min_height(self):
+        min_cluster_height = (self.Z_df
+                              .groupby('cluster_ids')['height'].max()
+                              .drop((-1.0)).min())
+        return 0.7 * min_cluster_height
+
+
+    def _linkage_get_child_y_coords(self, ys, obs_idx, n_children):
+        n = self.Z.shape[0] + 1
+        n_children -= 1
+        lookup_idx = int(obs_idx - n)
+        left_obs_idx = int(self.Z[lookup_idx, 0])
+        if left_obs_idx > n:
+            ys.append(self.Z[left_obs_idx - n, 2])
+            if n_children > 0:
+                _ = self._linkage_get_child_y_coords(ys, obs_idx, n_children)
+        right_obs_idx = int(self.Z[lookup_idx, 1])
+        if right_obs_idx > n:
+            ys.append(self.Z[right_obs_idx - n, 2])
+            if n_children > 0:
+                _ = self._linkage_get_child_y_coords(ys, right_obs_idx, n_children)
+        return ys
+
+
+    def _linkage_get_coord_dfs(self):
+        dendrogram_dict = dendrogram(self.Z, no_plot=True)
+        dcoords = pd.DataFrame.from_records(dendrogram_dict['dcoord'])
+        dcoords.columns = ['ylow_left', 'yhigh1', 'yhigh2', 'ylow_right']
+        dcoords = dcoords.sort_values('yhigh1')
+        icoords = pd.DataFrame.from_records(dendrogram_dict['icoord'])
+        icoords.columns = ['xleft1', 'xleft2', 'xright1', 'xright2']
+        icoords = icoords.loc[dcoords.index, :]
+        xcoords = icoords.reset_index(drop=True)
+        ycoords = dcoords.reset_index(drop=True)
+        return xcoords, ycoords
+
+def cut_dendrogram(linkage_mat: np.ndarray,
+                   cluster_ids_data_order: pd.Series,
+                   ax: Axes,
+                   pretty: bool = False,
+                   stop_at_cluster_level=True,
+                   orientation: str = 'horizontal',
+                   show_cluster_points: bool = False,
+                   point_params: Optional[Dict] = None,
+                   min_cluster_size: Optional[int] = None,
+                   min_height: str = 'auto'
+                   ):
+    cut_dendrogram = CutDendrogram(Z=linkage_mat,
+                                   cluster_ids_data_order=cluster_ids_data_order,
+                                   ax=ax, pretty=pretty, orientation=orientation)
+    if stop_at_cluster_level:
+        cut_dendrogram.plot_links_until_clusters()
+    else:
+        cut_dendrogram.plot_links_with_cluster_inspection(
+                show_cluster_points=show_cluster_points,
+                point_params=point_params,
+                min_cluster_size=min_cluster_size,
+                min_height=min_height
+        )
+
