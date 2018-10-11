@@ -1,6 +1,7 @@
 from collections import defaultdict
 from copy import deepcopy
 from inspect import getfullargspec
+from itertools import chain
 from typing import Optional, List, Tuple, Any, Dict, DefaultDict, Union
 
 import matplotlib.gridspec as gridspec
@@ -306,16 +307,23 @@ class GridManager:
         self.all_unique_abs_grid_line_positions_sorted = np.concatenate(
                 (np.array([0]), np.sort(all_unique_abs_grid_line_positions)), axis=0)
 
-        # The float gridline position matching code is experimental
-        # Therefore, we add an overly cautios warning
-        width_warn_threshold = 0.4/2.54
-        if (np.diff(self.all_unique_abs_grid_line_positions_sorted)
-            < width_warn_threshold).any():
-            warn(f'At least one column in the grid has a'
-                 f'width smaller than {width_warn_threshold}')
-            raise ValueError
-
+        # These width ratios are absolute widths in inch for each column in the grid
         self.width_ratios = np.diff(self.all_unique_abs_grid_line_positions_sorted)
+
+        grid_col_size_warn_threshold = 0.3/2.54
+        if (self.width_ratios
+            < grid_col_size_warn_threshold).any():
+            warn(f'At least one column in the grid has a'
+                 f'width smaller than {grid_col_size_warn_threshold}')
+
+        min_element_width_warn_threshold = 0.5/2.54
+        for abs_element_boundary_left, abs_element_boundary_right in chain(
+                *self.abs_grid_line_positions_per_row):
+            if (abs_element_boundary_right - abs_element_boundary_left
+                    < min_element_width_warn_threshold):
+                warn(f'At least one GridElement has a width '
+                     f'smaller than {min_element_width_warn_threshold}')
+
 
     def _compute_element_gridspec_slices(self):
         self.elem_gs = defaultdict(dict)
