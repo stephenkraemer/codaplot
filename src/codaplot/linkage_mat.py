@@ -58,56 +58,6 @@ class LinkageMatrix:
 
         return name
 
-    def merge_clusters(self, old_name, groups: List[List[int]],
-                       new_name: Optional[str] = None) -> pd.Series:
-        """
-
-        Args:
-            groups: cluster groups must be consecutive. For example:
-                [[3, 4], [8, 9 10]], but not [[3, 4], [8, 10]]
-
-        Returns:
-            Series with merged cluster ids. The cluster ids are adapted
-            to be consecutive again. If this is applied to cluster ids which
-            are chosen to be consecutive when leave-ordered, the new cluster ids
-            will still be consecutive when leave-ordered. This also holds if the
-            input cluster ids are data-ordered.
-        """
-
-        # groups must be consecutive
-        groups_sorted = [sorted(x) for x in groups]
-        assert all([all(np.array(x) == np.arange(len(x)) + x[0]) for x in groups_sorted])
-
-        if self.data_order_cluster_ids is None:
-            raise ValueError('need to calculate cluster ids first')
-        assert old_name in self.data_order_cluster_ids.columns
-
-        if new_name is None:
-            new_name = old_name + '_merged_' + '_'.join(['-'.join(str(i) for i in x) for x in groups])
-
-        d = {}
-        for x in groups_sorted:
-            new_id = x[0]
-            for elem in x:
-                d[elem] = new_id
-
-        merged_ids = self.data_order_cluster_ids[old_name].replace(d)
-        n_clusters = merged_ids.nunique()
-        merged_ids = merged_ids.replace(dict(zip(sorted(merged_ids.unique()), range(1, n_clusters + 1))))
-
-        # assert that cluster ids are consecutive
-        assert np.all(np.sort(merged_ids.unique()) == np.arange(1, n_clusters + 1))
-        # assert that cluster ids are still consecutive in leave order
-        assert ilen(unique_justseen(merged_ids.iloc[self.leaves_list])) == n_clusters
-
-        self.data_order_cluster_ids[new_name] = merged_ids
-
-        return new_name
-
-
-    def split(self, cluster_id):
-        pass
-
     @staticmethod
     def _dict_to_compact_str(d: Dict[str, Any]) -> str:
         return ','.join(f'{k}={v}' for k, v in d.items())
