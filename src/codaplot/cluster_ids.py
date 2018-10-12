@@ -137,7 +137,23 @@ class ClusterIDs:
                 self.df[new_name].loc[self.df[new_name] == orig_id_new_id_ser[cluster_id]] = (
                         np.array(spec[cluster_id]) + orig_id_new_id_ser[cluster_id] - 1)
 
+    def mask(self, name: str, new_name: str, spec: List[Union[int, str]]):
+        """Mask cluster IDs to mark regions without cluster assignment
 
+        Masked values are replaced by -1, either as integer or as category
+        depending on the dtype of the input cluster IDs.
+
+        Currently, the remaining cluster IDs are not modified to be
+        again subsequent.
+        """
+        new_ids = self.df[name].copy()
+        if is_categorical_dtype(new_ids):
+            new_ids = new_ids.cat.set_categories(['-1'] + list(new_ids.cat.categories))
+            new_ids.loc[new_ids.isin(spec)] = '-1'
+            new_ids = new_ids.cat.remove_unused_categories()
+        else:
+            new_ids.loc[new_ids.isin(spec)] = -1
+        self.df[new_name] = new_ids
 
 
     @staticmethod

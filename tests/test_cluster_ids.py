@@ -63,3 +63,23 @@ def test_split():
     exp_split_3 = pd.Series(pd.Categorical(exp_split_3, ordered=True),
                             name='split3')
     assert_series_equal(cluster_ids.df['split3'], exp_split_3)
+
+
+def test_discard():
+    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3), ordered=True),
+                                   'clustering2': pd.Categorical(np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
+                                   'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
+                                   })
+    cluster_ids = ci.ClusterIDs(df = cluster_ids_df)
+
+    # note that currently the resulting cluster ids are not subsequent
+
+    cluster_ids.mask(name='clustering3', new_name='discard3', spec=[3, 5])
+    expected_discard3 = pd.Series(np.tile([1, 2, -1, 4, -1, 6, 7, 8, 9], 3), name='discard3')
+    assert_series_equal(expected_discard3, cluster_ids.df['discard3'])
+
+    cluster_ids.mask(name='clustering1', new_name='discard1', spec=['3_2', '4'])
+    expected_discard1 = pd.Series(pd.Categorical(
+            np.tile(['1', '2', '3_1', '-1', '3_3', '3_4', '-1', '5', '6'], 3), ordered=True),
+            name='discard1')
+    assert_series_equal(expected_discard1, cluster_ids.df['discard1'])
