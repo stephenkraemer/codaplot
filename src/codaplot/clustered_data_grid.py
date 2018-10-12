@@ -428,8 +428,8 @@ class MultiLine(ClusteredDataGridElement):
 class Dendrogram(ClusteredDataGridElement):
     row_deco = False
     col_deco = False
-    align_vars = []
-    supply_vars = {}
+    align_vars: List[str] = []
+    supply_vars: Dict = {}
     plotter = staticmethod(cut_dendrogram)
 
 class AggHeatmap(ClusteredDataGridElement):

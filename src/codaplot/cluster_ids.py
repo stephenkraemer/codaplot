@@ -3,7 +3,7 @@ from itertools import chain
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_categorical_dtype
 import numpy as np
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Iterable
 from dataclasses import dataclass
 from toolz import merge
 
@@ -14,14 +14,14 @@ class ClusterIDs:
     order: Optional[np.ndarray] = None
 
     def merge(self, name: str, new_name: str,
-              groups_to_merge: List[List[Union[int, str]]]):
+              spec: List[List[Union[int, str]]]):
         """Merge cluster IDs
 
         Args:
             name: name of the input cluster IDs (must be column in
                 df
             new_name: name for the new set of Cluster IDs
-            groups_to_merge: Which clusters to merge, e.g.
+            spec: Which clusters to merge, e.g.
                 [[3, 4], [4, 9]] or [['1', '2'], ['4_1', '4_2']]
 
         Note that for hierarchical clustering, it is important to respect
@@ -38,10 +38,10 @@ class ClusterIDs:
             raise TypeError()
 
         if has_int_clust_ids:
-            groups_sorted = [sorted(x) for x in groups_to_merge]
+            groups_sorted = [sorted(x) for x in spec]
         else:
-            groups_sorted = [sorted(list_of_ids, key=lambda x: [int(i) for i in x.split('_')])
-                             for list_of_ids in groups_to_merge]
+            groups_sorted = [sorted(list_of_ids, key=lambda x: [int(i) for i in x.split('_')])  # type: ignore
+                             for list_of_ids in spec]
 
         identity_mapping = {cluster_id: cluster_id for cluster_id in self.df[name].unique()}
 
@@ -92,6 +92,54 @@ class ClusterIDs:
 
         return self.df[new_name]
 
+    def split(self, name: str, new_name: str,
+              spec: Dict[Union[int, str], Iterable], create_subclusters: bool = True) -> None:
+        """Split cluster into new clusters or into subclusters
+
+        Args:
+            name: Name of the input clustering
+            new_name: Name of the resulting split clustering
+            spec: maps IDs of clusters to be split to the new subcluster IDs for the
+                elements in the cluster (must be given in the data order, i.e. they
+                will not be aligned)
+            create_subclusters: if True, splitting is carried out by appending
+                the subcluster ids to the original cluster id, joined with an
+                underscore. If False, the original cluster id is discarded and
+                replaced with separate IDs for each subcluster. All following cluster
+                IDs are incremented so that the final clustering has subsequent
+                cluster IDs
+        """
+
+        if create_subclusters:
+            split_ids = self.df[name].astype(str)
+
+            for cluster_id, new_clusters in spec.items():
+                new_clusters = np.array(new_clusters).astype(str)
+                cluster_id = str(cluster_id)
+                split_ids[split_ids == cluster_id] = (
+                     split_ids[split_ids == cluster_id] + '_' + new_clusters)
+            categories = list(sorted(split_ids.unique(), key=lambda x: x.split('_')))
+            split_ids = pd.Series(pd.Categorical(split_ids, ordered=True,
+                                                     categories=categories))
+            self.df[new_name] = split_ids
+        else:
+            if not is_integer_dtype(self.df[name]):
+                raise NotImplementedError
+            sorted_cluster_ids = np.unique(self.df[name])
+            sorted_spec_keys = list(sorted(spec.keys()))
+            orig_id_new_id_ser = pd.Series(np.arange(1, len(sorted_cluster_ids) + 1),
+                                   index=np.arange(1, len(sorted_cluster_ids) + 1))
+            self.df[new_name] = self.df[name].copy()
+            for cluster_id in sorted_spec_keys:
+                n_ids = len(np.unique(spec[cluster_id]))
+                self.df[new_name].loc[self.df[new_name] > orig_id_new_id_ser[cluster_id]] += n_ids - 1
+                orig_id_new_id_ser[(orig_id_new_id_ser[cluster_id]+1):] += n_ids - 1
+                self.df[new_name].loc[self.df[new_name] == orig_id_new_id_ser[cluster_id]] = (
+                        np.array(spec[cluster_id]) + orig_id_new_id_ser[cluster_id] - 1)
+
+
+
+
     @staticmethod
     def _make_subsequent(ser: pd.Series):
         if ser.shape[0] == 1:
@@ -140,8 +188,6 @@ class ClusterIDs:
     #     return new_name
 
 
-    def split(self, cluster_id):
-        pass
 
 
 # def df_contract(inst: ClusterIDs):

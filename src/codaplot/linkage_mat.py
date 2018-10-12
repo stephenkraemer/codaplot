@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,6 @@ from dpcontracts import invariant
 from dynamicTreeCut import cutreeHybrid
 from more_itertools import ilen, unique_justseen
 from scipy.cluster.hierarchy import leaves_list
-
 
 
 def data_ordered_cluster_ids_contract(df):

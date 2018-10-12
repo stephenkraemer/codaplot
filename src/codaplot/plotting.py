@@ -520,17 +520,17 @@ class CutDendrogram:
                     curr_point_x = x['xleft1']
                     obs_idx = self.Z[i, 0]
 
-                    if obs_idx > self.Z.shape[0]:
-                        lookup_idx = int(obs_idx - (self.Z.shape[0] + 1))
-                        point_ys.append(self.Z[lookup_idx, 2])
-                        point_xs.append(curr_point_x)
-                        # curr_size = self.Z[lookup_idx, 3]
-                        curr_ys: List[float] = []
-                        curr_ys = self._linkage_get_child_y_coords(curr_ys, obs_idx, 8)
-                        point_ys += curr_ys
-                        point_xs += [curr_point_x] * len(curr_ys)
-                    else:
-                        curr_size = 1
+                    # if obs_idx > self.Z.shape[0]:
+                    lookup_idx = int(obs_idx - (self.Z.shape[0] + 1))
+                    point_ys.append(self.Z[lookup_idx, 2])
+                    point_xs.append(curr_point_x)
+                    # curr_size = self.Z[lookup_idx, 3]
+                    curr_ys: List[float] = []
+                    curr_ys = self._linkage_get_child_y_coords(curr_ys, obs_idx, 8)
+                    point_ys += curr_ys
+                    point_xs += [curr_point_x] * len(curr_ys)
+                    # else:
+                    #     curr_size = 1
 
                 if y['ylow_right'] < min_height or right_child_size < min_cluster_size:
                     y['ylow_right'] = 0
