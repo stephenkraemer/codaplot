@@ -13,6 +13,8 @@ from pandas.core.groupby import GroupBy
 import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram
 
+from codaplot.cluster_ids import ClusterIDs
+from codaplot.linkage_mat import LinkageMatrix
 
 CMAP_DICT = dict(
         divergent_meth_heatmap = plt.get_cmap('RdBu_r'),
@@ -559,8 +561,12 @@ class CutDendrogram:
 
     def _process_args(self):
         self.n_leaves = self.Z.shape[0] + 1
-        self.link_cluster_ids = self._linkage_get_link_cluster_ids(self.Z, self.cluster_ids_data_order)
-        self.Z_df = self._linkage_get_df(self.Z)
+        linkage_mat = LinkageMatrix(
+                self.Z,
+                cluster_ids=ClusterIDs(
+                        self.cluster_ids_data_order.to_frame('clustering1')))
+        self.link_cluster_ids = linkage_mat.get_link_cluster_ids('clustering1')
+        self.Z_df = linkage_mat.df
         self.Z_df['cluster_ids'] = self.link_cluster_ids
         self.xcoords, self.ycoords = self._linkage_get_coord_dfs()
 
@@ -585,45 +591,6 @@ class CutDendrogram:
             self.ax.margins(0)
             self.ax.set(xticks=[], yticks=[], xticklabels=[], yticklabels=[])
             sns.despine(ax=self.ax, left=True, bottom=True)
-
-    @staticmethod
-    def _linkage_get_df(Z) -> pd.DataFrame:
-        return pd.DataFrame(
-                Z,
-                columns=['left_child', 'right_child', 'height', 'n_elements']).astype(
-                dtype={'left_child': int, 'right_child': int,
-                       'height': float, 'n_elements': int})
-
-    @staticmethod
-    def _linkage_get_link_cluster_ids(Z, leave_cluster_ids):
-        """ Assign cluster ids to links defined in a linkage matrix
-
-        - cluster ids are assigned to links, not to branches of links
-        - links with children in more than one cluster are assigned id -1
-        """
-        n_leaves = Z.shape[0] + 1
-
-        link_cluster_ids = -2 * np.ones(Z.shape[0])
-
-        # noinspection PyShadowingNames
-        def get_cluster_ids(obs_idx, Z, n, link_cluster_ids, leave_cluster_ids):
-            if obs_idx < n:
-                return leave_cluster_ids[obs_idx]
-            link_idx = obs_idx - n
-            if link_cluster_ids[link_idx] != -2:
-                return link_cluster_ids[link_idx]
-            left_cluster_id = get_cluster_ids(int(Z[link_idx, 0]), Z, n,
-                                              link_cluster_ids, leave_cluster_ids)
-            right_cluster_id = get_cluster_ids(int(Z[link_idx, 1]), Z, n,
-                                               link_cluster_ids, leave_cluster_ids)
-            if left_cluster_id == right_cluster_id:
-                link_cluster_ids[link_idx] = left_cluster_id
-                return left_cluster_id
-            link_cluster_ids[link_idx] = -1
-            return -1
-        get_cluster_ids(Z.shape[0] * 2, Z, n_leaves, link_cluster_ids, leave_cluster_ids)
-
-        return link_cluster_ids
 
 
     def _linkage_estimate_min_height(self):

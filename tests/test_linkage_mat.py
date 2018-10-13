@@ -45,8 +45,8 @@ def test_linkage_matrix():
     dist_mat = pdist(medium_size_data)
     Z = linkage(dist_mat)
 
-    linkage_matrix = lm.LinkageMatrix(Z=Z, dist_mat=dist_mat,
-                                   index=medium_size_data.index)
+    linkage_matrix = lm.LinkageMatrix(matrix=Z, dist_mat=dist_mat,
+                                      index=medium_size_data.index)
 
     linkage_matrix.add_dynamic_cutree_division('less strict', deepSplit=1)
     linkage_matrix.add_dynamic_cutree_division('strict', deepSplit=2)
