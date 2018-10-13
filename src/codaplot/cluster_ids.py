@@ -1,3 +1,4 @@
+from copy import deepcopy
 from itertools import chain
 
 import pandas as pd
@@ -11,7 +12,6 @@ from toolz import merge
 @dataclass
 class ClusterIDs:
     df: pd.DataFrame
-    order: Optional[np.ndarray] = None
 
     def merge(self, name: str, new_name: str,
               spec: List[List[Union[int, str]]]):
@@ -164,6 +164,134 @@ class ClusterIDs:
         diffs[diffs > 1] = 1
         cumsums = np.cumsum(diffs)
         return cumsums.astype(int)
+
+
+    def sample_proportional(self, name,
+                            n_total=None, frac=None,
+                            min_cluster_size=0,
+                            random_state=1) -> 'ClusterIDs':
+        """Sample while maintaining the propertions of one clustering
+
+        Args:
+            name: the clustering whose proportions should be retained
+            n_total: total number of rows in the resulting ClusterIDs.
+                The algorithm tries to maintain the proportions as well as
+                possible, if some clusters must have larger fractions than orginally,
+                these 'additional rows' are drawn randomly from the entire dataset,
+                and are thus more likely to come from larger clusters
+            frac: will sample this fraction from every cluster, using
+                pd.DataFrame.sample
+            min_cluster_size: if specified, raises a ValueError if the size of any cluster
+                in the sampled result falls below this threshold (only applied to
+                the selected clustering)
+            random_state: RandomState or int used to initialize RandomState object
+                internally.
+        """
+        if n_total and frac:
+            raise ValueError('Can not define n_total and frac at the same time')
+        elif n_total:
+            frac = n_total / len(self.df)
+
+        rng = self._get_random_state(random_state)
+
+        new_df = (self.df
+                  .groupby(name, group_keys=False)
+                  .apply(lambda df: df.sample(frac=frac, random_state=rng))
+                  )
+
+        if n_total is not None:
+            new_df = self._bring_to_n_total(n_total, new_df, rng)
+
+        new_df = new_df.sort_index()
+
+        if min_cluster_size:
+            if new_df.groupby(name).size().lt(min_cluster_size).any():
+                raise ValueError('Some clusters fall below the minimum cluster'
+                                 'size with this parameter combination')
+
+        return ClusterIDs(df=new_df)
+
+
+    def sample_equal(self, name, n_per_cluster=None, n_total=None, random_state=1,
+                     strict=False):
+        """Sample equal number of rows from each cluster
+
+        Args:
+            name: the clustering which should be represented with same size
+                clusters in the sampled result.
+            n_per_cluster: absolute number of events sampled from every cluster.
+                Clusters smaller than n_per_cluster are taken as a whole.
+                May not be specified together with n_total.
+            n_total: number of rows in the sampled result. The algorithm will try
+                to sample the same number of rows from each cluster. If that's
+                not possible, missing or surplus rows are removed/added randomly
+                across all events, ie. occur in each cluster with a likelihood
+                proportional to the cluster size.
+                May not be specified together with n_per_cluster.
+            strict: if True, raises ValueError if any cluster size falls below
+                n_per_cluster or round(n_total / cluster_ids.nunique())
+            random_state: RandomState or int used to initialize RandomState object
+                internally.
+        """
+
+        if n_per_cluster and n_total:
+            raise ValueError('Not allowed to define n_per_cluster and n_total'
+                             ' at the same time')
+
+        if n_total is not None and n_total > len(self.df):
+            raise ValueError('n_total > len(self.df)')
+
+        rng = self._get_random_state(random_state)
+
+        if n_per_cluster is None:
+            if n_total is None:
+                raise ValueError('If n_per_cluster is not specified,'
+                                 ' n_total must be specified')
+            else:
+                n_per_cluster = np.round(
+                        n_total / self.df[name].nunique()).astype(int)
+                if n_per_cluster == 0:
+                    raise ValueError('n_total is too small,'
+                                     'can not draw at least one element from every cluster')
+
+        grouped = self.df.groupby(name)
+        if strict and grouped.size().lt(n_per_cluster).any():
+            raise ValueError('At least one cluster does not have enough elements')
+
+        new_df = self.df.groupby(name, group_keys=False).apply(lambda df: (
+            df if len(df) < n_per_cluster
+            else df.sample(n=n_per_cluster, random_state=rng)))
+
+        if n_total is not None:
+            new_df = self._bring_to_n_total(n_total, new_df, rng)
+
+        new_df = new_df.sort_index()
+
+        return ClusterIDs(df=new_df)
+
+    def _bring_to_n_total(self, n_total, new_df, rng):
+        nrows = len(new_df)
+        if nrows > n_total:
+            new_df = new_df.iloc[rng.choice(nrows, n_total)]
+        elif nrows < n_total:
+            n_missing = n_total - nrows
+            new_df = pd.concat([
+                new_df, self.df.sample(n=n_missing, random_state=rng)])
+        return new_df
+
+    def _get_random_state(self, random_state):
+        if isinstance(random_state, int):
+            rng = np.random.RandomState(random_state)
+        elif isinstance(random_state, np.random.RandomState):
+            rng = random_state
+        else:
+            raise TypeError('Wrong type for argument random_state')
+        return rng
+
+    def __eq__(self, other: 'ClusterIDs'):
+        return self.df.equals(other.df)
+
+
 
 
     # def merge_clusters(self, name, groups_to_merge: List[List[int]],
