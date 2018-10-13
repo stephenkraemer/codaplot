@@ -1,38 +1,49 @@
-import pandas as pd
-import pytest
-from pandas.testing import assert_series_equal
 import numpy as np
-from pandas.util.testing import assert_frame_equal
+import pandas as pd
+from pandas.testing import assert_series_equal
+import pytest
 
 import codaplot.cluster_ids as ci
 
 
 def test_merge():
 
-    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3), ordered=True),
-                                   'clustering2': pd.Categorical(np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
-                                   'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
-                                   })
+    cluster_ids_df = pd.DataFrame(
+            {'clustering1': pd.Categorical(
+                    np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3),
+                    ordered=True),
+             'clustering2': pd.Categorical(
+                     np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3),
+                     ordered=True),
+             'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
+             })
     cluster_ids = ci.ClusterIDs(df = cluster_ids_df)
-    cluster_ids.merge('clustering1', new_name='split1', spec=[['3_3', '3_2'], ['5', '4']])
+    cluster_ids.merge('clustering1', new_name='split1',spec=[['3_3', '3_2'], ['5', '4']])
     cluster_ids.merge('clustering2', new_name='split2', spec=[['3', '4'], ['2', '6']])
     cluster_ids.merge('clustering3', new_name='split3', spec=[[3, 4], [2, 6]])
 
-    exp_split1 = pd.Series(pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_2', '3_3', '4', '4', '5'], 3), ordered=True,
-                                                   categories=['1', '2', '3_1', '3_2', '3_3', '4', '5']), name='split1')
+    exp_split1 = pd.Series(pd.Categorical(np.tile(
+            ['1', '2', '3_1', '3_2', '3_2', '3_3', '4', '4', '5'], 3), ordered=True,
+            categories=['1', '2', '3_1', '3_2', '3_3', '4', '5']), name='split1')
     assert_series_equal(cluster_ids.df['split1'], exp_split1)
 
-    exp_split2 = pd.Series(pd.Categorical(np.tile(['1', '2', '3', '3', '4', '2', '5', '6', '7'], 3), ordered=True), name='split2')
+    exp_split2 = pd.Series(pd.Categorical(np.tile(
+            ['1', '2', '3', '3', '4', '2', '5', '6', '7'], 3), ordered=True), name='split2')
     assert_series_equal(cluster_ids.df['split2'], exp_split2)
 
     exp_split3 = pd.Series(np.tile([1, 2, 3, 3, 4, 2, 5, 6, 7], 3), name='split3')
     assert_series_equal(cluster_ids.df['split3'], exp_split3)
 
 def test_split():
-    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3), ordered=True),
-                                   'clustering2': pd.Categorical(np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
-                                   'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
-                                   })
+    cluster_ids_df = pd.DataFrame(
+            {'clustering1': pd.Categorical(
+                    np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3),
+                    ordered=True),
+                'clustering2': pd.Categorical(
+                        np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3),
+                        ordered=True),
+                'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
+            })
     cluster_ids = ci.ClusterIDs(df = cluster_ids_df)
 
 
@@ -69,10 +80,15 @@ def test_split():
 
 
 def test_discard():
-    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3), ordered=True),
-                                   'clustering2': pd.Categorical(np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
-                                   'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
-                                   })
+    cluster_ids_df = pd.DataFrame(
+            {'clustering1': pd.Categorical(np.tile(
+                    ['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3),
+                    ordered=True),
+                'clustering2': pd.Categorical(np.tile(
+                        ['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3),
+                        ordered=True),
+                'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
+            })
     cluster_ids = ci.ClusterIDs(df = cluster_ids_df)
 
     # note that currently the resulting cluster ids are not subsequent
@@ -91,10 +107,14 @@ def test_discard():
 
 def test_sample_proportional():
 
-    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3), ordered=True),
-                                   'clustering2': pd.Categorical(np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
-                                   'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
-                                   })
+    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(
+            ['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3),
+            ordered=True),
+        'clustering2': pd.Categorical(
+                np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3),
+                ordered=True),
+        'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
+    })
     cluster_ids = ci.ClusterIDs(df = cluster_ids_df)
 
     for name in ['clustering1', 'clustering2', 'clustering3']:
@@ -105,7 +125,7 @@ def test_sample_proportional():
         exp_cluster_id_df = pd.concat([
             (cluster_ids_df
              .groupby(name, group_keys=False)
-             .apply(lambda df: df.sample(frac=11/27, random_state=rng))
+             .apply(lambda df: df.sample(frac=11/27, random_state=rng))  # pylint: disable=W0640
              ),
             cluster_ids_df.sample(2, random_state=rng)], axis=0).sort_index()
         assert ci.ClusterIDs(exp_cluster_id_df) == sampled_cluster_ids
@@ -139,10 +159,14 @@ def test_sample_proportional():
 
 
 def test_sample_equal():
-    cluster_ids_df = pd.DataFrame({'clustering1': pd.Categorical(np.tile(['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3), ordered=True),
-                                   'clustering2': pd.Categorical(np.tile(['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
-                                   'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
-                                   })
+    cluster_ids_df = pd.DataFrame(
+            {'clustering1': pd.Categorical(np.tile(
+                    ['1', '2', '3_1', '3_2', '3_3', '3_4', '4', '5', '6'], 3),
+                    ordered=True),
+                'clustering2': pd.Categorical(np.tile(
+                        ['1', '2', '3', '4', '5', '6', '7', '8', '9'], 3), ordered=True),
+                'clustering3': pd.Series(np.tile([1, 2, 3, 4, 5, 6, 7, 8, 9], 3))
+            })
     cluster_ids = ci.ClusterIDs(df = cluster_ids_df)
 
     def assert_sample_equal(sampled_cluster_ids, cluster_ids,

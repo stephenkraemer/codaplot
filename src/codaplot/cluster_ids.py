@@ -1,10 +1,9 @@
-from copy import deepcopy
 from itertools import chain
+from typing import List, Union, Dict, Iterable
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_categorical_dtype
-import numpy as np
-from typing import List, Optional, Union, Dict, Iterable
 from dataclasses import dataclass
 from toolz import merge
 
@@ -279,7 +278,8 @@ class ClusterIDs:
                 new_df, self.df.sample(n=n_missing, random_state=rng)])
         return new_df
 
-    def _get_random_state(self, random_state):
+    @staticmethod
+    def _get_random_state(random_state):
         if isinstance(random_state, int):
             rng = np.random.RandomState(random_state)
         elif isinstance(random_state, np.random.RandomState):
@@ -288,7 +288,7 @@ class ClusterIDs:
             raise TypeError('Wrong type for argument random_state')
         return rng
 
-    def __eq__(self, other: 'ClusterIDs'):
+    def __eq__(self, other):
         return self.df.equals(other.df)
 
 

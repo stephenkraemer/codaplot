@@ -25,7 +25,7 @@ class LinkageMatrix:
     data_order_cluster_ids: Optional[pd.DataFrame] = None
 
     def __post_init__(self):
-        self.leaves_list = leaves_list(self.Z)
+        self.leaves_list = leaves_list(self.Z)  # pylint: disable=W0201
 
     def add_dynamic_cutree_division(self, name: Optional[str] = None, **kwargs):
         if name is None:

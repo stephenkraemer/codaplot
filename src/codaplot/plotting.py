@@ -1,7 +1,7 @@
 from typing import List, Optional, Callable, Union, Sequence, Iterable, Dict
 
-import matplotlib as mpl
 from dataclasses import dataclass
+import matplotlib as mpl
 from matplotlib import pyplot as plt, patches as mpatches
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
