@@ -14,7 +14,7 @@ import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram
 
 from codaplot.cluster_ids import ClusterIDs
-from codaplot.linkage_mat import LinkageMatrix
+from codaplot.linkage_mat import Linkage
 
 CMAP_DICT = dict(
         divergent_meth_heatmap = plt.get_cmap('RdBu_r'),
@@ -561,7 +561,7 @@ class CutDendrogram:
 
     def _process_args(self):
         self.n_leaves = self.Z.shape[0] + 1
-        linkage_mat = LinkageMatrix(
+        linkage_mat = Linkage(
                 self.Z,
                 cluster_ids=ClusterIDs(
                         self.cluster_ids_data_order.to_frame('clustering1')))

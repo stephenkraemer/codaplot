@@ -1,28 +1,30 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from dynamicTreeCut import cutreeHybrid
 from more_itertools import ilen, unique_justseen
-from scipy.cluster.hierarchy import leaves_list
+from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.spatial.distance import pdist
 
 from codaplot.cluster_ids import ClusterIDs
 
 
 @dataclass
-class LinkageMatrix:
+class Linkage:
 
     matrix: np.ndarray
     dist_mat: Optional[np.ndarray] = None
     index: Optional[pd.MultiIndex] = None
     cluster_ids: Optional[ClusterIDs] = None
+    leaf_orders: Optional[pd.DataFrame] = None
 
     def __post_init__(self):
-        self.leaves_list = leaves_list(self.matrix)  # pylint: disable=W0201
+        self.leaf_order = leaves_list(self.matrix)  # pylint: disable=W0201
         self._df = None
 
-    def add_dynamic_cutree_division(self, name: Optional[str] = None, **kwargs):
+    def dynamic_tree_cut(self, name: Optional[str] = None, **kwargs) -> None:
         if name is None:
             name = self._dict_to_compact_str(kwargs)
         cutree_result = cutreeHybrid(self.matrix, self.dist_mat, **kwargs)
@@ -33,7 +35,7 @@ class LinkageMatrix:
         unique_labels = data_order_ids.unique()
         n_clusters = len(unique_labels)
 
-        leave_order_ids = data_order_ids.iloc[self.leaves_list]
+        leave_order_ids = data_order_ids.iloc[self.leaf_order]
 
         # assert that elements with the same cluster ids form uniterrupted blocks
         # when in leave order
@@ -48,11 +50,17 @@ class LinkageMatrix:
                     df=pd.DataFrame(
                             {name: data_ordered_ids_relabeled}, index=self.index)
             )
+            assert self.leaf_orders is None
+            self.leaf_orders = pd.DataFrame({name: self.leaf_order})
         else:
             assert name not in self.cluster_ids.df.columns
             self.cluster_ids.df[name] = data_ordered_ids_relabeled
+            if self.leaf_orders is not None:
+                assert name not in self.leaf_orders.columns
+                self.leaf_orders[name] = self.leaf_order
+            else:
+                self.leaf_orders = pd.DataFrame({name: self.leaf_order})
 
-        return name
 
     @staticmethod
     def _dict_to_compact_str(d: Dict[str, Any]) -> str:
@@ -60,7 +68,6 @@ class LinkageMatrix:
 
     @property
     def df(self):
-        # TODO: add test
         if self._df is None:
             # noinspection PyAttributeOutsideInit
             self._df = pd.DataFrame(
@@ -104,3 +111,67 @@ class LinkageMatrix:
 
         return link_cluster_ids
 
+
+    def iterative_dynamic_tree_cut(self, clustering_name, cluster_id,
+                                   data: pd.DataFrame, name: Optional[str] = None,
+                                   treecut_args: Optional[Dict] = None,
+                                   metric='euclidean', method='average',
+                                   usecols: Optional[List[str]] = None,
+                                   create_subclusters: bool = True,
+                                   ) -> None:
+        """Iteratively cut a cluster from an existing partitioning
+
+        Currently, the only option is to compute a new linkage for the data
+        in the cluster and use this to compute the new partitioning within the cluster.
+        For this purpose, the columns use for the pdist calculation can be specified.
+
+        In the future, we may add the possibility to reuse a part of the original linkage
+        and cut this part again with finer parameters than in the original clustering.
+
+        Args:
+            clustering_name: base clustering, where one cluster is selected for
+                iterative refinement
+            cluster_id: the cluster selected for refinement
+            data: the original dataframe underlying the clustering
+            name: name of the new resulting clustering
+            treecut_args: passed to cutreeHybrid
+            metric: passed to scipy.pdist
+            method: passed to scipy.linkage
+            usecols: features used for clustering. List of column labels
+                for label-based indexing.
+            create_subclusters: passed to ClusterIDs.split
+        """
+
+        assert isinstance(data, pd.DataFrame)
+
+        # TODO: add test
+        if treecut_args is None:
+            treecut_args = {}
+        if usecols is None:
+            usecols = slice(None)
+        else:
+            assert isinstance(usecols, list)
+        if name is None:
+            name = f'iterative_{cluster_id}_{self._dict_to_compact_str(treecut_args)}'
+
+        is_in_split_cluster = self.cluster_ids.df[clustering_name] == cluster_id
+
+        sub_data = data.loc[is_in_split_cluster, usecols]
+        dist_mat = pdist(sub_data, metric=metric)
+        Z = linkage(dist_mat, method=method)
+        inner_linkage_mat = Linkage(Z, dist_mat, index=sub_data.index)
+        inner_linkage_mat.dynamic_tree_cut(name=name, **treecut_args)
+        self.cluster_ids.split(name=clustering_name, new_name=name,
+                               spec={cluster_id: inner_linkage_mat.cluster_ids.df[name]},
+                               create_subclusters=create_subclusters)
+        new_leaf_order = self.leaf_order.copy()
+
+        cluster_data_int_indices = np.arange(len(data))[is_in_split_cluster]
+        clustered_data_ii_ordered = cluster_data_int_indices[inner_linkage_mat.leaf_order]
+        new_leaf_order[np.isin(new_leaf_order, cluster_data_int_indices)] = clustered_data_ii_ordered
+
+        if self.leaf_orders is None:
+            self.leaf_orders = pd.DataFrame({name: new_leaf_order})
+        else:
+            assert name not in self.leaf_orders.columns
+            self.leaf_orders[name] = new_leaf_order
