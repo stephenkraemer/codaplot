@@ -160,7 +160,7 @@ class ClusterIDs:
         if ser.shape[0] == 1:
             return [None]
         diffs = np.diff(np.insert(ser.values, 0, 0))
-        diffs[diffs > 1] = 1
+        diffs[diffs != 0] = 1
         cumsums = np.cumsum(diffs)
         return cumsums.astype(int)
 
