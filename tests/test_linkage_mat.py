@@ -54,6 +54,7 @@ def test_dynamic_tree_cut_with_blobs(blobs):
     linkage_obj = clm.Linkage(matrix=Z, dist_mat=dist_mat)
     linkage_obj.dynamic_tree_cut('coarse', minClusterSize=20, deepSplit=1)
     linkage_obj.dynamic_tree_cut('fine', minClusterSize=5, deepSplit=2)
+    linkage_obj.dynamic_tree_cut('finer', minClusterSize=5, deepSplit=2.5)
     coarse_tree_cut_ids = linkage_obj.cluster_ids.df['coarse'].values
     fine_tree_cut_ids = linkage_obj.cluster_ids.df['fine'].values
     # plt.scatter(arr[:, 0], arr[:, 1], c=coarse_tree_cut_ids, cmap='Set1')
