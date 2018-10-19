@@ -157,7 +157,7 @@ class ClusteredDataGrid:
                   row_anno_heatmap_args: Optional[Dict[str, Any]] = None,
                   row_anno_col_width: float = 0.6/2.54,
                   fig_args: Optional[Dict[str, Any]] = None
-                  ):
+                  ) -> GridManager:
         """Create grid of plots with an optionally underlying clustering
 
         Row and column dendrograms and annotations can be added automatically
