@@ -13,7 +13,7 @@ class ClusterIDs:
     df: pd.DataFrame
 
     def merge(self, name: str, new_name: str,
-              spec: List[List[Union[int, str]]]):
+              spec: List[List[Union[int, str]]]) -> None:
         """Merge cluster IDs
 
         Args:
@@ -89,7 +89,6 @@ class ClusterIDs:
                     self.df[name]
                         .replace(full_mapping), ordered=True, categories=ordered_categories))
 
-        return self.df[new_name]
 
     def split(self, name: str, new_name: str,
               spec: Dict[Union[int, str], Iterable], create_subclusters: bool = True) -> None:

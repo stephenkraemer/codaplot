@@ -116,7 +116,7 @@ class Linkage:
                                    data: pd.DataFrame, name: Optional[str] = None,
                                    treecut_args: Optional[Dict] = None,
                                    metric='euclidean', method='average',
-                                   usecols: Optional[List[str]] = None,
+                                   usecols = None,
                                    create_subclusters: bool = True,
                                    ) -> None:
         """Iteratively cut a cluster from an existing partitioning
@@ -143,6 +143,7 @@ class Linkage:
         """
 
         assert isinstance(data, pd.DataFrame)
+        assert isinstance(self.cluster_ids, ClusterIDs)
 
         # TODO: add test
         if treecut_args is None:
@@ -161,11 +162,14 @@ class Linkage:
         Z = linkage(dist_mat, method=method)
         inner_linkage_mat = Linkage(Z, dist_mat, index=sub_data.index)
         inner_linkage_mat.dynamic_tree_cut(name=name, **treecut_args)
+        # mainly to make mypy happy
+        assert isinstance(inner_linkage_mat.cluster_ids, ClusterIDs)
         self.cluster_ids.split(name=clustering_name, new_name=name,
                                spec={cluster_id: inner_linkage_mat.cluster_ids.df[name]},
                                create_subclusters=create_subclusters)
         new_leaf_order = self.leaf_order.copy()
 
+        # TODO: add assert
         cluster_data_int_indices = np.arange(len(data))[is_in_split_cluster]
         clustered_data_ii_ordered = cluster_data_int_indices[inner_linkage_mat.leaf_order]
         new_leaf_order[np.isin(new_leaf_order, cluster_data_int_indices)] = clustered_data_ii_ordered
