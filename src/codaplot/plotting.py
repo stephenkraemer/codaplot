@@ -374,7 +374,6 @@ def grouped_rows_line_collections(data: pd.DataFrame, row: Union[str, Iterable],
         segments[:, :, 0] = np.arange(0.5, group_df.shape[1])
         line_collection = LineCollection(segments, color='black', alpha=alpha)
         curr_ax.add_collection(line_collection)
-        curr_ax.plot([1, 2, 3])
 
         # need to set plot limits, they will not autoscale
         curr_ax.set_xlim(0, data.shape[1])
