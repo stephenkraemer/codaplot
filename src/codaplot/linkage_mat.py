@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, List
 
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dynamicTreeCut import cutreeHybrid
 from more_itertools import ilen, unique_justseen
 from scipy.cluster.hierarchy import leaves_list, linkage
@@ -14,9 +14,9 @@ from codaplot.cluster_ids import ClusterIDs
 @dataclass
 class Linkage:
 
-    matrix: np.ndarray
-    dist_mat: Optional[np.ndarray] = None
-    index: Optional[pd.MultiIndex] = None
+    matrix: np.ndarray = field(repr=False)
+    dist_mat: Optional[np.ndarray] = field(repr=False, default=None)
+    index: Optional[pd.MultiIndex] = field(default=None, repr=False)
     cluster_ids: Optional[ClusterIDs] = None
     leaf_orders: Optional[pd.DataFrame] = None
 
