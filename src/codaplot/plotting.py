@@ -232,7 +232,7 @@ def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
     cluster_sizes.sort_index(inplace=True)
     ax.barh(y=np.arange(0.5, cluster_sizes.shape[0]),
             width=cluster_sizes.values,
-            height=bar_height)
+            height=bar_height, color='gray')
     ax.set_ylim(0, cluster_sizes.shape[0])
     if xlabel is not None:
         ax.set_xlabel(xlabel)
