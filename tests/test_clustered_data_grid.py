@@ -79,8 +79,8 @@ def test_heatmap_grids():
     # -------
     gm = profile_plot.plot_grid(
             grid=[[
-                codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr'),
-                codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r'),
+                codaplot.clustered_data_grid.Heatmap(df=df1, cmap='YlOrBr', rasterized=True),
+                codaplot.clustered_data_grid.Heatmap(df=df2, cmap='RdBu_r', rasterized=False),
                 codaplot.clustered_data_grid.Heatmap(df=df3, cmap='RdBu_r'),
             ]],
             row_dendrogram=False,
@@ -91,6 +91,7 @@ def test_heatmap_grids():
     gm.create_or_update_figure()
     plot_count += 1
     gm.fig.savefig(local_output_dir / f'test_{plot_count}.png')
+    gm.fig.savefig(local_output_dir / f'test_{plot_count}.pdf')
 
     # with dendrograms
     # ----------------

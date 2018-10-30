@@ -1,12 +1,12 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from dynamicTreeCut import cutreeHybrid
 from more_itertools import ilen, unique_justseen
-from scipy.cluster.hierarchy import leaves_list, linkage
-from scipy.spatial.distance import pdist
+from scipy.cluster.hierarchy import leaves_list, linkage, cophenet
+from scipy.spatial.distance import pdist, squareform
 
 from codaplot.cluster_ids import ClusterIDs
 
@@ -190,3 +190,43 @@ class Linkage:
         else:
             assert name not in self.leaf_orders.columns
             self.leaf_orders[name] = new_leaf_order
+
+
+    def get_subpart(self, labels: Optional[Union[pd.Index, pd.MultiIndex]] = None,
+                    int_idx: Optional[np.ndarray] = None):
+        """Linkage with original cophenetic distances for a subset of observations
+
+        Must specify either labels or int_idx, but not both.
+
+        Args:
+            labels: passed to .loc to retrieve observations based on their index
+                labels. Typically Index or MultiIndex. Linkage.index must be defined
+                if labels are passed. Does not need to be sorted.
+            int_idx: integer index of the observations in the subset. Does not need
+                to be sorted.
+
+        Background:
+            This works by retrieving the cophenetic distances from the full linkage.
+            A new linkage is constructed based on the cophenetic distance matrix
+            for only the selected observations.
+        """
+
+        assert (labels is not None) + (int_idx is not None) == 1, \
+            'Either labels or int_idx must specified (mutually exclusive)'
+        if labels is not None:
+            assert self.index is not None
+            int_idx = np.squeeze(pd.DataFrame(np.arange(len(self.index)), index=self.index)
+                                 .loc[labels].sort_index().values.T)
+        else:
+            int_idx = np.sort(int_idx)
+
+        cophenetic_dist_mat = cophenet(self.matrix)
+        cophenetic_dist_mat_square = squareform(cophenetic_dist_mat)
+        sampled_dist_mat = cophenetic_dist_mat_square[int_idx, :][:, int_idx]
+        # Note: many other linkage methods would also work, because the cophenetic
+        # distances are the same between each points in two clusters which are about
+        # to be joined. Selection of average linkage is arbitrary.
+        sampled_Z = linkage(squareform(sampled_dist_mat), method='average')
+        # maybe in the future: could also add distance matrix and index again
+        return Linkage(matrix=sampled_Z)
+

@@ -6,7 +6,7 @@ from dynamicTreeCut import cutreeHybrid
 from scipy.cluster.hierarchy import linkage, leaves_list
 from scipy.spatial.distance import pdist
 from sklearn.datasets import make_blobs, make_moons
-import codaplot.linkage_mat as clm
+import codaplot as co
 import pytest
 
 @pytest.fixture()
@@ -51,7 +51,7 @@ def test_dynamic_tree_cut_with_blobs(blobs):
 
     # Cut using dynamicTreeCut. The cluster IDs should be in order from 1..N
     # when data are ordered in leave order of the linkage
-    linkage_obj = clm.Linkage(matrix=Z, dist_mat=dist_mat)
+    linkage_obj = co.Linkage(matrix=Z, dist_mat=dist_mat)
     linkage_obj.dynamic_tree_cut('coarse', minClusterSize=20, deepSplit=1)
     linkage_obj.dynamic_tree_cut('fine', minClusterSize=5, deepSplit=2)
     linkage_obj.dynamic_tree_cut('finer', minClusterSize=5, deepSplit=2.5)
@@ -71,7 +71,7 @@ def test_dynamic_tree_cut_with_moons():
     Z = linkage(dist_mat)
     # cluster ids already aligned when in leave order
     assert np.all(pd.Series(cluster_ids[leaves_list(Z)]).unique() == [1, 2])
-    linkage_obj2 = clm.Linkage(Z, dist_mat)
+    linkage_obj2 = co.Linkage(Z, dist_mat)
     linkage_obj2.dynamic_tree_cut('1', deepSplit=2)
     assert np.all(cluster_ids == linkage_obj2.cluster_ids.df['1'].values)
     # plt.scatter(arr[:, 0], arr[:, 1], c=linkage_obj2.cluster_ids.df['1'], cmap='Set1')
@@ -96,7 +96,7 @@ def test_iterative_dynamic_tree_cut_with_numeric_ids(blobs, usecols):
 
     # Cut using dynamicTreeCut. The cluster IDs should be in order from 1..N
     # when data are ordered in leave order of the linkage
-    linkage_obj = clm.Linkage(matrix=Z, dist_mat=dist_mat)
+    linkage_obj = co.Linkage(matrix=Z, dist_mat=dist_mat)
     linkage_obj.dynamic_tree_cut('coarse', minClusterSize=20, deepSplit=1)
 
     # Test that the coarse cutting is equal to the correct coarse cluster ids
@@ -144,7 +144,7 @@ def test_iterative_dynamic_tree_cut_with_subcluster_strings(blobs, usecols):
     dist_mat = pdist(arr)
     Z = linkage(dist_mat)
 
-    linkage_obj = clm.Linkage(matrix=Z, dist_mat=dist_mat)
+    linkage_obj = co.Linkage(matrix=Z, dist_mat=dist_mat)
     linkage_obj.dynamic_tree_cut('coarse', minClusterSize=20, deepSplit=1)
     assert np.all(linkage_obj.cluster_ids.df['coarse'].values == coarse_cluster_ids)
     linkage_obj.iterative_dynamic_tree_cut(
@@ -181,3 +181,42 @@ def _make_cluster_ids_sequential(arr):
     diffs[diffs != 0] = 1
     cumsums = np.cumsum(diffs)
     return cumsums.astype(int)
+
+def test_linkage_get_subpart():
+    arr = np.array([[2, 4, 5, 10, 11, 20, 21, 22]]).T
+    dist_mat = pdist(arr, metric='cityblock')
+    Z = linkage(dist_mat, method='complete')
+    linkage_obj = co.Linkage(matrix=Z, dist_mat=dist_mat, index=np.arange(len(arr)).astype(str))
+
+    # test: extract coherent part of cluster (subtree)
+    int_idx = [0, 1, 2]
+    new_linkage_obj_labels = linkage_obj.get_subpart(labels=pd.Index(int_idx).astype(str))
+    new_linkage_obj_int_idx = linkage_obj.get_subpart(int_idx = int_idx)
+    assert np.all(new_linkage_obj_labels.matrix == np.array([[ 1.,  2.,  1.,  2.],
+                                                             [ 0.,  3.,  3.,  3.]]))
+    assert np.all(new_linkage_obj_int_idx.matrix == np.array([[ 1.,  2.,  1.,  2.],
+                                                              [ 0.,  3.,  3.,  3.]]))
+
+    # test: extract all elements
+    new_linkage_obj_labels = linkage_obj.get_subpart(labels=pd.Index(range(len(arr))).astype(str))
+    new_linkage_obj_int_idx = linkage_obj.get_subpart(int_idx = np.arange(len(arr)))
+    assert np.all(new_linkage_obj_labels.matrix == linkage_obj.matrix)
+    assert np.all(new_linkage_obj_int_idx.matrix == linkage_obj.matrix)
+
+    # test: extract all elements, shuffled
+    new_linkage_obj = linkage_obj.get_subpart(
+            labels=pd.Index(np.random.permutation(np.arange(len(arr)))).astype(str))
+    assert np.all(new_linkage_obj.matrix == linkage_obj.matrix)
+
+    # test: extract random choice of elements
+    int_idx = [0, 3, 6, 2, 7, 5]
+    new_linkage_obj_labels = linkage_obj.get_subpart(labels=pd.Index(int_idx).astype(str))
+    new_linkage_obj_int_idx = linkage_obj.get_subpart(int_idx=int_idx)
+    expected_array = np.array([[3., 4., 1., 2.],
+                               [5., 6., 2., 3.],
+                               [0., 1., 3., 2.],
+                               [2., 8., 9., 3.],
+                               [7., 9., 20., 6.]])
+    assert np.all(new_linkage_obj_labels.matrix == expected_array)
+    assert np.all(new_linkage_obj_int_idx.matrix == expected_array)
+
