@@ -175,6 +175,7 @@ def heatmap(df: pd.DataFrame,
             row_labels_show: bool = False,
             xlabel: Optional[str] = None,
             ylabel: Optional[str] = None,
+            rasterized: bool = False,
             ):
 
     if midpoint_normalize:
@@ -183,13 +184,14 @@ def heatmap(df: pd.DataFrame,
     else:
         norm = None
 
-    qm = ax.pcolormesh(df, cmap=cmap, norm=norm)
+    qm = ax.pcolormesh(df, cmap=cmap, norm=norm, rasterized=rasterized)
 
     if col_labels_show:
         ax.set_xticks(np.arange(df.shape[1]) + 0.5)
         ax.set_xticklabels(df.columns, rotation=90)
 
     if row_labels_show:
+        ax.set_yticks(np.arange(df.shape[0]) + 0.5)
         ax.set_yticklabels(df.index)
     else:
         ax.set_yticks([])
