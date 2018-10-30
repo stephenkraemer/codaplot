@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import List, Union, Dict, Iterable
+from typing import List, Union, Dict, Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -210,8 +210,10 @@ class ClusterIDs:
         return ClusterIDs(df=new_df)
 
 
-    def sample_equal(self, name, n_per_cluster=None, n_total=None, random_state=1,
-                     strict=False):
+    def sample_equal(self, name: str, n_per_cluster: Optional[int] = None,
+                     n_total: Optional[int] = None,
+                     random_state: Union[int, np.random.RandomState] = 1,
+                     strict: bool = False) -> 'ClusterIDs':
         """Sample equal number of rows from each cluster
 
         Args:
@@ -230,6 +232,9 @@ class ClusterIDs:
                 n_per_cluster or round(n_total / cluster_ids.nunique())
             random_state: RandomState or int used to initialize RandomState object
                 internally.
+
+        Returns:
+            ClusterIDs object with the sampled cluster ids (sorted)
         """
 
         if n_per_cluster and n_total:
