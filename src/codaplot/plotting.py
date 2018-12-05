@@ -254,11 +254,14 @@ def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes,
 
 
 def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence]], ax: List[Axes],
-                       marker='o', linestyle='-', color='black', linewidth=None,
-                       show_all_xticklabels=False, xlabel=None,
-                       sharey=True, ylim=None):
+                       show_all_xticklabels=False, xlabel=None, ylabel=None,
+                       sharey=True, ylim=None, hlines=None, plot_args: Optional[Dict] = None,
+                       hlines_args: Optional[Dict]= None):
 
     axes = ax
+    used_plot_args = dict(
+        marker='o', linestyle='-', color='black', linewidth=None)
+    used_plot_args.update(plot_args)
 
     if isinstance(row, str):
         if row in data:
@@ -277,9 +280,8 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
     ncol = data.shape[1]
     x = np.arange(0.5, ncol)
     xlim = (0, ncol)
-    for curr_ax, (unused_name, agg_row) in zip(axes[::-1], agg_values.iterrows()):
-        curr_ax.plot(x, agg_row.values, marker=marker, linestyle=linestyle,
-                     linewidth=linewidth, color=color)
+    for curr_ax, (group_name, agg_row) in zip(axes[::-1], agg_values.iterrows()):
+        curr_ax.plot(x, agg_row.values, **used_plot_args)
         curr_ax.set_xlim(xlim)
         if ylim is not None:
             curr_ax.set_ylim(ylim)
@@ -289,6 +291,12 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
             curr_ax.set_xticks(x)
             curr_ax.set_xticklabels(data.columns, rotation=90)
             curr_ax.set_xlabel('')
+        curr_ylabel = str(group_name) if not ylabel else str(group_name) + '\n\n' + ylabel
+        curr_ax.set_ylabel(curr_ylabel)
+
+        if hlines:
+            for h_line in hlines:
+                curr_ax.axhline(h_line, **hlines_args)
         sns.despine(ax=curr_ax)
 
     # Add xticks and xticklabels to the bottom Axes
