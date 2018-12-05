@@ -164,6 +164,10 @@ class ClusterIDs:
         return cumsums.astype(int)
 
 
+    def sample(self, n_total, random_state=123):
+        return ClusterIDs(df=self.df.sample(n=n_total, random_state=random_state).copy())
+
+
     def sample_proportional(self, name,
                             n_total=None, frac=None,
                             min_cluster_size=0,

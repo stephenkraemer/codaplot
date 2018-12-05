@@ -230,3 +230,24 @@ class Linkage:
         # maybe in the future: could also add distance matrix and index again
         return Linkage(matrix=sampled_Z)
 
+    def get_subpart_leaf_order(self, label_idx=None, int_idx=None):
+        if (label_idx is None) + (int_idx is None) != 1:
+            print('Either label_idx or int_idx, but not both, must be specified')
+        if label_idx is not None:
+            running_int_ser = pd.Series(np.arange(0, self.cluster_ids.df.shape[0]),
+                                        index=self.cluster_ids.df.index)
+            int_idx = running_int_ser.loc[label_idx].values
+        return np.array([i for i in self.leaf_order if i in int_idx])
+
+    def get_proportionally_sampled_leaf_order(self, n, random_state=123):
+        return self.get_subpart_leaf_order(
+                int_idx=np.random.RandomState(random_state)
+                    .choice(self.cluster_ids.df.shape[0], n)
+        )
+
+    def get_equal_sampled_leaf_order(self, **kwargs):
+        sampled_idx = self.cluster_ids.sample_equal(**kwargs).df.index
+        return self.get_subpart_leaf_order(label_idx=sampled_idx)
+
+
+

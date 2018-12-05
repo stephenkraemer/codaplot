@@ -5,3 +5,4 @@ from .clustered_data_grid import (
     Violin, MultiLine, Dendrogram, AggHeatmap)
 from .dynamic_grid import GridManager, GridElement
 from .linkage_mat import Linkage
+from .cluster_ids import ClusterIDs
