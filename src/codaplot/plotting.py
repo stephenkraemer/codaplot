@@ -170,21 +170,33 @@ class MidpointNormalize(mpl.colors.Normalize):
 def heatmap(df: pd.DataFrame,
             ax: Axes, fig: Figure,
             cmap: str,
-            midpoint_normalize: bool =  False,
+            # midpoint_normalize: bool =  False,
             col_labels_show: bool = True,
             row_labels_show: bool = False,
             xlabel: Optional[str] = None,
             ylabel: Optional[str] = None,
-            rasterized: bool = False,
+            cbar_args: Optional[Dict] = None,
+            title: Optional[str] = None,
+            **kwargs,
             ):
+    """Simple heatmap plotter
 
-    if midpoint_normalize:
-        norm: Optional[mpl.colors.Normalize] = MidpointNormalize(
-                vmin=df.min().min(), vmax=df.max().max(), midpoint=0)
-    else:
-        norm = None
+    Args:
+        kwargs: passed to pcolormesh. E.g. to pass a normalization
+    """
 
-    qm = ax.pcolormesh(df, cmap=cmap, norm=norm, rasterized=rasterized)
+    # if midpoint_normalize:
+    #     norm: Optional[mpl.colors.Normalize] = MidpointNormalize(
+    #             vmin=df.min().min(), vmax=df.max().max(), midpoint=0)
+    # else:
+    #     norm = None
+
+    # qm = ax.pcolormesh(df, cmap=cmap, norm=norm, **kwargs)
+
+    if cbar_args is None:
+        cbar_args = {}
+
+    qm = ax.pcolormesh(df, cmap=cmap, **kwargs)
 
     if col_labels_show:
         ax.set_xticks(np.arange(df.shape[1]) + 0.5)
@@ -201,7 +213,10 @@ def heatmap(df: pd.DataFrame,
     if ylabel:
         ax.set_ylabel(ylabel)
 
-    fig.colorbar(qm, ax=ax)
+    if title:
+        ax.set_title(title)
+
+    fig.colorbar(qm, ax=ax, **cbar_args)
 
 
 def simple_line(ax):
