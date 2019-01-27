@@ -173,8 +173,10 @@ def heatmap(df: pd.DataFrame,
             # midpoint_normalize: bool =  False,
             col_labels_show: bool = True,
             row_labels_show: bool = False,
+            tick_length = 0,
             xlabel: Optional[str] = None,
             ylabel: Optional[str] = None,
+            add_colorbar = True,
             cbar_args: Optional[Dict] = None,
             title: Optional[str] = None,
             **kwargs,
@@ -198,15 +200,21 @@ def heatmap(df: pd.DataFrame,
 
     qm = ax.pcolormesh(df, cmap=cmap, **kwargs)
 
+    ax.tick_params(length=tick_length, which='both', axis='both')
+
     if col_labels_show:
         ax.set_xticks(np.arange(df.shape[1]) + 0.5)
         ax.set_xticklabels(df.columns, rotation=90)
+    else:
+        ax.set_xticks([])
+        ax.tick_params(length=0, which='both', axis='x')
 
     if row_labels_show:
         ax.set_yticks(np.arange(df.shape[0]) + 0.5)
         ax.set_yticklabels(df.index)
     else:
         ax.set_yticks([])
+        ax.tick_params(length=0, which='both', axis='y')
 
     if xlabel:
         ax.set_xlabel(xlabel)
@@ -216,7 +224,10 @@ def heatmap(df: pd.DataFrame,
     if title:
         ax.set_title(title)
 
-    fig.colorbar(qm, ax=ax, **cbar_args)
+    if add_colorbar:
+        cb = fig.colorbar(qm, ax=ax, **cbar_args)
+        cb.outline.set_linewidth(0.5)
+        cb.ax.tick_params(length=3.5, width=0.5, which='both', axis='both')
 
 
 def simple_line(ax):
