@@ -149,4 +149,26 @@ def test_spaced_heatmap(tmpdir):
     fig.colorbar(qm, shrink=0.4, extend='both')
     fig.savefig(tmpdir.joinpath('test2.png'))
 
+    # without column clustering
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    qm = spaced_heatmap(ax=ax, df=df,
+                        row_clusters=row_clusters,
+                        row_spacer_size=[0.02, 0.1],
+                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        )
+    fig.colorbar(qm, shrink=0.4, extend='both')
+    fig.savefig(tmpdir.joinpath('test3.png'))
+
+    # without row clustering
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    qm = spaced_heatmap(ax=ax, df=df,
+                        col_clusters=col_clusters,
+                        col_spacer_size=0.1,
+                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        )
+    fig.colorbar(qm, shrink=0.4, extend='both')
+    fig.savefig(tmpdir.joinpath('test4.png'))
+
     subprocess.run(['firefox', tmpdir])

@@ -710,9 +710,9 @@ def grouped_rows_heatmap(df: pd.DataFrame, row_: Union[str, Iterable],
     # ax.set_xlabel(xlabel if xlabel is not None else '')
 
 
-def spaced_heatmap(ax, df, row_clusters, col_clusters,
-                   row_spacer_size: Union[float, Iterable[float]],
-                   col_spacer_size: Union[float, Iterable[float]],
+def spaced_heatmap(ax, df, row_clusters=None, col_clusters=None,
+                   row_spacer_size: Union[float, Iterable[float]]=0.01,
+                   col_spacer_size: Union[float, Iterable[float]]=0.01,
                    pcolormesh_args=None,
                    add_row_labels=False, add_col_labels=False) -> mpl.collections.QuadMesh :
     """Plot pcolormesh with spacers between groups of rows and columns
@@ -736,60 +736,66 @@ def spaced_heatmap(ax, df, row_clusters, col_clusters,
         quadmesh, for use in colorbar plotting etc.
     """
 
+    if row_clusters is None and col_clusters is None:
+        raise TypeError('You must specify at least one of {row_cluster, col_cluster}')
     if pcolormesh_args is None:
         pcolormesh_args = {}
 
-    row_cluster_nelem_per_cluster = np.unique(row_clusters, return_counts=True)[1]
-    row_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(row_cluster_nelem_per_cluster), 0, 0)
-    row_cluster_nclusters = np.max(row_clusters)
+    if row_clusters is not None:
+        row_cluster_nelem_per_cluster = np.unique(row_clusters, return_counts=True)[1]
+        row_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(row_cluster_nelem_per_cluster), 0, 0)
+        row_cluster_nclusters = np.max(row_clusters)
 
-    col_cluster_nelem_per_cluster = np.unique(col_clusters, return_counts=True)[1]
-    col_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(col_cluster_nelem_per_cluster), 0, 0)
-    col_cluster_nclusters = np.max(col_clusters)
+        if isinstance(row_spacer_size, float):
+            # all row spacers have the same size
+            # the total fraction of the Axes height reserved for row spacers is then:
+            total_row_spacer_frac = row_spacer_size * (row_cluster_nclusters - 1)
+            # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
+            row_spacers_with_0_end = np.repeat((row_spacer_size, 0), (row_cluster_nclusters-1, 1))
+        else:
+            # there is one size per spacer, assert the correct length of the iterable
+            assert len(row_spacer_size) == row_cluster_nclusters - 1
+            # the total fraction of the Axes height reserved for row spacers is then:
+            total_row_spacer_frac = np.sum(row_spacer_size)
+            # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
+            row_spacers_with_0_end = np.append(row_spacer_size, 0)
 
-    if isinstance(row_spacer_size, float):
-        # all row spacers have the same size
-        # the total fraction of the Axes height reserved for row spacers is then:
-        total_row_spacer_frac = row_spacer_size * (row_cluster_nclusters - 1)
-        # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
-        row_spacers_with_0_end = np.repeat((row_spacer_size, 0), (row_cluster_nclusters-1, 1))
-    else:
-        # there is one size per spacer, assert the correct length of the iterable
-        assert len(row_spacer_size) == row_cluster_nclusters - 1
-        # the total fraction of the Axes height reserved for row spacers is then:
-        total_row_spacer_frac = np.sum(row_spacer_size)
-        # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
-        row_spacers_with_0_end = np.append(row_spacer_size, 0)
+        # get the start and end positions for each quadmesh block (space in between will be left 'unplotted' to create the spacers)
+        # Fraction of all elements contained in the different clusters
+        row_cluster_rel_size_for_each_cluster = row_cluster_nelem_per_cluster / np.sum(row_cluster_nelem_per_cluster)
+        # Compute the fraction of axes occupied by each cluster, together with its subsequent spacer
+        row_cluster_axes_fraction_for_each_cluster = (1 - total_row_spacer_frac) * row_cluster_rel_size_for_each_cluster
+        row_cluster_axes_fraction_for_each_cluster_with_spacer = row_cluster_axes_fraction_for_each_cluster + row_spacers_with_0_end
+        # Now we can calculate the start and end of each quadmesh block
+        row_cluster_start_axis_fraction = np.cumsum(np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[:-1]
+        row_cluster_end_axis_fraction = np.cumsum(np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[1:] - row_spacers_with_0_end
+
 
     # see analogous row_spacer code block for comments
-    if isinstance(col_spacer_size, float):
-        total_col_spacer_frac = col_spacer_size * (col_cluster_nclusters - 1)
-        col_spacers_with_0_end = np.repeat((col_spacer_size, 0), (col_cluster_nclusters-1, 1))
-    else:
-        assert len(col_spacer_size) == col_cluster_nclusters - 1
-        total_col_spacer_frac = np.sum(col_spacer_size)
-        col_spacers_with_0_end = np.append(col_spacer_size, 0)
+    if col_clusters is not None:
+        col_cluster_nelem_per_cluster = np.unique(col_clusters, return_counts=True)[1]
+        col_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(col_cluster_nelem_per_cluster), 0, 0)
+        col_cluster_nclusters = np.max(col_clusters)
+        if isinstance(col_spacer_size, float):
+            total_col_spacer_frac = col_spacer_size * (col_cluster_nclusters - 1)
+            col_spacers_with_0_end = np.repeat((col_spacer_size, 0), (col_cluster_nclusters-1, 1))
+        else:
+            assert len(col_spacer_size) == col_cluster_nclusters - 1
+            total_col_spacer_frac = np.sum(col_spacer_size)
+            col_spacers_with_0_end = np.append(col_spacer_size, 0)
+
+        # see analogous row cluster handling code above for comments
+        col_cluster_rel_size_for_each_cluster = col_cluster_nelem_per_cluster / np.sum(col_cluster_nelem_per_cluster)
+        col_cluster_axes_fraction_for_each_cluster = (1 - total_col_spacer_frac) * col_cluster_rel_size_for_each_cluster
+        col_cluster_axes_fraction_for_each_cluster_with_spacer = col_cluster_axes_fraction_for_each_cluster + col_spacers_with_0_end
+        col_cluster_start_axis_fraction = np.cumsum(np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[:-1]
+        col_cluster_end_axis_fraction = np.cumsum(np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[1:] - col_spacers_with_0_end
+
 
     # we work with fractions of the Axes height and width, so we set the limits to:
     ax.set_ylim(0, 1)
     ax.set_xlim(0, 1)
 
-    # get the start and end positions for each quadmesh block (space in between will be left 'unplotted' to create the spacers)
-    # Fraction of all elements contained in the different clusters
-    row_cluster_rel_size_for_each_cluster = row_cluster_nelem_per_cluster / np.sum(row_cluster_nelem_per_cluster)
-    # Compute the fraction of axes occupied by each cluster, together with its subsequent spacer
-    row_cluster_axes_fraction_for_each_cluster = (1 - total_row_spacer_frac) * row_cluster_rel_size_for_each_cluster
-    row_cluster_axes_fraction_for_each_cluster_with_spacer = row_cluster_axes_fraction_for_each_cluster + row_spacers_with_0_end
-    # Now we can calculate the start and end of each quadmesh block
-    row_cluster_start_axis_fraction = np.cumsum(np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[:-1]
-    row_cluster_end_axis_fraction = np.cumsum(np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[1:] - row_spacers_with_0_end
-
-    # see analogous row cluster handling code above for comments
-    col_cluster_rel_size_for_each_cluster = col_cluster_nelem_per_cluster / np.sum(col_cluster_nelem_per_cluster)
-    col_cluster_axes_fraction_for_each_cluster = (1 - total_col_spacer_frac) * col_cluster_rel_size_for_each_cluster
-    col_cluster_axes_fraction_for_each_cluster_with_spacer = col_cluster_axes_fraction_for_each_cluster + col_spacers_with_0_end
-    col_cluster_start_axis_fraction = np.cumsum(np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[:-1]
-    col_cluster_end_axis_fraction = np.cumsum(np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[1:] - col_spacers_with_0_end
 
     # Prepare colormapping - all pcolormesh blocks must use the same colormapping
     # The user can guarantee this by specifying norm or vmin AND vmax in the pcolormesh_args
@@ -798,7 +804,6 @@ def spaced_heatmap(ax, df, row_clusters, col_clusters,
         pcolormesh_args['vmin'] = np.quantile(df, 0.02)
         pcolormesh_args['vmax'] = np.quantile(df, 1 - 0.02)
 
-
     # Plot all colormesh blocks, and do some defensive assertions
     col_widths = []  # for asserting equal column width
     row_heights = []  # for asserting equal row heights
@@ -806,31 +811,61 @@ def spaced_heatmap(ax, df, row_clusters, col_clusters,
     x_ticklabels = []
     y_ticks = []
     y_ticklabels = []
-    for row_cluster_idx, col_cluster_idx in product(range(row_cluster_nclusters), range(col_cluster_nclusters)):
-        # Retrieve the data for the current pcolormesh block
-        dataview=df.iloc[row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx]:row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx+1], col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx]:col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx+1]]
 
-        # Create meshgrid for pcolormesh
-        # create 1D x and y arrays, then use np.meshgrid to get X and Y for pcolormesh(X, Y)
-        x = np.linspace(col_cluster_start_axis_fraction[col_cluster_idx], col_cluster_end_axis_fraction[col_cluster_idx], col_cluster_nelem_per_cluster[col_cluster_idx] + 1)
-        col_widths.append(np.ediff1d(x))
-        if row_cluster_idx == 0:
-            # for the bottom row, add x-ticks in the middle of each column
-            x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
-            x_ticklabels.append(dataview.columns.tolist())
-        y = np.linspace(row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx], row_cluster_nelem_per_cluster[row_cluster_idx] + 1)
-        row_heights.append(np.ediff1d(y))
-        if col_cluster_idx == 0:
+    if row_clusters is not None and col_clusters is not None:
+        for row_cluster_idx, col_cluster_idx in product(range(row_cluster_nclusters), range(col_cluster_nclusters)):
+            # Retrieve the data for the current pcolormesh block
+            dataview=df.iloc[row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx]:row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx+1], col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx]:col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx+1]]
+
+            # Create meshgrid for pcolormesh
+            # create 1D x and y arrays, then use np.meshgrid to get X and Y for pcolormesh(X, Y)
+            x = np.linspace(col_cluster_start_axis_fraction[col_cluster_idx], col_cluster_end_axis_fraction[col_cluster_idx], col_cluster_nelem_per_cluster[col_cluster_idx] + 1)
+            col_widths.append(np.ediff1d(x))
+            if row_cluster_idx == 0:
+                # for the bottom row, add x-ticks in the middle of each column
+                x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
+                x_ticklabels.append(dataview.columns.tolist())
+            y = np.linspace(row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx], row_cluster_nelem_per_cluster[row_cluster_idx] + 1)
+            row_heights.append(np.ediff1d(y))
+            if col_cluster_idx == 0:
+                y_ticks.append((y + (y[1] - y[0])/2)[:-1])
+                y_ticklabels.append(dataview.index.tolist())
+            X, Y = np.meshgrid(x, y)
+
+            # Plot, color mapping is controlled via pcolormesh_args
+            quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
+
+        assert np.all(np.isclose(np.concatenate(row_heights), row_heights[0][0]))
+        assert np.all(np.isclose(np.concatenate(col_widths), col_widths[0][0]))
+    elif row_clusters is not None:
+        # see row + col grouping code above for comments
+        for row_cluster_idx in range(row_cluster_nclusters):
+            dataview=df.iloc[row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx]:row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx+1], :]
+            x = np.linspace(0, 1, df.shape[1] + 1)
+            if row_cluster_idx == 0:
+                x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
+                x_ticklabels.append(dataview.columns.tolist())
+            y = np.linspace(row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx], row_cluster_nelem_per_cluster[row_cluster_idx] + 1)
+            row_heights.append(np.ediff1d(y))
             y_ticks.append((y + (y[1] - y[0])/2)[:-1])
             y_ticklabels.append(dataview.index.tolist())
-        X, Y = np.meshgrid(x, y)
-
-        # Plot, color mapping is controlled via pcolormesh_args
-        quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
-
-
-    assert np.all(np.isclose(np.concatenate(row_heights), row_heights[0][0]))
-    assert np.all(np.isclose(np.concatenate(col_widths), col_widths[0][0]))
+            X, Y = np.meshgrid(x, y)
+            quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
+        assert np.all(np.isclose(np.concatenate(row_heights), row_heights[0][0]))
+    elif col_clusters is not None:
+        for col_cluster_idx in range(col_cluster_nclusters):
+            dataview=df.iloc[:, col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx]:col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx+1]]
+            x = np.linspace(col_cluster_start_axis_fraction[col_cluster_idx], col_cluster_end_axis_fraction[col_cluster_idx], col_cluster_nelem_per_cluster[col_cluster_idx] + 1)
+            col_widths.append(np.ediff1d(x))
+            x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
+            x_ticklabels.append(dataview.columns.tolist())
+            y = np.linspace(0, 1, df.shape[0] + 1)
+            if col_cluster_idx == 0:
+                y_ticks.append((y + (y[1] - y[0])/2)[:-1])
+                y_ticklabels.append(dataview.index.tolist())
+            X, Y = np.meshgrid(x, y)
+            quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
+        assert np.all(np.isclose(np.concatenate(col_widths), col_widths[0][0]))
 
     # Ticks and beautify
     ax.set(xticks=np.concatenate(x_ticks), yticks=np.concatenate(y_ticks),
