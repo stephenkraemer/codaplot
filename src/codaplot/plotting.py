@@ -82,6 +82,7 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         levels = np.unique(df.values)
     n_levels = len(levels)
 
+    # Colors are repeatedly tiled until all levels are covered
     if colors is None:
         color_list = sns.color_palette(cmap, n_levels)
     else:
@@ -288,7 +289,8 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
     axes = ax
     used_plot_args = dict(
         marker='o', linestyle='-', color='black', linewidth=None)
-    used_plot_args.update(plot_args)
+    if plot_args is not None:
+        used_plot_args.update(plot_args)
 
     if isinstance(row, str):
         if row in data:

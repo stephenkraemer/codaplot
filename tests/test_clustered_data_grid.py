@@ -219,7 +219,7 @@ def test_row_faceted_grid():
                             fn='mean',
                             row='variable',
                             data=df_with_group_var,
-                            color='darkgray',
+                            plot_args=dict(color='darkgray'),
 
                     )
                 ],
