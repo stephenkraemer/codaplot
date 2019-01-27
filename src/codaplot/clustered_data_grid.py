@@ -29,6 +29,8 @@ MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
 class ClusteredDataGridElement(ABC):
     align_vars: List[str] = []
     supply_vars: Dict[str, str] = {}
+    # align_maybe variables are aligned if they are Series or DataFrame
+    # otherwise, they are left untouched
     align_maybe: List[str] = []
     plotter: Optional[staticmethod] = None
     row_deco: bool = True

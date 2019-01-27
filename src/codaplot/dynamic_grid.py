@@ -452,10 +452,11 @@ class GridManager:
         else:
             self.fig = plt.figure(constrained_layout=True,
                                   figsize=self.figsize, **self.fig_args)
+            self.fig.set_constrained_layout_pads(
+                    h_pad=self.h_pad, w_pad=self.w_pad,
+                    hspace=self.hspace, wspace=self.wspace)
             # self.fig = plt.figure(tight_layout=True, figsize=self.figsize, **self.fig_args)
-            # self.fig.set_constrained_layout_pads(
-            #         h_pad=self.h_pad, w_pad=self.w_pad,
-            #         hspace=self.hspace, wspace=self.wspace)
+            # self.fig = plt.figure(figsize=self.figsize, **self.fig_args)
         self.gs = gridspec.GridSpec(nrows=len(self._height_ratios),
                                     ncols=len(self.width_ratios),
                                     width_ratios=self.width_ratios,
