@@ -1,6 +1,7 @@
 #-
 import subprocess
 import time
+import sklearn.datasets
 from os.path import expanduser
 from pathlib import Path
 
@@ -9,7 +10,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from codaplot.plotting import grouped_rows_violin, grouped_rows_line_collections, cut_dendrogram, grouped_rows_heatmap
+from codaplot.plotting import (
+    grouped_rows_violin,
+    grouped_rows_line_collections,
+    cut_dendrogram,
+    grouped_rows_heatmap,
+    spaced_heatmap)
 # Test data setup
 # ######################################################################
 # Create 'base' test data ndarray with three clusters across rows and
@@ -103,3 +109,44 @@ def test_grouped_rows_heatmap():
     fp = output_dir / 'grouped-rows-heatmap.png'
     fig.savefig(fp)
     subprocess.run(['firefox', fp])
+
+def test_spaced_heatmap(tmpdir):
+    tmpdir = Path(tmpdir)
+
+    # prepare test data
+    # data with cluster ids, not ordered by cluster ids
+    data, cluster_ids = sklearn.datasets.make_blobs(n_samples=10, n_features=10, centers=3)
+
+    # data and cluster ids, sorted by cluster ids
+    # *this is the input expected by the heatmap functions, for now*
+    row_order = np.argsort(cluster_ids)
+    row_clusters = cluster_ids[row_order] + 1
+    data = data[row_order]
+    df = pd.DataFrame(data)
+    col_clusters = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+
+    # one spacer width for all row spacers
+    # one spacer width for all col spacers
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    qm = spaced_heatmap(ax=ax, df=df,
+                        row_clusters=row_clusters, col_clusters=col_clusters,
+                        row_spacer_size=0.02, col_spacer_size=0.1,
+                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        )
+    fig.colorbar(qm, shrink=0.4, extend='both')
+    fig.savefig(tmpdir.joinpath('test1.png'))
+
+
+    # specify sizes for all spacer elements individually
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    qm = spaced_heatmap(ax=ax, df=df,
+                        row_clusters=row_clusters, col_clusters=col_clusters,
+                        row_spacer_size=[0.02, 0.1], col_spacer_size=[0.2, 0.05],
+                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        )
+    fig.colorbar(qm, shrink=0.4, extend='both')
+    fig.savefig(tmpdir.joinpath('test2.png'))
+
+    subprocess.run(['firefox', tmpdir])
