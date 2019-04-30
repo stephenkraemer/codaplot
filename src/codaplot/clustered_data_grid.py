@@ -21,6 +21,7 @@ from codaplot.plotting import (
     grouped_rows_line_collections,
     cut_dendrogram,
     grouped_rows_heatmap,
+    spaced_heatmap
 )
 
 MixedGrid = List[List[Union['ClusteredDataGridElement', GridElement]]]
@@ -66,7 +67,7 @@ class ClusteredDataGridElement(ABC):
                                 )
 
         for var in self.align_maybe:
-            var_value = self.kwargs[var]
+            var_value = self.kwargs.get(var)
             if isinstance(var_value, pd.DataFrame):
                 self.kwargs[var] = (var_value
                                     .iloc[row_slice, col_slice]
@@ -371,6 +372,11 @@ class Heatmap(ClusteredDataGridElement):
     supply_vars = {'df': 'main_df'}
     plotter = staticmethod(heatmap)
 
+class CategoricalHeatmap(ClusteredDataGridElement):
+    align_vars = ['df']
+    align_maybe = ['cluster_rows', 'cluster_cols']
+    supply_vars = {'df': 'main_df'}
+    plotter = staticmethod(categorical_heatmap)
 
 class SimpleLine(ClusteredDataGridElement):
     align_vars: List[str] = []
@@ -442,3 +448,10 @@ class AggHeatmap(ClusteredDataGridElement):
     supply_vars = {'df': 'main_df'}
     plotter = staticmethod(grouped_rows_heatmap)
 
+class SpacedHeatmap(ClusteredDataGridElement):
+    row_deco = True
+    col_deco = True
+    align_vars = ['df']
+    align_maybe = ['row_clusters', 'col_clusters']
+    supply_vars = {'df': 'main_df'}
+    plotter = staticmethod(spaced_heatmap)

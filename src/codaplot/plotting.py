@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable, Union, Sequence, Iterable, Dict
+from typing import List, Optional, Callable, Union, Sequence, Iterable, Dict, Any
 
 from dataclasses import dataclass
 import matplotlib as mpl
@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt, patches as mpatches
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
+import matplotlib.patches as patches
 from itertools import product
 import numpy as np
 import numba
@@ -52,9 +53,12 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
                         show_values = True,
                         show_legend = False,
                         legend_ax: Optional[Axes] = None,
+                        legend_args: Optional[Dict[str, Any]] = None,
                         despine = True,
                         show_yticklabels=False,
                         show_xticklabels=False,
+                        spaced_heatmap_args=None,
+                        title=None,
                         ):
     """Categorical heatmap
 
@@ -64,6 +68,11 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         cmap: a cmap name that sns.color_palette understands; ignored if
               colors are given
         colors: List of color specs
+        legend_args: if None, defaults to dict(bbox_to_anchor=(-1, 0, 1, 1), loc='best'),
+            which is meant to place the legend outside of the categorical heatmap to the left.
+            This will need to be adjusted depending on the label length and the width
+            of the heatmap
+
 
     Does not accept NA values.
     """
@@ -99,7 +108,15 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         value_to_code = {value: code for code, value in enumerate(levels)}
         codes_df = df.replace(value_to_code)
 
-    qm = ax.pcolormesh(codes_df, cmap=cmap)
+    if spaced_heatmap_args is not None:
+        pargs = spaced_heatmap_args.get('pcolormesh_args', {})
+        if 'cmap' in pargs:
+            print('Warning: cmap is defined via the categorical heatmap argument, not via pcolormesh_args')
+        pargs.update(cmap=cmap)
+        qm = spaced_heatmap(ax, codes_df, **spaced_heatmap_args)
+    else:
+        qm = ax.pcolormesh(codes_df, cmap=cmap)
+
     if despine:
         sns.despine(ax=ax, bottom=True, left=True)
     if not show_xticklabels:
@@ -112,10 +129,12 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
     # Create dummy patches for legend
     patches = [mpatches.Patch(facecolor=c, edgecolor='black') for c in color_list]
     if show_legend:
+        if legend_args is None:
+            legend_args = dict(bbox_to_anchor=(-1, 0, 1, 1), loc='best')
         if legend_ax is not None:
-            legend_ax.legend(patches, levels)
+            legend_ax.legend(patches, levels, **legend_args)
         else:
-            ax.legend(patches, levels)
+            ax.legend(patches, levels, **legend_args)
 
     if show_values:
         for i in range(df.shape[1]):
@@ -126,6 +145,9 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
             x = i + 0.5
             for curr_y, curr_s in zip(list(y), s):
                 ax.text(x, curr_y, str(curr_s), va='center', ha='center')
+
+    if title is not None:
+        ax.set_title(title)
 
     return {'quadmesh': qm, 'patches': patches, 'levels': levels}
 
@@ -178,6 +200,7 @@ def heatmap(df: pd.DataFrame,
             tick_length = 0,
             xlabel: Optional[str] = None,
             ylabel: Optional[str] = None,
+            row_labels_rotation = 90,
             add_colorbar = True,
             cbar_args: Optional[Dict] = None,
             title: Optional[str] = None,
@@ -206,7 +229,7 @@ def heatmap(df: pd.DataFrame,
 
     if col_labels_show:
         ax.set_xticks(np.arange(df.shape[1]) + 0.5)
-        ax.set_xticklabels(df.columns, rotation=90)
+        ax.set_xticklabels(df.columns, rotation=row_labels_rotation)
     else:
         ax.set_xticks([])
         ax.tick_params(length=0, which='both', axis='x')
@@ -237,7 +260,8 @@ def simple_line(ax):
 
 
 def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
-                      bar_height = 0.6, xlabel=None):
+                      bar_height = 0.6, xlabel=None,
+                      invert_xaxis=False, cmap=None, color='gray'):
     """Horizontal cluster size barplot
 
     Currently, this assumes that the cluster IDs can be sorted directly
@@ -255,16 +279,23 @@ def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
             IDs.
         bar_height: between 0 and 1
         xlabel: x-Axis label for the plot
+        invert_xaxis: will invert xaxis
     """
     cluster_sizes = cluster_ids.value_counts()
     cluster_sizes.sort_index(inplace=True)
+    if cmap is not None:
+        color = sns.color_palette(cmap, len(cluster_sizes))
+    else:
+        color = color
     ax.barh(y=np.arange(0.5, cluster_sizes.shape[0]),
             width=cluster_sizes.values,
-            height=bar_height, color='gray')
+            height=bar_height, color=color)
     ax.set_ylim(0, cluster_sizes.shape[0])
     if xlabel is not None:
         ax.set_xlabel(xlabel)
     remove_axis(ax, x=False)
+    if invert_xaxis:
+        ax.invert_xaxis()
 
 
 def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes,
@@ -710,41 +741,78 @@ def grouped_rows_heatmap(df: pd.DataFrame, row_: Union[str, Iterable],
     # ax.set_xlabel(xlabel if xlabel is not None else '')
 
 
-def spaced_heatmap(ax, df, row_clusters=None, col_clusters=None,
+def spaced_heatmap(ax, df,
+                   row_clusters: Union[np.ndarray, pd.Series]=None,
+                   col_clusters: Union[np.ndarray, pd.Series]=None,
                    row_spacer_size: Union[float, Iterable[float]]=0.01,
                    col_spacer_size: Union[float, Iterable[float]]=0.01,
                    pcolormesh_args=None,
-                   add_row_labels=False, add_col_labels=False) -> mpl.collections.QuadMesh :
+                   show_row_labels=False, show_col_labels=False,
+                   rotate_col_labels=True,
+                   add_colorbar=False,
+                   cbar_args=None,
+                   fig=None,
+                   title=None,
+                   frame_spaced_elements=False,
+                   frame_kwargs=None,
+                   ) -> mpl.collections.QuadMesh :
     """Plot pcolormesh with spacers between groups of rows and columns
 
     Spacer size can be specified for each spacer individually, or with
     one size for all row spacers and one size for all col spacers.
 
-    To control the colormap, specify pcolormesh_args, otherwise vmin and vmax are the 0.02 and 0.98 quantiles of the data.
+    To control the colormap, specify pcolormesh_args, (cmap, vmin, vmax, norm)
+    if neither vmin+vmax or norm is specified, vmin and vmax are the 0.02 and 0.98 quantiles of the data.
+    to avoid vmin/vmax determination, you can also set vmin=None, vmax=None (eg for a categorical heatmap)
 
     Args:
         ax: Axes to plot on
         df: pd.DataFrame, index and columns will be used for labeling
-        row_clusters: one id per row, specifies which columns to group together. Each group must consist of a single, consecutive stretch of rows.
+        row_clusters: one id per row, specifies which columns to group together. Each group must consist of a single, consecutive stretch of rows. Any dtype is allowed.
         col_clusters: same as row_clusters
         row_spacer_size: if float, specifies the size for a single spacer, which will be used for each individual spacer.  If List[float] specifies size for each spacer in order.
             Size is given as fraction of the Axes width.
         col_spacer_size: Same as row_spacer_size, size is given as fraction of the Axis height
         pcolormesh_args: if the colormapping is not specified via either vmin+vmax or norm, the 0.02 and 0.98 percentiles of df will be used as vmin and vmax.
+        fig: if add_colorbar == True, fig must specified, otherwise it is ignored
+        colorbar_args: if None, defaults to dict(shrink=0.4, aspect=20)
+        frame_spaced_elements: if True, draw a rectangle around each individual
+            heatmap. This is only implemented for row-clusters only at the moment (experimental!) and is ignored in other cases
+        frame_kwargs: passed to patches.Rectangle
 
     Returns:
         quadmesh, for use in colorbar plotting etc.
     """
 
+    # Argument checking and pre-processing
     if row_clusters is None and col_clusters is None:
         raise TypeError('You must specify at least one of {row_cluster, col_cluster}')
+    elif row_clusters is not None and not isinstance(row_clusters, (pd.Series, np.ndarray)):
+        raise TypeError('Cluster ids must be given as array or series, not e.g. DataFrame')
+    elif col_clusters is not None and not isinstance(col_clusters, (pd.Series, np.ndarray)):
+        raise TypeError('Cluster ids must be given as array or series, not e.g. DataFrame')
     if pcolormesh_args is None:
         pcolormesh_args = {}
+    if add_colorbar:
+        if cbar_args is None:
+            cbar_args = dict(shrink=0.4, aspect=20)
+        if fig is None:
+            raise ValueError('If add_colorbars == True, fig must be specified')
+
+    # if df has a multiindex, flatten it to get labels usable for plotting
+    if isinstance(df.index, pd.MultiIndex):
+        df.index = [' | '.join(str(s) for s in t) for t in df.index]
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [' | '.join(str(s) for s in t) for t in df.columns]
 
     if row_clusters is not None:
-        row_cluster_nelem_per_cluster = np.unique(row_clusters, return_counts=True)[1]
+        row_cluster_ids, row_cluster_unique_idx, row_cluster_nelem_per_cluster = np.unique(
+                row_clusters, return_counts=True, return_index=True)
+        row_cluster_id_order = np.argsort(row_cluster_unique_idx)
+        row_cluster_nelem_per_cluster = row_cluster_nelem_per_cluster[row_cluster_id_order]
+        row_cluster_ids = row_cluster_ids[row_cluster_id_order]
         row_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(row_cluster_nelem_per_cluster), 0, 0)
-        row_cluster_nclusters = np.max(row_clusters)
+        row_cluster_nclusters = len(row_cluster_ids)
 
         if isinstance(row_spacer_size, float):
             # all row spacers have the same size
@@ -773,9 +841,13 @@ def spaced_heatmap(ax, df, row_clusters=None, col_clusters=None,
 
     # see analogous row_spacer code block for comments
     if col_clusters is not None:
-        col_cluster_nelem_per_cluster = np.unique(col_clusters, return_counts=True)[1]
+        col_cluster_ids, col_cluster_unique_idx, col_cluster_nelem_per_cluster = np.unique(
+                col_clusters, return_counts=True, return_index=True)
+        col_cluster_id_order = np.argsort(col_cluster_unique_idx)
+        col_cluster_nelem_per_cluster = col_cluster_nelem_per_cluster[col_cluster_id_order]
+        col_cluster_ids = col_cluster_ids[col_cluster_id_order]
         col_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(col_cluster_nelem_per_cluster), 0, 0)
-        col_cluster_nclusters = np.max(col_clusters)
+        col_cluster_nclusters = len(col_cluster_ids)
         if isinstance(col_spacer_size, float):
             total_col_spacer_frac = col_spacer_size * (col_cluster_nclusters - 1)
             col_spacers_with_0_end = np.repeat((col_spacer_size, 0), (col_cluster_nclusters-1, 1))
@@ -852,6 +924,12 @@ def spaced_heatmap(ax, df, row_clusters=None, col_clusters=None,
             X, Y = np.meshgrid(x, y)
             quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
         assert np.all(np.isclose(np.concatenate(row_heights), row_heights[0][0]))
+        # TEST: surround the row clusters with black framing lines
+        if frame_spaced_elements:
+            for row_cluster_idx in range(row_cluster_nclusters):
+                y0, y1 = row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx]
+                rect = patches.Rectangle((0, y0), width=1, height=y1-y0, fill=None, **frame_kwargs)
+                ax.add_patch(rect)
     elif col_clusters is not None:
         for col_cluster_idx in range(col_cluster_nclusters):
             dataview=df.iloc[:, col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx]:col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx+1]]
@@ -868,10 +946,33 @@ def spaced_heatmap(ax, df, row_clusters=None, col_clusters=None,
         assert np.all(np.isclose(np.concatenate(col_widths), col_widths[0][0]))
 
     # Ticks and beautify
-    ax.set(xticks=np.concatenate(x_ticks), yticks=np.concatenate(y_ticks),
-           xticklabels=np.concatenate(x_ticklabels), yticklabels=np.concatenate(y_ticklabels))
+    if show_row_labels:
+        ax.set(yticks=np.concatenate(y_ticks), yticklabels=np.concatenate(y_ticklabels))
+    else:
+        ax.set(yticks=[])
+    if show_col_labels:
+        ax.set_xticks(np.concatenate(x_ticks))
+        if rotate_col_labels:
+            ax.set_xticklabels(np.concatenate(x_ticklabels), rotation=90)
+        else:
+            ax.set_xticklabels(np.concatenate(x_ticklabels))
+    else:
+        ax.set(xticks=[])
+
+    if title:
+        ax.set_title(title)
+
     ax.tick_params(length=0, which='both', axis='both')
     sns.despine(ax=ax, bottom=True, left=True)
+
+    if add_colorbar:
+        cb = fig.colorbar(quadmesh, ax=ax, **cbar_args)
+        cb.outline.set_linewidth(0.5)
+        cb.ax.tick_params(length=3.5, width=0.5, which='both', axis='both')
+
+
+
+
 
     # noinspection PyUnboundLocalVariable
     return quadmesh

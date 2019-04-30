@@ -15,7 +15,9 @@ from codaplot.plotting import (
     grouped_rows_line_collections,
     cut_dendrogram,
     grouped_rows_heatmap,
-    spaced_heatmap)
+    spaced_heatmap,
+    categorical_heatmap)
+
 # Test data setup
 # ######################################################################
 # Create 'base' test data ndarray with three clusters across rows and
@@ -123,7 +125,7 @@ def test_spaced_heatmap(tmpdir):
     row_clusters = cluster_ids[row_order] + 1
     data = data[row_order]
     df = pd.DataFrame(data)
-    col_clusters = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+    col_clusters = np.array([1, 1, 1, 1, 2, 2, 2, 2, 3, 3])
 
     # one spacer width for all row spacers
     # one spacer width for all col spacers
@@ -144,7 +146,8 @@ def test_spaced_heatmap(tmpdir):
     qm = spaced_heatmap(ax=ax, df=df,
                         row_clusters=row_clusters, col_clusters=col_clusters,
                         row_spacer_size=[0.02, 0.1], col_spacer_size=[0.2, 0.05],
-                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        pcolormesh_args={'vmin': -3, 'vmax': 3},
+                        show_col_labels=True,
                         )
     fig.colorbar(qm, shrink=0.4, extend='both')
     fig.savefig(tmpdir.joinpath('test2.png'))
@@ -155,7 +158,8 @@ def test_spaced_heatmap(tmpdir):
     qm = spaced_heatmap(ax=ax, df=df,
                         row_clusters=row_clusters,
                         row_spacer_size=[0.02, 0.1],
-                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        pcolormesh_args={'vmin': -3, 'vmax': 3},
+                        show_row_labels=True,
                         )
     fig.colorbar(qm, shrink=0.4, extend='both')
     fig.savefig(tmpdir.joinpath('test3.png'))
@@ -166,9 +170,89 @@ def test_spaced_heatmap(tmpdir):
     qm = spaced_heatmap(ax=ax, df=df,
                         col_clusters=col_clusters,
                         col_spacer_size=0.1,
-                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        pcolormesh_args={'vmin': -3, 'vmax': 3},
+                        show_row_labels=True, show_col_labels=True,
                         )
     fig.colorbar(qm, shrink=0.4, extend='both')
     fig.savefig(tmpdir.joinpath('test4.png'))
 
     subprocess.run(['firefox', tmpdir])
+
+    # with string labels
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    row_clusters_str = np.array(list('aaaabbbccc'))
+    qm = spaced_heatmap(ax=ax, df=df,
+                        row_clusters=row_clusters_str, col_clusters=col_clusters,
+                        row_spacer_size=0.02, col_spacer_size=0.1,
+                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        )
+    fig.colorbar(qm, shrink=0.4, extend='both')
+    fig.savefig(tmpdir.joinpath('test5.png'))
+
+    # multiindex
+    df2 = df.copy()
+    df2.columns = pd.MultiIndex.from_arrays([list('aaaabbbccc'),
+                                               np.repeat([.1, .2], 5)])
+    df2.index = df2.columns
+    ## same spacers
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    qm = spaced_heatmap(ax=ax, df=df2,
+                        row_clusters=row_clusters, col_clusters=col_clusters,
+                        row_spacer_size=0.02, col_spacer_size=0.1,
+                        pcolormesh_args={'vmin': -3, 'vmax': 3}
+                        )
+    fig.colorbar(qm, shrink=0.4, extend='both')
+    fig.savefig(tmpdir.joinpath('test6.png'))
+
+    # colorbar
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), constrained_layout=True)
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
+    qm = spaced_heatmap(ax=ax, df=df2,
+                        row_clusters=row_clusters, col_clusters=col_clusters,
+                        row_spacer_size=0.02, col_spacer_size=0.1,
+                        pcolormesh_args={'vmin': -3, 'vmax': 3},
+                        add_colorbar=True, cbar_args=dict(shrink=0.9, extend='both'),
+                        fig=fig
+                        )
+    fig.savefig(tmpdir.joinpath('test7.png'))
+
+
+
+def test_categorical_heatmap(tmpdir):
+    tmpdir = str(tmpdir)
+
+    # from int df
+    data = pd.DataFrame(np.repeat(np.arange(1, 7), 10))
+    fig, ax = plt.subplots(1, 1)
+    categorical_heatmap(data, ax=ax)
+    fig.savefig(tmpdir + '/plot1.png')
+
+    ## with equal spacer
+    fig, ax = plt.subplots(1, 1)
+    categorical_heatmap(data, ax=ax, spaced_heatmap_args=dict(row_clusters=data.iloc[:, 0], row_spacer_size=0.1))
+    fig.savefig(tmpdir + '/plot2.png')
+
+    ## with different spacers
+    fig, ax = plt.subplots(1, 1)
+    categorical_heatmap(data, ax=ax,
+                        spaced_heatmap_args=dict(row_clusters=data.iloc[:, 0],
+                                                 row_spacer_size=np.arange(5) / 100))
+    fig.savefig(tmpdir + '/plot3.png')
+
+    # from string
+    data = pd.DataFrame(np.repeat(list('abcdef'), 10))
+    fig, ax = plt.subplots(1, 1)
+    categorical_heatmap(data, ax=ax)
+    fig.savefig(tmpdir + '/plot4.png')
+
+    ## with spacing
+    fig, ax = plt.subplots(1, 1)
+    categorical_heatmap(data, ax=ax,
+                        spaced_heatmap_args=dict(row_clusters=data.iloc[:, 0],
+                                                 row_spacer_size=0.1))
+    fig.savefig(tmpdir + '/plot5.png')
+
+    subprocess.run(['firefox', tmpdir])
+
