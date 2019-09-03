@@ -19,13 +19,13 @@ from codaplot.cluster_ids import ClusterIDs
 from codaplot.linkage_mat import Linkage
 
 CMAP_DICT = dict(
-        divergent_meth_heatmap = plt.get_cmap('RdBu_r'),
-        sequential_meth_heatmap = plt.get_cmap('YlOrBr'),
-        cluster_id_to_color = dict(zip(np.arange(1,101),
-                                       sns.color_palette('Set1', 100))),
+    divergent_meth_heatmap=plt.get_cmap("RdBu_r"),
+    sequential_meth_heatmap=plt.get_cmap("YlOrBr"),
+    cluster_id_to_color=dict(zip(np.arange(1, 101), sns.color_palette("Set1", 100))),
 )
-CMAP_DICT['cluster_id_to_color'][-1] = (0,0,0)
-CMAP_DICT['cluster_id_to_color'][0] = (0,0,0)
+CMAP_DICT["cluster_id_to_color"][-1] = (0, 0, 0)
+CMAP_DICT["cluster_id_to_color"][0] = (0, 0, 0)
+
 
 def remove_axis(ax: Axes, y=True, x=True):
     """Remove spines, ticks, labels, ..."""
@@ -42,24 +42,34 @@ def dendrogram_wrapper(linkage_mat, ax: Axes, orientation: str):
 
     Despines plot and removes ticks and labels
     """
-    dendrogram(linkage_mat, ax=ax, color_threshold=-1,
-               above_threshold_color='black', orientation=orientation)
+    dendrogram(
+        linkage_mat,
+        ax=ax,
+        color_threshold=-1,
+        above_threshold_color="black",
+        orientation=orientation,
+    )
     ax.set(xticks=[], yticks=[], yticklabels=[], xticklabels=[])
     sns.despine(ax=ax, bottom=True, left=True)
 
 
-def categorical_heatmap(df: pd.DataFrame, ax: Axes,
-                        cmap: str = 'Set1', colors: Optional[List] = None,
-                        show_values = True,
-                        show_legend = False,
-                        legend_ax: Optional[Axes] = None,
-                        legend_args: Optional[Dict[str, Any]] = None,
-                        despine = True,
-                        show_yticklabels=False,
-                        show_xticklabels=False,
-                        spaced_heatmap_args=None,
-                        title=None,
-                        ):
+def categorical_heatmap(
+    df: pd.DataFrame,
+    ax: Axes,
+    cmap: str = "Set1",
+    colors: Optional[List] = None,
+    show_values=True,
+    show_legend=False,
+    legend_ax: Optional[Axes] = None,
+    legend_args: Optional[Dict[str, Any]] = None,
+    despine=True,
+    show_yticklabels=False,
+    show_xticklabels=False,
+    row_clusters=None,
+    col_clusters=None,
+    spaced_heatmap_args=None,
+    title=None,
+):
     """Categorical heatmap
 
     Args:
@@ -72,18 +82,19 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
             which is meant to place the legend outside of the categorical heatmap to the left.
             This will need to be adjusted depending on the label length and the width
             of the heatmap
+        row_clusters, col_clusters: passed to spaced heatmap. these arguments must be given outside of space_heatmap_args (to allow alignment in dynamic grid manager)
 
 
     Does not accept NA values.
     """
 
     if df.isna().any().any():
-        raise ValueError('NA values not allowed')
+        raise ValueError("NA values not allowed")
 
     if not df.dtypes.unique().shape[0] == 1:
-        raise ValueError('All columns must have the same dtype')
+        raise ValueError("All columns must have the same dtype")
 
-    is_categorical = df.dtypes.iloc[0].name == 'category'
+    is_categorical = df.dtypes.iloc[0].name == "category"
 
     if is_categorical:
         levels = df.dtypes.iloc[0].categories.values
@@ -99,7 +110,6 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         color_list = (np.ceil(n_levels / len(colors)).astype(int) * colors)[:n_levels]
     cmap = mpl.colors.ListedColormap(color_list)
 
-
     # Get integer codes matrix for pcolormesh, ie levels are represented by
     # increasing integers according to the level ordering
     if is_categorical:
@@ -108,12 +118,20 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         value_to_code = {value: code for code, value in enumerate(levels)}
         codes_df = df.replace(value_to_code)
 
-    if spaced_heatmap_args is not None:
-        pargs = spaced_heatmap_args.get('pcolormesh_args', {})
-        if 'cmap' in pargs:
-            print('Warning: cmap is defined via the categorical heatmap argument, not via pcolormesh_args')
+    if row_clusters is not None or col_clusters is not None:
+        pargs = spaced_heatmap_args.get("pcolormesh_args", {})
+        if "cmap" in pargs:
+            print(
+                "Warning: cmap is defined via the categorical heatmap argument, not via pcolormesh_args"
+            )
         pargs.update(cmap=cmap)
-        qm = spaced_heatmap(ax, codes_df, **spaced_heatmap_args)
+        qm = spaced_heatmap(
+            ax,
+            codes_df,
+            row_clusters=row_clusters,
+            col_clusters=col_clusters,
+            **spaced_heatmap_args,
+        )
     else:
         qm = ax.pcolormesh(codes_df, cmap=cmap)
 
@@ -127,10 +145,10 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
         ax.set(yticks=[], yticklabels=[])
 
     # Create dummy patches for legend
-    patches = [mpatches.Patch(facecolor=c, edgecolor='black') for c in color_list]
+    patches = [mpatches.Patch(facecolor=c, edgecolor="black") for c in color_list]
     if show_legend:
         if legend_args is None:
-            legend_args = dict(bbox_to_anchor=(-1, 0, 1, 1), loc='best')
+            legend_args = dict(bbox_to_anchor=(-1, 0, 1, 1), loc="best")
         if legend_ax is not None:
             legend_ax.legend(patches, levels, **legend_args)
         else:
@@ -144,17 +162,19 @@ def categorical_heatmap(df: pd.DataFrame, ax: Axes,
             y, s = find_stretches(np.array(df.iloc[:, i]))
             x = i + 0.5
             for curr_y, curr_s in zip(list(y), s):
-                ax.text(x, curr_y, str(curr_s), va='center', ha='center')
+                ax.text(x, curr_y, str(curr_s), va="center", ha="center")
 
     if title is not None:
         ax.set_title(title)
 
-    return {'quadmesh': qm, 'patches': patches, 'levels': levels}
+    return {"quadmesh": qm, "patches": patches, "levels": levels}
 
 
 # Note: jit compilation does not seem to provide speed-ups. Haven't
 # checked it out yet.
-numba.jit(nopython=True)
+# @numba.jit(nopython=True)
+
+
 def find_stretches(arr):
     """Find stretches of equal values in ndarray"""
     assert isinstance(arr, np.ndarray)
@@ -168,16 +188,16 @@ def find_stretches(arr):
         if value == stretch_value:
             end += 1
         else:
-            marks[mark_i] = start + (end - start)/2
+            marks[mark_i] = start + (end - start) / 2
             values[mark_i] = stretch_value
             start = end
             end += 1
             stretch_value = value
             mark_i += 1
     # add last stretch
-    marks[mark_i] = start + (end - start)/2
+    marks[mark_i] = start + (end - start) / 2
     values[mark_i] = stretch_value
-    return marks[:(mark_i + 1)], values[:(mark_i + 1)]
+    return marks[: (mark_i + 1)], values[: (mark_i + 1)]
 
 
 # From matplotlib docs:
@@ -191,21 +211,23 @@ class MidpointNormalize(mpl.colors.Normalize):
         return np.ma.masked_array(np.interp(value, x, y))
 
 
-def heatmap(df: pd.DataFrame,
-            ax: Axes, fig: Figure,
-            cmap: str,
-            # midpoint_normalize: bool =  False,
-            col_labels_show: bool = True,
-            row_labels_show: bool = False,
-            tick_length = 0,
-            xlabel: Optional[str] = None,
-            ylabel: Optional[str] = None,
-            row_labels_rotation = 90,
-            add_colorbar = True,
-            cbar_args: Optional[Dict] = None,
-            title: Optional[str] = None,
-            **kwargs,
-            ):
+def heatmap(
+    df: pd.DataFrame,
+    ax: Axes,
+    fig: Figure,
+    cmap: str,
+    # midpoint_normalize: bool =  False,
+    col_labels_show: bool = True,
+    row_labels_show: bool = False,
+    tick_length=0,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    row_labels_rotation=90,
+    add_colorbar=True,
+    cbar_args: Optional[Dict] = None,
+    title: Optional[str] = None,
+    **kwargs,
+):
     """Simple heatmap plotter
 
     Args:
@@ -225,21 +247,21 @@ def heatmap(df: pd.DataFrame,
 
     qm = ax.pcolormesh(df, cmap=cmap, **kwargs)
 
-    ax.tick_params(length=tick_length, which='both', axis='both')
+    ax.tick_params(length=tick_length, which="both", axis="both")
 
     if col_labels_show:
         ax.set_xticks(np.arange(df.shape[1]) + 0.5)
         ax.set_xticklabels(df.columns, rotation=row_labels_rotation)
     else:
         ax.set_xticks([])
-        ax.tick_params(length=0, which='both', axis='x')
+        ax.tick_params(length=0, which="both", axis="x")
 
     if row_labels_show:
         ax.set_yticks(np.arange(df.shape[0]) + 0.5)
         ax.set_yticklabels(df.index)
     else:
         ax.set_yticks([])
-        ax.tick_params(length=0, which='both', axis='y')
+        ax.tick_params(length=0, which="both", axis="y")
 
     if xlabel:
         ax.set_xlabel(xlabel)
@@ -252,16 +274,22 @@ def heatmap(df: pd.DataFrame,
     if add_colorbar:
         cb = fig.colorbar(qm, ax=ax, **cbar_args)
         cb.outline.set_linewidth(0.5)
-        cb.ax.tick_params(length=3.5, width=0.5, which='both', axis='both')
+        cb.ax.tick_params(length=3.5, width=0.5, which="both", axis="both")
 
 
 def simple_line(ax):
     ax.plot([1, 2, 3, 4, 5])
 
 
-def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
-                      bar_height = 0.6, xlabel=None,
-                      invert_xaxis=False, cmap=None, color='gray'):
+def cluster_size_plot(
+    cluster_ids: pd.Series,
+    ax: Axes,
+    bar_height=0.6,
+    xlabel=None,
+    invert_xaxis=False,
+    cmap=None,
+    color="gray",
+):
     """Horizontal cluster size barplot
 
     Currently, this assumes that the cluster IDs can be sorted directly
@@ -287,9 +315,12 @@ def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
         color = sns.color_palette(cmap, len(cluster_sizes))
     else:
         color = color
-    ax.barh(y=np.arange(0.5, cluster_sizes.shape[0]),
-            width=cluster_sizes.values,
-            height=bar_height, color=color)
+    ax.barh(
+        y=np.arange(0.5, cluster_sizes.shape[0]),
+        width=cluster_sizes.values,
+        height=bar_height,
+        color=color,
+    )
     ax.set_ylim(0, cluster_sizes.shape[0])
     if xlabel is not None:
         ax.set_xlabel(xlabel)
@@ -298,28 +329,35 @@ def cluster_size_plot(cluster_ids: pd.Series, ax: Axes,
         ax.invert_xaxis()
 
 
-def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes,
-                 xlabel=None):
+def col_agg_plot(df: pd.DataFrame, fn: Callable, ax: Axes, xlabel=None):
     """Plot aggregate statistic as line plot
 
     Args:
         fn: function which will be passed to pd.DataFrame.agg
     """
     agg_stat = df.agg(fn)
-    ax.plot(np.arange(0.5, df.shape[1]),
-            agg_stat.values)
+    ax.plot(np.arange(0.5, df.shape[1]), agg_stat.values)
     if xlabel is not None:
         ax.set_xlabel(xlabel)
 
 
-def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence]], ax: List[Axes],
-                       show_all_xticklabels=False, xlabel=None, ylabel=None,
-                       sharey=True, ylim=None, hlines=None, plot_args: Optional[Dict] = None,
-                       hlines_args: Optional[Dict]= None):
+def row_group_agg_plot(
+    data: pd.DataFrame,
+    fn,
+    row: Optional[Union[str, Sequence]],
+    ax: List[Axes],
+    show_all_xticklabels=False,
+    xlabel=None,
+    ylabel=None,
+    sharey=True,
+    ylim=None,
+    hlines=None,
+    plot_args: Optional[Dict] = None,
+    hlines_args: Optional[Dict] = None,
+):
 
     axes = ax
-    used_plot_args = dict(
-        marker='o', linestyle='-', color='black', linewidth=None)
+    used_plot_args = dict(marker="o", linestyle="-", color="black", linewidth=None)
     if plot_args is not None:
         used_plot_args.update(plot_args)
 
@@ -346,12 +384,14 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
         if ylim is not None:
             curr_ax.set_ylim(ylim)
         if not show_all_xticklabels:
-            curr_ax.set(xticks=[], xticklabels=[], xlabel='')
+            curr_ax.set(xticks=[], xticklabels=[], xlabel="")
         else:
             curr_ax.set_xticks(x)
             curr_ax.set_xticklabels(data.columns, rotation=90)
-            curr_ax.set_xlabel('')
-        curr_ylabel = str(group_name) if not ylabel else str(group_name) + '\n\n' + ylabel
+            curr_ax.set_xlabel("")
+        curr_ylabel = (
+            str(group_name) if not ylabel else str(group_name) + "\n\n" + ylabel
+        )
         curr_ax.set_ylabel(curr_ylabel)
 
         if hlines:
@@ -362,7 +402,7 @@ def row_group_agg_plot(data: pd.DataFrame, fn, row: Optional[Union[str, Sequence
     # Add xticks and xticklabels to the bottom Axes
     axes[-1].set_xticks(x)
     axes[-1].set_xticklabels(data.columns, rotation=90)
-    axes[-1].set_xlabel(xlabel if xlabel is not None else '')
+    axes[-1].set_xlabel(xlabel if xlabel is not None else "")
 
 
 def compute_padded_ylim(df):
@@ -379,10 +419,17 @@ def compute_padded_ylim(df):
     return ylim
 
 
-def grouped_rows_violin(data: pd.DataFrame, row: Union[str, Iterable],
-                        ax: List[Axes], n_per_group=2000, sort=False,
-                        sharey=False, ylim=None, show_all_xticklabels=False,
-                        xlabel=None) -> None:
+def grouped_rows_violin(
+    data: pd.DataFrame,
+    row: Union[str, Iterable],
+    ax: List[Axes],
+    n_per_group=2000,
+    sort=False,
+    sharey=False,
+    ylim=None,
+    show_all_xticklabels=False,
+    xlabel=None,
+) -> None:
     # axes list called ax because currently only ax kwarg recognized by Grid
     # currently, axes are given in top down order, but we want to fill them
     # in bottom up order (aka the pcolormesh plotting direction)
@@ -399,29 +446,37 @@ def grouped_rows_violin(data: pd.DataFrame, row: Union[str, Iterable],
     xticklabels = data.columns.values
     for curr_ax, curr_level in zip(axes, levels):
         group_df: pd.DataFrame = sample_n(grouped.get_group(curr_level), n_per_group)
-        group_df.columns.name = 'x'
-        long_group_df = group_df.stack().to_frame('y').reset_index()
-        sns.violinplot(x='x', y='y', data=long_group_df, ax=curr_ax)
+        group_df.columns.name = "x"
+        long_group_df = group_df.stack().to_frame("y").reset_index()
+        sns.violinplot(x="x", y="y", data=long_group_df, ax=curr_ax)
         if ylim:
             curr_ax.set_ylim(ylim)
-        curr_ax.set_xlabel('')
+        curr_ax.set_xlabel("")
         if not show_all_xticklabels:
-            curr_ax.set(xticks=[], xticklabels=[], xlabel='')
+            curr_ax.set(xticks=[], xticklabels=[], xlabel="")
         else:
             # sns.violinplot already sets the same labels (data.columns.values),
             # but does not rotate them
             curr_ax.set_xticklabels(xticklabels, rotation=90)
-            curr_ax.set_xlabel('')
+            curr_ax.set_xlabel("")
 
     axes[0].set_xticks(xticks)
     axes[0].set_xticklabels(xticklabels, rotation=90)
-    axes[0].set_xlabel('' if xlabel is None else xlabel)
+    axes[0].set_xlabel("" if xlabel is None else xlabel)
 
 
-def grouped_rows_line_collections(data: pd.DataFrame, row: Union[str, Iterable],
-                                  ax: List[Axes], n_per_group=2000, sort=False,
-                                  sharey=False, ylim=None, show_all_xticklabels=False,
-                                  xlabel=None, alpha=0.01):
+def grouped_rows_line_collections(
+    data: pd.DataFrame,
+    row: Union[str, Iterable],
+    ax: List[Axes],
+    n_per_group=2000,
+    sort=False,
+    sharey=False,
+    ylim=None,
+    show_all_xticklabels=False,
+    xlabel=None,
+    alpha=0.01,
+):
     axes = ax[::-1]
     grouped: GroupBy = data.groupby(row)
     levels = get_groupby_levels_in_order_of_appearance(data, row)
@@ -442,7 +497,7 @@ def grouped_rows_line_collections(data: pd.DataFrame, row: Union[str, Iterable],
         segments = np.zeros(group_df.shape + (2,))
         segments[:, :, 1] = group_df.values
         segments[:, :, 0] = np.arange(0.5, group_df.shape[1])
-        line_collection = LineCollection(segments, color='black', alpha=alpha)
+        line_collection = LineCollection(segments, color="black", alpha=alpha)
         curr_ax.add_collection(line_collection)
 
         # need to set plot limits, they will not autoscale
@@ -456,23 +511,22 @@ def grouped_rows_line_collections(data: pd.DataFrame, row: Union[str, Iterable],
         if show_all_xticklabels:
             curr_ax.set_xticks(xticks)
             curr_ax.set_xticklabels(xticklabels, rotation=90)
-            curr_ax.set_xlabel('')
+            curr_ax.set_xlabel("")
         else:
-            curr_ax.set(xticks=[], xticklabels=[], xlabel='')
+            curr_ax.set(xticks=[], xticklabels=[], xlabel="")
 
     axes[0].set_xticks(xticks)
     axes[0].set_xticklabels(xticklabels, rotation=90)
-    axes[0].set_xlabel(xlabel if xlabel is not None else '')
-
-
+    axes[0].set_xlabel(xlabel if xlabel is not None else "")
 
 
 def sample_n(df, n):
     if df.shape[0] < 50:
-        print('Warning: less than 50 elements for calculating violin plot')
+        print("Warning: less than 50 elements for calculating violin plot")
     if df.shape[0] <= n:
         return df
     return df.sample(n=n)
+
 
 def get_groupby_levels_in_order_of_appearance(df, groupby_var) -> np.ndarray:
     if isinstance(groupby_var, str):
@@ -481,7 +535,7 @@ def get_groupby_levels_in_order_of_appearance(df, groupby_var) -> np.ndarray:
         elif groupby_var in df.index.names:
             levels = df.index.get_level_values(groupby_var).unique()
         else:
-            raise ValueError(f'Can not find {groupby_var} in df')
+            raise ValueError(f"Can not find {groupby_var} in df")
     else:
         levels = pd.Series(groupby_var).unique()
     return levels
@@ -495,12 +549,10 @@ class CutDendrogram:
     cluster_ids_data_order: pd.Series
     ax: Axes
     pretty: bool = False
-    orientation: str = 'horizontal'
-
+    orientation: str = "horizontal"
 
     def __post_init__(self):
         self._args_processed = False
-
 
     def plot_links_until_clusters(self):
 
@@ -518,40 +570,47 @@ class CutDendrogram:
             if self.link_cluster_ids[i] != -1:
                 continue
             x, y = self.xcoords.iloc[i, :].copy(), self.ycoords.iloc[i, :].copy()
-            left_child_idx, right_child_idx = self.Z_df[['left_child', 'right_child']].iloc[i]
-            left_cluster_id = get_cluster_ids(left_child_idx,
-                                              self.link_cluster_ids, self.cluster_ids_data_order)
-            right_cluster_id = get_cluster_ids(right_child_idx,
-                                               self.link_cluster_ids, self.cluster_ids_data_order)
+            left_child_idx, right_child_idx = self.Z_df[
+                ["left_child", "right_child"]
+            ].iloc[i]
+            left_cluster_id = get_cluster_ids(
+                left_child_idx, self.link_cluster_ids, self.cluster_ids_data_order
+            )
+            right_cluster_id = get_cluster_ids(
+                right_child_idx, self.link_cluster_ids, self.cluster_ids_data_order
+            )
             if left_cluster_id != -1:
-                y['ylow_left'] = 0
+                y["ylow_left"] = 0
             if right_cluster_id != -1:
-                y['ylow_right'] = 0
+                y["ylow_right"] = 0
 
-            if self.orientation == 'horizontal':
-                self.ax.plot(y, x, color='black')
+            if self.orientation == "horizontal":
+                self.ax.plot(y, x, color="black")
             else:
-                self.ax.plot(x, y, color='black')
-
+                self.ax.plot(x, y, color="black")
 
         self._plot_post_processing()
 
-
-    def plot_links_with_cluster_inspection(self, show_cluster_points: bool = False,
-                                           point_params: Optional[Dict] = None,
-                                           min_cluster_size: Optional[int] = None,
-                                           min_height: str = 'auto'):
+    def plot_links_with_cluster_inspection(
+        self,
+        show_cluster_points: bool = False,
+        point_params: Optional[Dict] = None,
+        min_cluster_size: Optional[int] = None,
+        min_height: str = "auto",
+    ):
 
         if not self._args_processed:
             self._process_args()
 
         if point_params is None:
-            point_params = {'s': 2, 'marker': 'x', 'c': 'black'}
-        if min_height == 'auto':
+            point_params = {"s": 2, "marker": "x", "c": "black"}
+        if min_height == "auto":
             min_height = self._linkage_estimate_min_height()
         if min_cluster_size is None:
             min_cluster_size = self.n_leaves * 0.02
-        link_colors = pd.Series(self.link_cluster_ids).map(CMAP_DICT['cluster_id_to_color'])
+        link_colors = pd.Series(self.link_cluster_ids).map(
+            CMAP_DICT["cluster_id_to_color"]
+        )
         # cluster_ids_ser, link_colors = linkage_get_link_cluster_ids(Z, cluster_ids_ser)
         # ys = []
         # _linkage_get_child_y_coords(Z, ys, Z.shape[0] * 2, 3)
@@ -563,7 +622,7 @@ class CutDendrogram:
 
             if self.Z[i, 3] < min_cluster_size:
                 continue
-            if y['yhigh1'] < min_height:
+            if y["yhigh1"] < min_height:
                 continue
 
             try:
@@ -575,20 +634,22 @@ class CutDendrogram:
             except IndexError:
                 right_child_size = 1
 
-            if (left_child_size < min_cluster_size
-                    and right_child_size < min_cluster_size):
-                y['ylow_left'] = 0
-                y['ylow_right'] = 0
-                if self.orientation == 'vertical':
+            if (
+                left_child_size < min_cluster_size
+                and right_child_size < min_cluster_size
+            ):
+                y["ylow_left"] = 0
+                y["ylow_right"] = 0
+                if self.orientation == "vertical":
                     self.ax.plot(x, y, color=link_colors[i])
                 else:
                     self.ax.plot(y, x, color=link_colors[i])
 
             else:
-                if y['ylow_left'] < min_height or left_child_size < min_cluster_size:
-                    y['ylow_left'] = 0
+                if y["ylow_left"] < min_height or left_child_size < min_cluster_size:
+                    y["ylow_left"] = 0
 
-                    curr_point_x = x['xleft1']
+                    curr_point_x = x["xleft1"]
                     obs_idx = self.Z[i, 0]
 
                     # if obs_idx > self.Z.shape[0]:
@@ -603,9 +664,9 @@ class CutDendrogram:
                     # else:
                     #     curr_size = 1
 
-                if y['ylow_right'] < min_height or right_child_size < min_cluster_size:
-                    y['ylow_right'] = 0
-                    curr_point_x = x['xright1']
+                if y["ylow_right"] < min_height or right_child_size < min_cluster_size:
+                    y["ylow_right"] = 0
+                    curr_point_x = x["xright1"]
                     obs_idx = self.Z[i, 1]
                     if obs_idx > self.Z.shape[0]:
                         lookup_idx = int(obs_idx - (self.Z.shape[0] + 1))
@@ -616,58 +677,54 @@ class CutDendrogram:
                         point_ys += curr_ys
                         point_xs += [curr_point_x] * len(curr_ys)
 
-                if self.orientation == 'vertical':
+                if self.orientation == "vertical":
                     self.ax.plot(x, y, color=link_colors[i])
                 else:
                     self.ax.plot(y, x, color=link_colors[i])
 
             if show_cluster_points:
-                if self.orientation == 'vertical':
-                    self.ax.scatter(point_xs, point_ys, **point_params, zorder=20_000)
+                if self.orientation == "vertical":
+                    self.ax.scatter(point_xs, point_ys, **point_params, zorder=20000)
                 else:
-                    self.ax.scatter(point_ys, point_xs, **point_params, zorder=20_000)
-
+                    self.ax.scatter(point_ys, point_xs, **point_params, zorder=20000)
 
     def _process_args(self):
         self.n_leaves = self.Z.shape[0] + 1
         linkage_mat = Linkage(
-                self.Z,
-                cluster_ids=ClusterIDs(
-                        self.cluster_ids_data_order.to_frame('clustering1')))
-        self.link_cluster_ids = linkage_mat.get_link_cluster_ids('clustering1')
+            self.Z,
+            cluster_ids=ClusterIDs(self.cluster_ids_data_order.to_frame("clustering1")),
+        )
+        self.link_cluster_ids = linkage_mat.get_link_cluster_ids("clustering1")
         self.Z_df = linkage_mat.df
-        self.Z_df['cluster_ids'] = self.link_cluster_ids
+        self.Z_df["cluster_ids"] = self.link_cluster_ids
         self.xcoords, self.ycoords = self._linkage_get_coord_dfs()
 
-        assert self.orientation in ['horizontal', 'vertical']
+        assert self.orientation in ["horizontal", "vertical"]
 
-        if self.orientation == 'horizontal':
+        if self.orientation == "horizontal":
             self.ax.invert_xaxis()
             #     self.ax.invert_yaxis()
             self.ax.margins(0)
 
         self._args_processed = True
 
-
     def _plot_post_processing(self):
         """Orientation, axis limits, despine..."""
 
         max_xcoord = self.xcoords.max().max()
-        xcoord_axis = 'x' if self.orientation == 'vertical' else 'y'
-        self.ax.set(**{f'{xcoord_axis}lim': [0, max_xcoord]})
+        xcoord_axis = "x" if self.orientation == "vertical" else "y"
+        self.ax.set(**{f"{xcoord_axis}lim": [0, max_xcoord]})
 
         if self.pretty:
             self.ax.margins(0)
             self.ax.set(xticks=[], yticks=[], xticklabels=[], yticklabels=[])
             sns.despine(ax=self.ax, left=True, bottom=True)
 
-
     def _linkage_estimate_min_height(self):
-        min_cluster_height = (self.Z_df
-                              .groupby('cluster_ids')['height'].max()
-                              .drop((-1.0)).min())
+        min_cluster_height = (
+            self.Z_df.groupby("cluster_ids")["height"].max().drop((-1.0)).min()
+        )
         return 0.7 * min_cluster_height
-
 
     def _linkage_get_child_y_coords(self, ys, obs_idx, n_children):
         n = self.Z.shape[0] + 1
@@ -685,48 +742,59 @@ class CutDendrogram:
                 _ = self._linkage_get_child_y_coords(ys, right_obs_idx, n_children)
         return ys
 
-
     def _linkage_get_coord_dfs(self):
         dendrogram_dict = dendrogram(self.Z, no_plot=True)
-        dcoords = pd.DataFrame.from_records(dendrogram_dict['dcoord'])
-        dcoords.columns = ['ylow_left', 'yhigh1', 'yhigh2', 'ylow_right']
-        dcoords = dcoords.sort_values('yhigh1')
-        icoords = pd.DataFrame.from_records(dendrogram_dict['icoord'])
-        icoords.columns = ['xleft1', 'xleft2', 'xright1', 'xright2']
+        dcoords = pd.DataFrame.from_records(dendrogram_dict["dcoord"])
+        dcoords.columns = ["ylow_left", "yhigh1", "yhigh2", "ylow_right"]
+        dcoords = dcoords.sort_values("yhigh1")
+        icoords = pd.DataFrame.from_records(dendrogram_dict["icoord"])
+        icoords.columns = ["xleft1", "xleft2", "xright1", "xright2"]
         icoords = icoords.loc[dcoords.index, :]
         xcoords = icoords.reset_index(drop=True)
         ycoords = dcoords.reset_index(drop=True)
         return xcoords, ycoords
 
-def cut_dendrogram(linkage_mat: np.ndarray,
-                   cluster_ids_data_order: pd.Series,
-                   ax: Axes,
-                   pretty: bool = False,
-                   stop_at_cluster_level=True,
-                   orientation: str = 'horizontal',
-                   show_cluster_points: bool = False,
-                   point_params: Optional[Dict] = None,
-                   min_cluster_size: Optional[int] = None,
-                   min_height: str = 'auto'
-                   ):
-    cut_dendrogram = CutDendrogram(Z=linkage_mat,
-                                   cluster_ids_data_order=cluster_ids_data_order,
-                                   ax=ax, pretty=pretty, orientation=orientation)
+
+def cut_dendrogram(
+    linkage_mat: np.ndarray,
+    cluster_ids_data_order: pd.Series,
+    ax: Axes,
+    pretty: bool = False,
+    stop_at_cluster_level=True,
+    orientation: str = "horizontal",
+    show_cluster_points: bool = False,
+    point_params: Optional[Dict] = None,
+    min_cluster_size: Optional[int] = None,
+    min_height: str = "auto",
+):
+    cut_dendrogram = CutDendrogram(
+        Z=linkage_mat,
+        cluster_ids_data_order=cluster_ids_data_order,
+        ax=ax,
+        pretty=pretty,
+        orientation=orientation,
+    )
     if stop_at_cluster_level:
         cut_dendrogram.plot_links_until_clusters()
     else:
         cut_dendrogram.plot_links_with_cluster_inspection(
-                show_cluster_points=show_cluster_points,
-                point_params=point_params,
-                min_cluster_size=min_cluster_size,
-                min_height=min_height
+            show_cluster_points=show_cluster_points,
+            point_params=point_params,
+            min_cluster_size=min_cluster_size,
+            min_height=min_height,
         )
 
 
-def grouped_rows_heatmap(df: pd.DataFrame, row_: Union[str, Iterable],
-                         fn: Union[str, Callable],
-                         cmap: str, ax: Axes, fig=Figure, sort=False,
-                         **kwargs):
+def grouped_rows_heatmap(
+    df: pd.DataFrame,
+    row_: Union[str, Iterable],
+    fn: Union[str, Callable],
+    cmap: str,
+    ax: Axes,
+    fig=Figure,
+    sort=False,
+    **kwargs,
+):
     agg_df = df.groupby(row_).agg(fn)
     levels = get_groupby_levels_in_order_of_appearance(df, row_)
     if sort:
@@ -741,21 +809,24 @@ def grouped_rows_heatmap(df: pd.DataFrame, row_: Union[str, Iterable],
     # ax.set_xlabel(xlabel if xlabel is not None else '')
 
 
-def spaced_heatmap(ax, df,
-                   row_clusters: Union[np.ndarray, pd.Series]=None,
-                   col_clusters: Union[np.ndarray, pd.Series]=None,
-                   row_spacer_size: Union[float, Iterable[float]]=0.01,
-                   col_spacer_size: Union[float, Iterable[float]]=0.01,
-                   pcolormesh_args=None,
-                   show_row_labels=False, show_col_labels=False,
-                   rotate_col_labels=True,
-                   add_colorbar=False,
-                   cbar_args=None,
-                   fig=None,
-                   title=None,
-                   frame_spaced_elements=False,
-                   frame_kwargs=None,
-                   ) -> mpl.collections.QuadMesh :
+def spaced_heatmap(
+    ax,
+    df,
+    row_clusters: Union[np.ndarray, pd.Series] = None,
+    col_clusters: Union[np.ndarray, pd.Series] = None,
+    row_spacer_size: Union[float, Iterable[float]] = 0.01,
+    col_spacer_size: Union[float, Iterable[float]] = 0.01,
+    pcolormesh_args=None,
+    show_row_labels=False,
+    show_col_labels=False,
+    rotate_col_labels=True,
+    add_colorbar=False,
+    cbar_args=None,
+    fig=None,
+    title=None,
+    frame_spaced_elements=False,
+    frame_kwargs=None,
+) -> mpl.collections.QuadMesh:
     """Plot pcolormesh with spacers between groups of rows and columns
 
     Spacer size can be specified for each spacer individually, or with
@@ -786,32 +857,45 @@ def spaced_heatmap(ax, df,
 
     # Argument checking and pre-processing
     if row_clusters is None and col_clusters is None:
-        raise TypeError('You must specify at least one of {row_cluster, col_cluster}')
-    elif row_clusters is not None and not isinstance(row_clusters, (pd.Series, np.ndarray)):
-        raise TypeError('Cluster ids must be given as array or series, not e.g. DataFrame')
-    elif col_clusters is not None and not isinstance(col_clusters, (pd.Series, np.ndarray)):
-        raise TypeError('Cluster ids must be given as array or series, not e.g. DataFrame')
+        raise TypeError("You must specify at least one of {row_cluster, col_cluster}")
+    elif row_clusters is not None and not isinstance(
+        row_clusters, (pd.Series, np.ndarray)
+    ):
+        raise TypeError(
+            "Cluster ids must be given as array or series, not e.g. DataFrame"
+        )
+    elif col_clusters is not None and not isinstance(
+        col_clusters, (pd.Series, np.ndarray)
+    ):
+        raise TypeError(
+            "Cluster ids must be given as array or series, not e.g. DataFrame"
+        )
     if pcolormesh_args is None:
         pcolormesh_args = {}
     if add_colorbar:
         if cbar_args is None:
             cbar_args = dict(shrink=0.4, aspect=20)
         if fig is None:
-            raise ValueError('If add_colorbars == True, fig must be specified')
+            raise ValueError("If add_colorbars == True, fig must be specified")
 
     # if df has a multiindex, flatten it to get labels usable for plotting
     if isinstance(df.index, pd.MultiIndex):
-        df.index = [' | '.join(str(s) for s in t) for t in df.index]
+        df.index = [" | ".join(str(s) for s in t) for t in df.index]
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [' | '.join(str(s) for s in t) for t in df.columns]
+        df.columns = [" | ".join(str(s) for s in t) for t in df.columns]
 
     if row_clusters is not None:
         row_cluster_ids, row_cluster_unique_idx, row_cluster_nelem_per_cluster = np.unique(
-                row_clusters, return_counts=True, return_index=True)
+            row_clusters, return_counts=True, return_index=True
+        )
         row_cluster_id_order = np.argsort(row_cluster_unique_idx)
-        row_cluster_nelem_per_cluster = row_cluster_nelem_per_cluster[row_cluster_id_order]
+        row_cluster_nelem_per_cluster = row_cluster_nelem_per_cluster[
+            row_cluster_id_order
+        ]
         row_cluster_ids = row_cluster_ids[row_cluster_id_order]
-        row_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(row_cluster_nelem_per_cluster), 0, 0)
+        row_cluster_cumsum_nelem_prev_clusters = np.insert(
+            np.cumsum(row_cluster_nelem_per_cluster), 0, 0
+        )
         row_cluster_nclusters = len(row_cluster_ids)
 
         if isinstance(row_spacer_size, float):
@@ -819,7 +903,9 @@ def spaced_heatmap(ax, df,
             # the total fraction of the Axes height reserved for row spacers is then:
             total_row_spacer_frac = row_spacer_size * (row_cluster_nclusters - 1)
             # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
-            row_spacers_with_0_end = np.repeat((row_spacer_size, 0), (row_cluster_nclusters-1, 1))
+            row_spacers_with_0_end = np.repeat(
+                (row_spacer_size, 0), (row_cluster_nclusters - 1, 1)
+            )
         else:
             # there is one size per spacer, assert the correct length of the iterable
             assert len(row_spacer_size) == row_cluster_nclusters - 1
@@ -830,51 +916,84 @@ def spaced_heatmap(ax, df,
 
         # get the start and end positions for each quadmesh block (space in between will be left 'unplotted' to create the spacers)
         # Fraction of all elements contained in the different clusters
-        row_cluster_rel_size_for_each_cluster = row_cluster_nelem_per_cluster / np.sum(row_cluster_nelem_per_cluster)
+        row_cluster_rel_size_for_each_cluster = row_cluster_nelem_per_cluster / np.sum(
+            row_cluster_nelem_per_cluster
+        )
         # Compute the fraction of axes occupied by each cluster, together with its subsequent spacer
-        row_cluster_axes_fraction_for_each_cluster = (1 - total_row_spacer_frac) * row_cluster_rel_size_for_each_cluster
-        row_cluster_axes_fraction_for_each_cluster_with_spacer = row_cluster_axes_fraction_for_each_cluster + row_spacers_with_0_end
+        row_cluster_axes_fraction_for_each_cluster = (
+            1 - total_row_spacer_frac
+        ) * row_cluster_rel_size_for_each_cluster
+        row_cluster_axes_fraction_for_each_cluster_with_spacer = (
+            row_cluster_axes_fraction_for_each_cluster + row_spacers_with_0_end
+        )
         # Now we can calculate the start and end of each quadmesh block
-        row_cluster_start_axis_fraction = np.cumsum(np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[:-1]
-        row_cluster_end_axis_fraction = np.cumsum(np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[1:] - row_spacers_with_0_end
-
+        row_cluster_start_axis_fraction = np.cumsum(
+            np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+        )[:-1]
+        row_cluster_end_axis_fraction = (
+            np.cumsum(
+                np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+            )[1:]
+            - row_spacers_with_0_end
+        )
 
     # see analogous row_spacer code block for comments
     if col_clusters is not None:
         col_cluster_ids, col_cluster_unique_idx, col_cluster_nelem_per_cluster = np.unique(
-                col_clusters, return_counts=True, return_index=True)
+            col_clusters, return_counts=True, return_index=True
+        )
         col_cluster_id_order = np.argsort(col_cluster_unique_idx)
-        col_cluster_nelem_per_cluster = col_cluster_nelem_per_cluster[col_cluster_id_order]
+        col_cluster_nelem_per_cluster = col_cluster_nelem_per_cluster[
+            col_cluster_id_order
+        ]
         col_cluster_ids = col_cluster_ids[col_cluster_id_order]
-        col_cluster_cumsum_nelem_prev_clusters = np.insert(np.cumsum(col_cluster_nelem_per_cluster), 0, 0)
+        col_cluster_cumsum_nelem_prev_clusters = np.insert(
+            np.cumsum(col_cluster_nelem_per_cluster), 0, 0
+        )
         col_cluster_nclusters = len(col_cluster_ids)
         if isinstance(col_spacer_size, float):
             total_col_spacer_frac = col_spacer_size * (col_cluster_nclusters - 1)
-            col_spacers_with_0_end = np.repeat((col_spacer_size, 0), (col_cluster_nclusters-1, 1))
+            col_spacers_with_0_end = np.repeat(
+                (col_spacer_size, 0), (col_cluster_nclusters - 1, 1)
+            )
         else:
             assert len(col_spacer_size) == col_cluster_nclusters - 1
             total_col_spacer_frac = np.sum(col_spacer_size)
             col_spacers_with_0_end = np.append(col_spacer_size, 0)
 
         # see analogous row cluster handling code above for comments
-        col_cluster_rel_size_for_each_cluster = col_cluster_nelem_per_cluster / np.sum(col_cluster_nelem_per_cluster)
-        col_cluster_axes_fraction_for_each_cluster = (1 - total_col_spacer_frac) * col_cluster_rel_size_for_each_cluster
-        col_cluster_axes_fraction_for_each_cluster_with_spacer = col_cluster_axes_fraction_for_each_cluster + col_spacers_with_0_end
-        col_cluster_start_axis_fraction = np.cumsum(np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[:-1]
-        col_cluster_end_axis_fraction = np.cumsum(np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0))[1:] - col_spacers_with_0_end
-
+        col_cluster_rel_size_for_each_cluster = col_cluster_nelem_per_cluster / np.sum(
+            col_cluster_nelem_per_cluster
+        )
+        col_cluster_axes_fraction_for_each_cluster = (
+            1 - total_col_spacer_frac
+        ) * col_cluster_rel_size_for_each_cluster
+        col_cluster_axes_fraction_for_each_cluster_with_spacer = (
+            col_cluster_axes_fraction_for_each_cluster + col_spacers_with_0_end
+        )
+        col_cluster_start_axis_fraction = np.cumsum(
+            np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+        )[:-1]
+        col_cluster_end_axis_fraction = (
+            np.cumsum(
+                np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+            )[1:]
+            - col_spacers_with_0_end
+        )
 
     # we work with fractions of the Axes height and width, so we set the limits to:
     ax.set_ylim(0, 1)
     ax.set_xlim(0, 1)
 
-
     # Prepare colormapping - all pcolormesh blocks must use the same colormapping
     # The user can guarantee this by specifying norm or vmin AND vmax in the pcolormesh_args
     # Otherwise, we determine vmin and vmax as:
-    if not ('norm' in pcolormesh_args or ('vmin' in pcolormesh_args and 'vmax' in pcolormesh_args)):
-        pcolormesh_args['vmin'] = np.quantile(df, 0.02)
-        pcolormesh_args['vmax'] = np.quantile(df, 1 - 0.02)
+    if not (
+        "norm" in pcolormesh_args
+        or ("vmin" in pcolormesh_args and "vmax" in pcolormesh_args)
+    ):
+        pcolormesh_args["vmin"] = np.quantile(df, 0.02)
+        pcolormesh_args["vmax"] = np.quantile(df, 1 - 0.02)
 
     # Plot all colormesh blocks, and do some defensive assertions
     col_widths = []  # for asserting equal column width
@@ -885,22 +1004,41 @@ def spaced_heatmap(ax, df,
     y_ticklabels = []
 
     if row_clusters is not None and col_clusters is not None:
-        for row_cluster_idx, col_cluster_idx in product(range(row_cluster_nclusters), range(col_cluster_nclusters)):
+        for row_cluster_idx, col_cluster_idx in product(
+            range(row_cluster_nclusters), range(col_cluster_nclusters)
+        ):
             # Retrieve the data for the current pcolormesh block
-            dataview=df.iloc[row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx]:row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx+1], col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx]:col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx+1]]
+            dataview = df.iloc[
+                row_cluster_cumsum_nelem_prev_clusters[
+                    row_cluster_idx
+                ] : row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx + 1],
+                col_cluster_cumsum_nelem_prev_clusters[
+                    col_cluster_idx
+                ] : col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx + 1],
+            ]
 
             # Create meshgrid for pcolormesh
             # create 1D x and y arrays, then use np.meshgrid to get X and Y for pcolormesh(X, Y)
-            x = np.linspace(col_cluster_start_axis_fraction[col_cluster_idx], col_cluster_end_axis_fraction[col_cluster_idx], col_cluster_nelem_per_cluster[col_cluster_idx] + 1)
+            x = np.linspace(
+                col_cluster_start_axis_fraction[col_cluster_idx],
+                col_cluster_end_axis_fraction[col_cluster_idx],
+                col_cluster_nelem_per_cluster[col_cluster_idx] + 1,
+            )
             col_widths.append(np.ediff1d(x))
             if row_cluster_idx == 0:
                 # for the bottom row, add x-ticks in the middle of each column
-                x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
+                x_ticks.append(
+                    (x + (x[1] - x[0]) / 2)[:-1]
+                )  # no tick after the end of this colormesh block
                 x_ticklabels.append(dataview.columns.tolist())
-            y = np.linspace(row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx], row_cluster_nelem_per_cluster[row_cluster_idx] + 1)
+            y = np.linspace(
+                row_cluster_start_axis_fraction[row_cluster_idx],
+                row_cluster_end_axis_fraction[row_cluster_idx],
+                row_cluster_nelem_per_cluster[row_cluster_idx] + 1,
+            )
             row_heights.append(np.ediff1d(y))
             if col_cluster_idx == 0:
-                y_ticks.append((y + (y[1] - y[0])/2)[:-1])
+                y_ticks.append((y + (y[1] - y[0]) / 2)[:-1])
                 y_ticklabels.append(dataview.index.tolist())
             X, Y = np.meshgrid(x, y)
 
@@ -912,14 +1050,25 @@ def spaced_heatmap(ax, df,
     elif row_clusters is not None:
         # see row + col grouping code above for comments
         for row_cluster_idx in range(row_cluster_nclusters):
-            dataview=df.iloc[row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx]:row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx+1], :]
+            dataview = df.iloc[
+                row_cluster_cumsum_nelem_prev_clusters[
+                    row_cluster_idx
+                ] : row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx + 1],
+                :,
+            ]
             x = np.linspace(0, 1, df.shape[1] + 1)
             if row_cluster_idx == 0:
-                x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
+                x_ticks.append(
+                    (x + (x[1] - x[0]) / 2)[:-1]
+                )  # no tick after the end of this colormesh block
                 x_ticklabels.append(dataview.columns.tolist())
-            y = np.linspace(row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx], row_cluster_nelem_per_cluster[row_cluster_idx] + 1)
+            y = np.linspace(
+                row_cluster_start_axis_fraction[row_cluster_idx],
+                row_cluster_end_axis_fraction[row_cluster_idx],
+                row_cluster_nelem_per_cluster[row_cluster_idx] + 1,
+            )
             row_heights.append(np.ediff1d(y))
-            y_ticks.append((y + (y[1] - y[0])/2)[:-1])
+            y_ticks.append((y + (y[1] - y[0]) / 2)[:-1])
             y_ticklabels.append(dataview.index.tolist())
             X, Y = np.meshgrid(x, y)
             quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
@@ -927,19 +1076,35 @@ def spaced_heatmap(ax, df,
         # TEST: surround the row clusters with black framing lines
         if frame_spaced_elements:
             for row_cluster_idx in range(row_cluster_nclusters):
-                y0, y1 = row_cluster_start_axis_fraction[row_cluster_idx], row_cluster_end_axis_fraction[row_cluster_idx]
-                rect = patches.Rectangle((0, y0), width=1, height=y1-y0, fill=None, **frame_kwargs)
+                y0, y1 = (
+                    row_cluster_start_axis_fraction[row_cluster_idx],
+                    row_cluster_end_axis_fraction[row_cluster_idx],
+                )
+                rect = patches.Rectangle(
+                    (0, y0), width=1, height=y1 - y0, fill=None, **frame_kwargs
+                )
                 ax.add_patch(rect)
     elif col_clusters is not None:
         for col_cluster_idx in range(col_cluster_nclusters):
-            dataview=df.iloc[:, col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx]:col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx+1]]
-            x = np.linspace(col_cluster_start_axis_fraction[col_cluster_idx], col_cluster_end_axis_fraction[col_cluster_idx], col_cluster_nelem_per_cluster[col_cluster_idx] + 1)
+            dataview = df.iloc[
+                :,
+                col_cluster_cumsum_nelem_prev_clusters[
+                    col_cluster_idx
+                ] : col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx + 1],
+            ]
+            x = np.linspace(
+                col_cluster_start_axis_fraction[col_cluster_idx],
+                col_cluster_end_axis_fraction[col_cluster_idx],
+                col_cluster_nelem_per_cluster[col_cluster_idx] + 1,
+            )
             col_widths.append(np.ediff1d(x))
-            x_ticks.append((x + (x[1]-x[0])/2)[:-1])  # no tick after the end of this colormesh block
+            x_ticks.append(
+                (x + (x[1] - x[0]) / 2)[:-1]
+            )  # no tick after the end of this colormesh block
             x_ticklabels.append(dataview.columns.tolist())
             y = np.linspace(0, 1, df.shape[0] + 1)
             if col_cluster_idx == 0:
-                y_ticks.append((y + (y[1] - y[0])/2)[:-1])
+                y_ticks.append((y + (y[1] - y[0]) / 2)[:-1])
                 y_ticklabels.append(dataview.index.tolist())
             X, Y = np.meshgrid(x, y)
             quadmesh = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
@@ -962,19 +1127,13 @@ def spaced_heatmap(ax, df,
     if title:
         ax.set_title(title)
 
-    ax.tick_params(length=0, which='both', axis='both')
+    ax.tick_params(length=0, which="both", axis="both")
     sns.despine(ax=ax, bottom=True, left=True)
 
     if add_colorbar:
         cb = fig.colorbar(quadmesh, ax=ax, **cbar_args)
         cb.outline.set_linewidth(0.5)
-        cb.ax.tick_params(length=3.5, width=0.5, which='both', axis='both')
-
-
-
-
+        cb.ax.tick_params(length=3.5, width=0.5, which="both", axis="both")
 
     # noinspection PyUnboundLocalVariable
     return quadmesh
-
-

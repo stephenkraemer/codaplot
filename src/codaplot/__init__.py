@@ -3,7 +3,7 @@ from .plotting import categorical_heatmap, find_stretches, spaced_heatmap, heatm
 from .clustered_data_grid import (
     Heatmap, ClusterSizePlot, ColAggPlot, RowGroupAggPlot,
     Violin, MultiLine, Dendrogram, AggHeatmap, SpacedHeatmap,
-    CategoricalHeatmap)
+    CategoricalHeatmap, CategoricalColumnAnnotationHeatmap)
 from .dynamic_grid import GridManager, GridElement
 from .linkage_mat import Linkage
 from .cluster_ids import ClusterIDs

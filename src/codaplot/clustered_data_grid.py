@@ -33,6 +33,8 @@ class ClusteredDataGridElement(ABC):
     # align_maybe variables are aligned if they are Series or DataFrame
     # otherwise, they are left untouched
     align_maybe: List[str] = []
+    align_rows: bool = True
+    align_cols: bool = True
     plotter: Optional[staticmethod] = None
     row_deco: bool = True
     col_deco: bool = True
@@ -374,9 +376,16 @@ class Heatmap(ClusteredDataGridElement):
 
 class CategoricalHeatmap(ClusteredDataGridElement):
     align_vars = ['df']
-    align_maybe = ['cluster_rows', 'cluster_cols']
+    align_maybe = ['row_clusters', 'col_clusters']
     supply_vars = {'df': 'main_df'}
     plotter = staticmethod(categorical_heatmap)
+
+class CategoricalColumnAnnotationHeatmap(ClusteredDataGridElement):
+    align_vars = ['df']
+    align_maybe = ['col_clusters']
+    align_rows = False
+    plotter = staticmethod(categorical_heatmap)
+
 
 class SimpleLine(ClusteredDataGridElement):
     align_vars: List[str] = []
