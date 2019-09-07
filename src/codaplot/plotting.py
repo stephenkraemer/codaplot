@@ -211,6 +211,11 @@ class MidpointNormalize(mpl.colors.Normalize):
         return np.ma.masked_array(np.interp(value, x, y))
 
 
+# TODO:
+# - figure does not need to be given
+# - document
+#   - cbar is added to ax
+#   - if labels are not given, take them from the dataframe
 def heatmap(
     df: pd.DataFrame,
     ax: Axes,
