@@ -9,7 +9,6 @@ from matplotlib.figure import Figure
 import matplotlib.patches as patches
 from itertools import product
 import numpy as np
-import numba
 import pandas as pd
 from pandas.core.groupby import GroupBy
 import seaborn as sns
@@ -170,11 +169,119 @@ def categorical_heatmap(
     return {"quadmesh": qm, "patches": patches, "levels": levels}
 
 
+def categorical_heatmap2(
+        df: pd.DataFrame,
+        ax: Axes,
+        cmap: Optional[Union[str, List]] = 'Set1',
+        label_stretches=True,
+        legend=False,
+        legend_ax: Optional[Axes] = None,
+        legend_args: Optional[Dict] = None,
+        heatmap_args: Optional[Dict] = None,
+        spaced_heatmap_args: Optional[Dict] = None,
+) -> Dict:
+    """Categorical heatmap
+
+    Args:
+        df: Colors will be assigned to df values in sorting order.
+            Columns must have homogeneous types. NA values are not allowed.
+        ax: heatmap Axes
+        cmap: either a cmap name that sns.color_palette understands or a list of color specs acting as color palette
+        label_stretches: put centered value labels in each stretch of consecutive values
+        legend: whether to add the legend
+        legend_ax: optional: second axes where legend should be drawn (instead of adding it to ax)
+        legend_args: passed to ax.legend
+        heatmap_args: if not None, heatmap will be drawn with co.heatmap
+        spaced_heatmap_args: if not None, heatmap will be drawn with co.spaced_heatmap
+    
+    Returns:
+        Dict with values required for drawing the legend
+    """
+    
+    # 1. Process input data
+    # 2. Pass to either heatmap or spaced_heatmap
+    # 3. add specific features of categorical heatmaps
+    #    3.1 add stretch labels
+    #    3.2 add Legend of Rectangle patches
+
+    # Check inputs
+    if df.isna().any().any():
+        raise ValueError("NA values not allowed")
+    if not df.dtypes.unique().shape[0] == 1:
+        raise ValueError("All columns must have the same dtype")
+    if (spaced_heatmap_args is not None) + (heatmap_args is not None) != 1:
+        raise ValueError('Either spaced_heatmap_args or heatmap_args must be specified')
+    if legend_args is None:
+        legend_args = {}
+    assert isinstance(cmap, (str, list))
+    
+    # Process data: turn categories into consecutive integers (codes_df)
+    # Tile colors to get vector mapping each category to its color (cmap_listmap)
+    is_categorical = df.dtypes.iloc[0].name == "category"
+    if is_categorical:
+        levels = df.dtypes.iloc[0].categories.values
+    else:
+        levels = np.unique(df.values)
+    n_levels = len(levels)
+
+    # Colors are repeatedly tiled until all levels are covered
+    # They may be specified as color palette names or list of colors
+    if isinstance(cmap, str):
+        color_list = sns.color_palette(cmap, n_levels)
+    else:  # List of colors
+        color_list = (np.ceil(n_levels / len(cmap)).astype(int) * cmap)[:n_levels]
+    cmap_listmap = mpl.colors.ListedColormap(color_list)
+
+    # Get integer codes matrix for pcolormesh, ie levels are represented by
+    # increasing integers according to the level ordering
+    if is_categorical:
+        codes_df = df.apply(lambda ser: ser.cat.codes, axis=0)
+    else:
+        value_to_code = {value: code for code, value in enumerate(levels)}
+        codes_df = df.replace(value_to_code)
+
+    # Call either heatmap or spaced_heatmap on codes_df with cmap_listmap
+    fn = heatmap2 if heatmap_args is not None else spaced_heatmap2
+    kwargs = heatmap_args if heatmap_args is not None else spaced_heatmap_args
+    # continous colorbar for categorical heatmap makes no sense
+    kwargs['add_colorbar'] = False
+    pargs = kwargs.get("pcolormesh_args", {})
+    if "cmap_listmap" in pargs:
+        print(
+                "Warning: cmap_listmap is defined via the categorical heatmap argument, not via pcolormesh_args"
+        )
+    pargs.update(cmap_listmap=cmap_listmap)
+    res = fn(ax=ax, df=codes_df, **kwargs)
+
+    # Some specific features of categorical heatmaps at the end:
+
+    # Legend with proxy artists
+    patches = [mpatches.Patch(facecolor=c, edgecolor="black") for c in color_list]
+    if legend:
+        if legend_args is None:
+            legend_args = dict(bbox_to_anchor=(-1, 0, 1, 1), loc="best")
+        if legend_ax is not None:
+            legend_ax.legend(patches, levels, **legend_args)
+        else:
+            ax.legend(patches, levels, **legend_args)
+
+    # Label stretches
+    if label_stretches:
+        for i in range(df.shape[1]):
+            # note: categorical_series.values is not a numpy array
+            # any series has __array__ method - so instead of values
+            # attribute, use np.array
+            y, s = find_stretches(np.array(df.iloc[:, i]))
+            x = i + 0.5
+            for curr_y, curr_s in zip(list(y), s):
+                ax.text(x, curr_y, str(curr_s), va="center", ha="center")
+
+    return {"mappable": res, "handles": patches, "labels": levels,
+            **legend_args}
+
 # Note: jit compilation does not seem to provide speed-ups. Haven't
 # checked it out yet.
 # @numba.jit(nopython=True)
-
-
 def find_stretches(arr):
     """Find stretches of equal values in ndarray"""
     assert isinstance(arr, np.ndarray)
@@ -814,6 +921,7 @@ def grouped_rows_heatmap(
     # ax.set_xlabel(xlabel if xlabel is not None else '')
 
 
+# noinspection PyUnboundLocalVariable
 def spaced_heatmap(
     ax,
     df,
@@ -851,7 +959,6 @@ def spaced_heatmap(
         col_spacer_size: Same as row_spacer_size, size is given as fraction of the Axis height
         pcolormesh_args: if the colormapping is not specified via either vmin+vmax or norm, the 0.02 and 0.98 percentiles of df will be used as vmin and vmax.
         fig: if add_colorbar == True, fig must specified, otherwise it is ignored
-        colorbar_args: if None, defaults to dict(shrink=0.4, aspect=20)
         frame_spaced_elements: if True, draw a rectangle around each individual
             heatmap. This is only implemented for row-clusters only at the moment (experimental!) and is ignored in other cases
         frame_kwargs: passed to patches.Rectangle
@@ -1142,3 +1249,408 @@ def spaced_heatmap(
 
     # noinspection PyUnboundLocalVariable
     return quadmesh
+
+
+# noinspection PyUnboundLocalVariable
+def spaced_heatmap2(
+        df: pd.DataFrame,
+        ax: Axes,
+        pcolormesh_args=None,
+        xticklabels: Union[bool, List[str]] = None,
+        xticklabel_rotation=90,
+        xlabel: Optional[str] = None,
+        yticklabels: Union[bool, List[str]] = None,
+        ylabel: Optional[str] = None,
+        cbar_args: Optional[Dict] = None,
+        add_colorbar=True,
+        title: Optional[str] = None,
+        row_clusters: Union[np.ndarray, pd.Series] = None,
+        col_clusters: Union[np.ndarray, pd.Series] = None,
+        row_spacer_size: Union[float, Iterable[float]] = 0.01,
+        col_spacer_size: Union[float, Iterable[float]] = 0.01,
+        frame_spaced_elements=False,
+        frame_kwargs=None,
+) -> Dict:
+    """Plot pcolormesh with spacers between groups of rows and columns
+
+    Spacer size can be specified for each spacer individually, or with
+    one size for all row spacers and one size for all col spacers.
+
+    To control the colormap, specify pcolormesh_args, (cmap, vmin, vmax, norm)
+    if neither vmin+vmax or norm is specified, vmin and vmax are the 0.02 and 0.98 quantiles of the data.
+    to avoid vmin/vmax determination, you can also set vmin=None, vmax=None (eg for a categorical heatmap)
+
+    Args:
+        ax: Axes to plot on
+        df: pd.DataFrame, index and columns will be used for labeling
+        row_clusters: one id per row, specifies which columns to group together. Each group must consist of a single, consecutive stretch of rows. Any dtype is allowed.
+        col_clusters: same as row_clusters
+        row_spacer_size: if float, specifies the size for a single spacer, which will be used for each individual spacer.  If List[float] specifies size for each spacer in order.
+            Size is given as fraction of the Axes width.
+        col_spacer_size: Same as row_spacer_size, size is given as fraction of the Axis height
+        pcolormesh_args: if the colormapping is not specified via either vmin+vmax or norm, the 0.02 and 0.98 percentiles of df will be used as vmin and vmax.
+        frame_spaced_elements: if True, draw a rectangle around each individual
+            heatmap. This is only implemented for row-clusters only at the moment (experimental!) and is ignored in other cases
+        frame_kwargs: passed to patches.Rectangle
+
+    Returns:
+        quadmesh, for use in colorbar plotting etc.
+    """
+
+    fig = ax.figure
+    if pcolormesh_args is None:
+        pcolormesh_args = {}
+    if cbar_args is None:
+        cbar_args = {}
+
+    # Argument checking and pre-processing
+    if row_clusters is None and col_clusters is None:
+        raise TypeError("You must specify at least one of {row_cluster, col_cluster}")
+    elif row_clusters is not None and not isinstance(
+            row_clusters, (pd.Series, np.ndarray)
+    ):
+        raise TypeError(
+                "Cluster ids must be given as array or series, not e.g. DataFrame"
+        )
+    elif col_clusters is not None and not isinstance(
+            col_clusters, (pd.Series, np.ndarray)
+    ):
+        raise TypeError(
+                "Cluster ids must be given as array or series, not e.g. DataFrame"
+        )
+
+    # currently ticklabels must be stored as flat dataframe indices
+    # if df has a multiindex, flatten it to get labels usable for plotting
+    if xticklabels:
+        if isinstance(xticklabels, list):
+            df.index = xticklabels
+        else:
+            df.index = index_to_labels(df.index)
+    if yticklabels:
+        if isinstance(yticklabels, list):
+            df.columns = yticklabels
+        else:
+            df.columns = index_to_labels(df.columns)
+
+
+    if row_clusters is not None:
+        row_cluster_ids, row_cluster_unique_idx, row_cluster_nelem_per_cluster = np.unique(
+                row_clusters, return_counts=True, return_index=True
+        )
+        row_cluster_id_order = np.argsort(row_cluster_unique_idx)
+        row_cluster_nelem_per_cluster = row_cluster_nelem_per_cluster[
+            row_cluster_id_order
+        ]
+        row_cluster_ids = row_cluster_ids[row_cluster_id_order]
+        row_cluster_cumsum_nelem_prev_clusters = np.insert(
+                np.cumsum(row_cluster_nelem_per_cluster), 0, 0
+        )
+        row_cluster_nclusters = len(row_cluster_ids)
+
+        if isinstance(row_spacer_size, float):
+            # all row spacers have the same size
+            # the total fraction of the Axes height reserved for row spacers is then:
+            total_row_spacer_frac = row_spacer_size * (row_cluster_nclusters - 1)
+            # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
+            row_spacers_with_0_end = np.repeat(
+                    (row_spacer_size, 0), (row_cluster_nclusters - 1, 1)
+            )
+        else:
+            # there is one size per spacer, assert the correct length of the iterable
+            assert len(row_spacer_size) == row_cluster_nclusters - 1
+            # the total fraction of the Axes height reserved for row spacers is then:
+            total_row_spacer_frac = np.sum(row_spacer_size)
+            # a vector with the size for each individual row spacer, after the last cluster, there is a row spacer with '0' width
+            row_spacers_with_0_end = np.append(row_spacer_size, 0)
+
+        # get the start and end positions for each quadmesh block (space in between will be left 'unplotted' to create the spacers)
+        # Fraction of all elements contained in the different clusters
+        row_cluster_rel_size_for_each_cluster = row_cluster_nelem_per_cluster / np.sum(
+                row_cluster_nelem_per_cluster
+        )
+        # Compute the fraction of axes occupied by each cluster, together with its subsequent spacer
+        row_cluster_axes_fraction_for_each_cluster = (
+                                                             1 - total_row_spacer_frac
+                                                     ) * row_cluster_rel_size_for_each_cluster
+        row_cluster_axes_fraction_for_each_cluster_with_spacer = (
+                row_cluster_axes_fraction_for_each_cluster + row_spacers_with_0_end
+        )
+        # Now we can calculate the start and end of each quadmesh block
+        row_cluster_start_axis_fraction = np.cumsum(
+                np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+        )[:-1]
+        row_cluster_end_axis_fraction = (
+                np.cumsum(
+                        np.insert(row_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+                )[1:]
+                - row_spacers_with_0_end
+        )
+
+    # see analogous row_spacer code block for comments
+    if col_clusters is not None:
+        col_cluster_ids, col_cluster_unique_idx, col_cluster_nelem_per_cluster = np.unique(
+                col_clusters, return_counts=True, return_index=True
+        )
+        col_cluster_id_order = np.argsort(col_cluster_unique_idx)
+        col_cluster_nelem_per_cluster = col_cluster_nelem_per_cluster[
+            col_cluster_id_order
+        ]
+        col_cluster_ids = col_cluster_ids[col_cluster_id_order]
+        col_cluster_cumsum_nelem_prev_clusters = np.insert(
+                np.cumsum(col_cluster_nelem_per_cluster), 0, 0
+        )
+        col_cluster_nclusters = len(col_cluster_ids)
+        if isinstance(col_spacer_size, float):
+            total_col_spacer_frac = col_spacer_size * (col_cluster_nclusters - 1)
+            col_spacers_with_0_end = np.repeat(
+                    (col_spacer_size, 0), (col_cluster_nclusters - 1, 1)
+            )
+        else:
+            assert len(col_spacer_size) == col_cluster_nclusters - 1
+            total_col_spacer_frac = np.sum(col_spacer_size)
+            col_spacers_with_0_end = np.append(col_spacer_size, 0)
+
+        # see analogous row cluster handling code above for comments
+        col_cluster_rel_size_for_each_cluster = col_cluster_nelem_per_cluster / np.sum(
+                col_cluster_nelem_per_cluster
+        )
+        col_cluster_axes_fraction_for_each_cluster = (
+                                                             1 - total_col_spacer_frac
+                                                     ) * col_cluster_rel_size_for_each_cluster
+        col_cluster_axes_fraction_for_each_cluster_with_spacer = (
+                col_cluster_axes_fraction_for_each_cluster + col_spacers_with_0_end
+        )
+        col_cluster_start_axis_fraction = np.cumsum(
+                np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+        )[:-1]
+        col_cluster_end_axis_fraction = (
+                np.cumsum(
+                        np.insert(col_cluster_axes_fraction_for_each_cluster_with_spacer, 0, 0)
+                )[1:]
+                - col_spacers_with_0_end
+        )
+
+    # we work with fractions of the Axes height and width, so we set the limits to:
+    ax.set_ylim(0, 1)
+    ax.set_xlim(0, 1)
+
+    # Prepare colormapping - all pcolormesh blocks must use the same colormapping
+    # The user can guarantee this by specifying norm or vmin AND vmax in the pcolormesh_args
+    # Otherwise, we determine vmin and vmax as:
+    if not (
+            "norm" in pcolormesh_args
+            or ("vmin" in pcolormesh_args and "vmax" in pcolormesh_args)
+    ):
+        pcolormesh_args["vmin"] = np.quantile(df, 0.02)
+        pcolormesh_args["vmax"] = np.quantile(df, 1 - 0.02)
+
+    # Plot all colormesh blocks, and do some defensive assertions
+    col_widths = []  # for asserting equal column width
+    row_heights = []  # for asserting equal row heights
+    x_ticks = []
+    x_ticklabels = []
+    y_ticks = []
+    y_ticklabels = []
+
+    if row_clusters is not None and col_clusters is not None:
+        for row_cluster_idx, col_cluster_idx in product(
+                range(row_cluster_nclusters), range(col_cluster_nclusters)
+        ):
+            # Retrieve the data for the current pcolormesh block
+            dataview = df.iloc[
+                       row_cluster_cumsum_nelem_prev_clusters[
+                           row_cluster_idx
+                       ] : row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx + 1],
+                       col_cluster_cumsum_nelem_prev_clusters[
+                           col_cluster_idx
+                       ] : col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx + 1],
+                       ]
+
+            # Create meshgrid for pcolormesh
+            # create 1D x and y arrays, then use np.meshgrid to get X and Y for pcolormesh(X, Y)
+            x = np.linspace(
+                    col_cluster_start_axis_fraction[col_cluster_idx],
+                    col_cluster_end_axis_fraction[col_cluster_idx],
+                    col_cluster_nelem_per_cluster[col_cluster_idx] + 1,
+                    )
+            col_widths.append(np.ediff1d(x))
+            if row_cluster_idx == 0:
+                # for the bottom row, add x-ticks in the middle of each column
+                x_ticks.append(
+                        (x + (x[1] - x[0]) / 2)[:-1]
+                )  # no tick after the end of this colormesh block
+                x_ticklabels.append(dataview.columns.tolist())
+            y = np.linspace(
+                    row_cluster_start_axis_fraction[row_cluster_idx],
+                    row_cluster_end_axis_fraction[row_cluster_idx],
+                    row_cluster_nelem_per_cluster[row_cluster_idx] + 1,
+                    )
+            row_heights.append(np.ediff1d(y))
+            if col_cluster_idx == 0:
+                y_ticks.append((y + (y[1] - y[0]) / 2)[:-1])
+                y_ticklabels.append(dataview.index.tolist())
+            X, Y = np.meshgrid(x, y)
+
+            # Plot, color mapping is controlled via pcolormesh_args
+            qm = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
+
+        assert np.all(np.isclose(np.concatenate(row_heights), row_heights[0][0]))
+        assert np.all(np.isclose(np.concatenate(col_widths), col_widths[0][0]))
+    elif row_clusters is not None:
+        # see row + col grouping code above for comments
+        for row_cluster_idx in range(row_cluster_nclusters):
+            dataview = df.iloc[
+                       row_cluster_cumsum_nelem_prev_clusters[
+                           row_cluster_idx
+                       ] : row_cluster_cumsum_nelem_prev_clusters[row_cluster_idx + 1],
+                       :,
+                       ]
+            x = np.linspace(0, 1, df.shape[1] + 1)
+            if row_cluster_idx == 0:
+                x_ticks.append(
+                        (x + (x[1] - x[0]) / 2)[:-1]
+                )  # no tick after the end of this colormesh block
+                x_ticklabels.append(dataview.columns.tolist())
+            y = np.linspace(
+                    row_cluster_start_axis_fraction[row_cluster_idx],
+                    row_cluster_end_axis_fraction[row_cluster_idx],
+                    row_cluster_nelem_per_cluster[row_cluster_idx] + 1,
+                    )
+            row_heights.append(np.ediff1d(y))
+            y_ticks.append((y + (y[1] - y[0]) / 2)[:-1])
+            y_ticklabels.append(dataview.index.tolist())
+            X, Y = np.meshgrid(x, y)
+            qm = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
+        assert np.all(np.isclose(np.concatenate(row_heights), row_heights[0][0]))
+        # TEST: surround the row clusters with black framing lines
+        if frame_spaced_elements:
+            for row_cluster_idx in range(row_cluster_nclusters):
+                y0, y1 = (
+                    row_cluster_start_axis_fraction[row_cluster_idx],
+                    row_cluster_end_axis_fraction[row_cluster_idx],
+                )
+                rect = patches.Rectangle(
+                        (0, y0), width=1, height=y1 - y0, fill=None, **frame_kwargs
+                )
+                ax.add_patch(rect)
+    elif col_clusters is not None:
+        for col_cluster_idx in range(col_cluster_nclusters):
+            dataview = df.iloc[
+                       :,
+                       col_cluster_cumsum_nelem_prev_clusters[
+                           col_cluster_idx
+                       ] : col_cluster_cumsum_nelem_prev_clusters[col_cluster_idx + 1],
+                       ]
+            x = np.linspace(
+                    col_cluster_start_axis_fraction[col_cluster_idx],
+                    col_cluster_end_axis_fraction[col_cluster_idx],
+                    col_cluster_nelem_per_cluster[col_cluster_idx] + 1,
+                    )
+            col_widths.append(np.ediff1d(x))
+            x_ticks.append(
+                    (x + (x[1] - x[0]) / 2)[:-1]
+            )  # no tick after the end of this colormesh block
+            x_ticklabels.append(dataview.columns.tolist())
+            y = np.linspace(0, 1, df.shape[0] + 1)
+            if col_cluster_idx == 0:
+                y_ticks.append((y + (y[1] - y[0]) / 2)[:-1])
+                y_ticklabels.append(dataview.index.tolist())
+            X, Y = np.meshgrid(x, y)
+            qm = ax.pcolormesh(X, Y, dataview, **pcolormesh_args)
+        assert np.all(np.isclose(np.concatenate(col_widths), col_widths[0][0]))
+
+    # Ticks and beautify
+    if yticklabels:
+        ax.set_yticks(np.concatenate(y_ticks))
+        ax.set_yticklabels(np.concatenate(y_ticklabels), va='bottom')
+    if xticklabels:
+        ax.set_xticks(np.concatenate(x_ticks))
+        ax.set_xticklabels(np.concatenate(x_ticklabels),
+                           ha="right", rotation=xticklabel_rotation)
+
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+
+    ax.tick_params(length=0, which="both", axis="both")
+    sns.despine(ax=ax, bottom=True, left=True)
+
+    if add_colorbar:
+        cb = fig.colorbar(qm, ax=ax, **cbar_args)
+        cb.outline.set_linewidth(0)
+        cb.ax.tick_params(length=0, which="both", axis="both")
+
+    cbar_args['mappable'] = qm
+
+    return cbar_args
+
+
+def index_to_labels(index):
+    return [" | ".join(str(s) for s in t) for t in index]
+
+
+def heatmap2(
+    df: pd.DataFrame,
+    ax: Axes,
+    pcolormesh_args=None,
+    xticklabels: Union[bool, List[str]] = None,
+    xticklabel_rotation=90,
+    xlabel: Optional[str] = None,
+    yticklabels: Union[bool, List[str]] = None,
+    ylabel: Optional[str] = None,
+    cbar_args: Optional[Dict] = None,
+    add_colorbar=True,
+    title: Optional[str] = None,
+) -> Dict:
+
+    if pcolormesh_args is None:
+        pcolormesh_args = {}
+    if cbar_args is None:
+        cbar_args = {}
+
+    qm = ax.pcolormesh(df, **pcolormesh_args)
+
+    ax.tick_params(length=0, which="both", axis="both")
+
+    if xticklabels:
+        if not isinstance(xticklabels, list):
+            xticklabels = df.columns
+        # the default locator will likely not set ticks at each column
+        # centering with label alignment fails for large cells
+        ax.set_xticks(np.arange(0, df.shape[1]) + 0.5)
+        ax.set_xticklabels(xticklabels, ha='center', rotation=90)
+    else:
+        ax.tick_params(labelbottom=False)
+
+    # Left side is reserved for dendrogram and annotations
+    ax.tick_params(labelleft=False)
+    if yticklabels:
+        ax.tick_params(labelright=True)
+        if not isinstance(yticklabels, list):
+            yticklabels = df.index
+        # the default locator will likely not set ticks at each column
+        # centering with label alignment fails for large cells
+        ax.set_yticks(np.arange(0, df.shape[0]) + 0.5)
+        ax.set_yticklabels(yticklabels, va="center")
+
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+
+
+    if add_colorbar:
+        cb = ax.figure.colorbar(qm, ax=ax, **cbar_args)
+        cb.outline.set_linewidth(0)
+        cb.ax.tick_params(length=0, which="both", axis="both")
+
+    sns.despine(ax=ax, bottom=True, left=True)
+
+    cbar_args["mappable"] = qm
+
+    return cbar_args
