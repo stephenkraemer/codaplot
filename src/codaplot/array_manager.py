@@ -3,13 +3,33 @@ import itertools
 from inspect import getfullargspec
 from typing import Callable, Tuple, Dict, Optional
 
+import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+import matplotlib.legend as mlegend
+
 import matplotlib.gridspec as gridspec
 import matplotlib.colors as colors
 import numpy as np
 from dataclasses import dataclass, field
 
 from IPython.display import display
+
+# TODO: make code work with 'medium' etc. labels
+p = mpl.rcParams
+p["legend.fontsize"] = 7
+p["legend.title_fontsize"] = 8
+# in font size units
+# details: https://matplotlib.org/3.1.1/api/legend_api.html
+p["legend.handlelength"] = 0.5
+p["legend.handleheight"] = 0.5
+# vertical space between legend entries
+p["legend.labelspacing"] = 0.5
+# pad between axes and legend border
+p["legend.borderaxespad"] = 0
+# fractional whitspace inside legend border, still measured in font size units
+p["legend.borderpad"] = 0
 
 
 class MidpointNormalize(colors.Normalize):
@@ -34,9 +54,12 @@ class ArrayElement:
 
 
 # tests
-def object_plotter(ax, a=3, b=10):
+def object_plotter(ax, a=3, b=10, title="title"):
     """Simple test function which accepts ax, and fails if b is not overwritten"""
-    ax.plot(range(a), range(b))
+    ax.plot(range(a), range(b), label="object")
+    ax.plot(range(a), range(b), c="green", label="object_green")
+    handles, labels, *_ = mlegend._parse_legend_args([ax])
+    return dict(handles=handles, labels=labels, title=title)
 
 
 def test_plot():
@@ -44,26 +67,36 @@ def test_plot():
 
     displays figure if successful
 
-    - empty legend ax
-    - None placeholder without any axes
-    - pyplot function
-    - function taking Axes object
-    """
+    Tested features
+    - array handling
+        - specification of a combination of relative and absolute column and row sizes in margins
+        - Creating of empty Axes
+        - returned objects which are queried: axes_d, results
+        - None acts as placeholder without Axes creation
+        - concatenation of arrays prior to plotting
+    - manual legend addition
+    - ArrayElement
+        - plotting works with
+            - pyplot functions (state machinery relying functions)
+            - function taking Axes object
 
-    plot_array = np.array(
+    """
+    # TODO: add default guide title to ArrayElement, to optionally name auto-generated legends
+
+    plot_array1 = np.array(
         [
             [
                 ArrayElement(
                     "scatter1",
                     plt.scatter,
                     args=([1, 2, 3], [1, 2, 3]),
-                    kwargs=dict(c="green"),
+                    kwargs=dict(c="green", label="green"),
                 ),
                 ArrayElement(
                     "scatter2",
                     plt.scatter,
                     args=([1, 2, 3], [1, 2, 3]),
-                    kwargs=dict(c="black"),
+                    kwargs=dict(c="black", label="black"),
                 ),
                 None,
                 (1, "abs"),
@@ -74,27 +107,49 @@ def test_plot():
                     "scatter4",
                     plt.scatter,
                     args=([1, 2, 3], [1, 2, 3]),
-                    kwargs=dict(c="blue"),
+                    kwargs=dict(c="blue", label="blue"),
                 ),
                 ArrayElement("legend"),
-                (1, "rel"),
+                (2, "rel"),
             ],
-            [
-                ArrayElement("plot3", object_plotter, args=(), kwargs=dict(b=3)),
-                ArrayElement(
+            [(2, "rel"), (3, "rel"), (2, "abs"), None],
+        ]
+    )
+
+    plot_array2 = [
+        [
+            ArrayElement("plot3", object_plotter, args=(), kwargs=dict(b=3)),
+            ArrayElement(
                     "scatter34",
                     plt.scatter,
                     args=([1, 2, 3], [1, 2, 3]),
                     kwargs=dict(c="blue"),
-                ),
-                None,
-                (2, "rel"),
-            ],
-            [(2, "rel"), (3, "rel"), (1, "abs"), None],
-        ]
-    )
+            ),
+            None,
+            (1, "rel"),
+        ],
+        [(2, "rel"), (3, "rel"), (2, "abs"), None],
+    ]
 
-    res = array_to_figure(plot_array, figsize=(8, 2))
+    plot_array_combined = np.vstack([plot_array1[:-1, :], plot_array2])
+    res = array_to_figure(plot_array_combined, figsize=(8, 8))
+    axes_d = res["axes_d"]
+
+    for k, v in res["plot_returns"].items():
+        # check whether we already have a complete guide spec
+        if not isinstance(v, dict) or ("mappable" not in v and "handles" not in v):
+            handles, labels, *_ = mlegend._parse_legend_args([axes_d[k]])
+            if handles:
+                res["plot_returns"][k] = dict(
+                    handles=handles, labels=labels, title="TODO"
+                )
+            else:
+                res["plot_returns"][k] = None
+
+    legends_df = create_guides(res["plot_returns"].values(), res["axes_d"]["legend"])
+    fit_guides(res["axes_d"]["legend"], legends_df, 0.05)
+    res['axes_d']['legend'].axis('off')
+
     display(res["fig"])
 
 
@@ -177,7 +232,12 @@ def array_to_figure(plot_array: np.ndarray, figsize: Tuple[float]) -> Dict:
             ge.kwargs["ax"] = ax
         plot_returns[ge.name] = ge.func(*ge.args, **ge.kwargs)
 
-    return {"axes_d": axes_d, "axes_arr": axes_arr, "fig": fig}
+    return {
+        "axes_d": axes_d,
+        "axes_arr": axes_arr,
+        "plot_returns": plot_returns,
+        "fig": fig,
+    }
 
 
 def compute_gridspec_ratios(sizes: np.ndarray, total_size_in: float) -> np.ndarray:
@@ -205,6 +265,152 @@ def compute_gridspec_ratios(sizes: np.ndarray, total_size_in: float) -> np.ndarr
     rel_heights = heights[anno == "rel"]
     heights[anno == "rel"] = rel_heights / rel_heights.sum() * remaining_height
     return heights
+
+
+def create_guides(guide_spec_l, ax):
+    ax_height_in, ax_width_in = get_axes_dim_in(ax)
+    legends_df = pd.DataFrame(columns=["title", "height", "width", "object"])
+    for guide_d in guide_spec_l:
+        if guide_d is None:
+            continue
+        # colorbar
+        if "handles" not in guide_d:
+            legends_df = legends_df.append(
+                dict(
+                    title=guide_d.get("title", None),
+                    height=guide_d.get("shrink", None),
+                    width=guide_d.get("aspect", None),
+                    object=guide_d["mappable"],
+                ),
+                ignore_index=True,
+            )
+        else:
+            elem = guide_d["handles"], guide_d["labels"]
+            l = mlegend.Legend(
+                ax,
+                *elem,
+                title=guide_d.get("title", None),
+                loc="upper left",
+                frameon=False,
+            )
+            l._legend_box.align = "left"
+            width_in, height_in = get_legend_dimensions(*elem, guide_d["title"])
+            legends_df = legends_df.append(
+                dict(
+                    title=guide_d.get("title", None),
+                    height=height_in / ax_height_in,
+                    width=width_in / ax_width_in,
+                    object=l,
+                ),
+                ignore_index=True,
+            )
+    return legends_df
+
+
+def get_axes_dim_in(ax):
+    transform = ax.figure.dpi_scale_trans.inverted()
+    bbox = ax.get_window_extent().transformed(transform)
+    ax_width_in, ax_height_in = bbox.width, bbox.height
+    return ax_height_in, ax_width_in
+
+
+def fit_guides(ax, legends_df, xpad=0.2, ypad=0.2 / 2.54):
+    fig = ax.figure
+    p = mpl.rcParams
+    legends_df = legends_df.sort_values("height", ascending=False)
+    curr_x = 0
+    next_x = 0
+    curr_y = 1
+    ax_width_in, ax_height_in = get_axes_dim_in(ax)
+    for _, row_ser in legends_df.iterrows():
+        # TODO: row_ser.height may be larger 1
+        if curr_y - row_ser.height < 0:
+            curr_y = 1
+            curr_x = next_x
+        if isinstance(row_ser.object, mlegend.Legend):
+            row_ser.object.set_bbox_to_anchor((curr_x, curr_y))
+            ax.add_artist(row_ser.object)
+            x_padding = xpad
+        else:  # cbar
+            cbar_ax: Axes
+            cbar_ax = ax.inset_axes(
+                [curr_x, curr_y - row_ser.height, row_ser.width, row_ser.height]
+            )
+            title_text = cbar_ax.set_title(
+                row_ser["title"],
+                fontdict={"fontsize": p["legend.title_fontsize"]},
+                # center left right
+                loc="left",
+                # pad=rcParams["axes.titlepad"],
+                # **kwargs: Text properties
+            )
+
+            r = fig.canvas.get_renderer()  # not necessary if figure was drawn
+            title_bbox = ax.transAxes.inverted().transform(
+                title_text.get_window_extent(r)
+            )
+            # The format is
+            #        [[ left    bottom]
+            #         [ right   top   ]]
+            title_size_axes_coord = title_bbox[1, 0] - title_bbox[0, 0]
+            fig.colorbar(row_ser.object, cax=cbar_ax)
+            # draw is necessary to get yticklabels
+            fig.canvas.draw()
+            # assumption: all labels have same length
+            bbox = cbar_ax.get_yticklabels()[0].get_window_extent()
+            axes_bbox = ax.transAxes.inverted().transform(bbox)
+            # The format is
+            #        [[ left    bottom]
+            #         [ right   top   ]]
+            y_tick_label_size = axes_bbox[1, 0] - axes_bbox[0, 0]
+            # add tick size
+            y_tick_label_size += p["ytick.major.size"] * 1 / 72 / ax_width_in
+            # add additional padding
+            x_padding = max(title_size_axes_coord, y_tick_label_size) + xpad
+        # TODO: padding around colorbars hardcoded in axes coordinates
+        curr_y -= row_ser.height + ypad / ax_height_in
+        next_x = max(next_x, curr_x + row_ser.width + x_padding)
+
+
+def get_legend_dimensions(handles, labels, title=None):
+    p = mpl.rcParams
+    # assumption: handleheight >= 1, ie handles are at least as large as font size
+    # assumption: ncol = 1
+    legend_height = (
+        (
+            len(handles) * mpl.rcParams["legend.handleheight"]
+            + 2 * mpl.rcParams["legend.borderaxespad"]
+            + 2 * p["legend.borderpad"]
+            + (len(handles) - 1) * p["legend.labelspacing"]
+        )
+        * p["legend.fontsize"]
+        * 1
+        / 72
+    )
+    legend_height += (
+        0
+        if title is None
+        else (
+            p["legend.title_fontsize"] * 1 / 72 * (sum(s == "\n" for s in title) + 1)
+            + p["legend.labelspacing"] * p["legend.fontsize"] * 1 / 72
+        )
+    )
+    legend_width = (
+        (
+            mpl.rcParams["legend.handlelength"]
+            # TODO: take into account whether the legend is at both borders
+            + 2 * mpl.rcParams["legend.borderaxespad"]
+            # + 2 * p['legend.borderpad']
+            + p["legend.handletextpad"]
+        )
+        * p["legend.fontsize"]
+        * 1
+        / 72
+    )
+    legend_width += (
+        max(len(str(l)) for l in labels) * p["legend.fontsize"] * 1 / 72 * 0.5
+    )
+    return legend_width, legend_height
 
 
 def end():
