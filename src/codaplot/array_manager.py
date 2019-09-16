@@ -10,6 +10,7 @@ from typing import Callable, Tuple, Dict, Optional, List, Iterable, Union
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from matplotlib.axes import Axes
 import matplotlib.legend as mlegend
 import seaborn as sns
@@ -910,7 +911,7 @@ def test_adjust_coords():
     adjusted_y = adjust_coords(
         coords=np.arange(0, 11),
         # y_coords=np.array(list('abcdefghij')),
-        spacing_groups=clusters,
+        spacing_group_ids=clusters,
         spacer_size=0.2,
     )
 
@@ -1352,6 +1353,7 @@ pcm_display_kwargs = dict(edgecolor="face", linewidth=0.2)
 
 def test_heatmap3():
 
+    # %%
     df = pd.DataFrame(np.random.random_integers(0, 10, (9, 9))).set_axis(
         ["Aga", "bg", "Ag", "CD", "pP", "1", "8", "3", "0"], axis=1, inplace=False
     )
@@ -1366,11 +1368,12 @@ def test_heatmap3():
         zip(list(df.index.astype(str)), np.repeat(["blue", "red", "black"], 3))
     )
 
-    co.plotting.find_stretches2()
-
-
-
-    fig, ax = plt.subplots(1, 1, dpi=180, figsize=(2.5, 2.5))
+    fig, axes = plt.subplots(2, 2, dpi=180, figsize=(2.5, 2.5),
+                                      constrained_layout=True,
+                                      gridspec_kw=dict(height_ratios=(8, 1), width_ratios = (1, 8)))
+    ax = axes[0, 1]
+    anno_ax = axes[1, 1]
+    fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
     # ax.imshow(pd.DataFrame(np.random.randn(9, 9)), rasterized=True)
     res = co.plotting.heatmap3(
         df=df,
@@ -1389,7 +1392,60 @@ def test_heatmap3():
         # heatmap_args={},
         # cmap='Set3'
     )
-    ax.tick_params(bottom=True, left=True, labelleft=True, size=5, width=0.5)
+    # ax.tick_params(bottom=False, labelbottom=False, left=True, labelleft=True, size=0, width=0.5)
+
+    co.plotting.label_groups(
+            group_ids=col_clusters,
+            ax=anno_ax,
+            y=0.5,
+            spacer_size=0.1,
+            labels=np.array(['AA', 'aa', 'gg']),
+    )
+
+    anno_ax.axis('off')
+
+    co.plotting.label_groups(
+            group_ids=row_clusters,
+            ax=ax,
+            x=0.1,
+            spacer_size=0.1,
+            labels=np.array(['AA', 'aa', 'gg'])
+    )
+
+    co.plotting.frame_groups(
+            group_ids=col_clusters,
+            ax=anno_ax,
+            direction='x',
+            colors=['black', 'orange', 'blue'],
+            linewidth=2,
+            spacer_size=0.1,
+    )
+
+    co.plotting.frame_groups(
+            group_ids=row_clusters,
+            ax=axes[0, 0],
+            direction='y',
+            colors=['black', 'orange', 'red'],
+            linewidth=1,
+            spacer_size=0.1,
+    )
+    axes[0, 0].axis('off')
+
+    fig.savefig('/home/stephen/temp/test.pdf')
+
+    # %%
+
+
+
+    # code to mark groups in a plot
+    # %%
+
+
+
+
+
+
+
 
     # plt.setp(
     #     ax.get_xticklabels(),

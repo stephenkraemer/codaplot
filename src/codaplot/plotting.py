@@ -8,13 +8,16 @@ from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 import matplotlib.patches as patches
-from itertools import product
+import matplotlib.transforms as mtransforms
+from itertools import product, zip_longest
 import numpy as np
 import pandas as pd
 from pandas.core.dtypes.common import is_numeric_dtype
 from pandas.core.groupby import GroupBy
 import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram, leaves_list
+
+import toolz as tz
 
 import codaplot as co
 from codaplot.cluster_ids import ClusterIDs
@@ -248,13 +251,13 @@ def categorical_heatmap2(
     kwargs = heatmap_args if heatmap_args is not None else spaced_heatmap_args
     # continous colorbar for categorical heatmap makes no sense
     kwargs["add_colorbar"] = False
-    if 'pcolormesh_args' not in kwargs:
-        kwargs['pcolormesh_args'] = {}
-    elif "cmap" in kwargs['pcolormesh_args']:
+    if "pcolormesh_args" not in kwargs:
+        kwargs["pcolormesh_args"] = {}
+    elif "cmap" in kwargs["pcolormesh_args"]:
         print(
-                "Warning: cmap is defined via the categorical heatmap argument, not via pcolormesh_args"
+            "Warning: cmap is defined via the categorical heatmap argument, not via pcolormesh_args"
         )
-    kwargs['pcolormesh_args']['cmap'] = cmap_listmap
+    kwargs["pcolormesh_args"]["cmap"] = cmap_listmap
     _ = fn(ax=ax, df=codes_df, **kwargs)
 
     # Some specific features of categorical heatmaps at the end:
@@ -291,11 +294,11 @@ def heatmap3(
     categorical_colors: Optional[List] = None,
     xticklabels: Union[bool, List[str]] = None,
     xticklabel_rotation=90,
-        xticklabel_colors: Optional[Union[Iterable, Dict]] = None,
+    xticklabel_colors: Optional[Union[Iterable, Dict]] = None,
     xlabel: Optional[str] = None,
     yticklabels: Union[bool, List[str]] = None,
-        yticklabel_colors: Optional[Union[Iterable, Dict]] = None,
-        ylabel: Optional[str] = None,
+    yticklabel_colors: Optional[Union[Iterable, Dict]] = None,
+    ylabel: Optional[str] = None,
     show_guide=False,
     guide_args: Optional[Dict] = None,
     guide_ax: Optional[Axes] = None,
@@ -330,7 +333,6 @@ def heatmap3(
         pcolormesh_args = {}
     else:
         pcolormesh_args = deepcopy(pcolormesh_args)
-
 
     if not df.dtypes.unique().shape[0] == 1:
         raise ValueError("All columns must have the same dtype")
@@ -379,10 +381,9 @@ def heatmap3(
         # normal heatmap
         res = heatmap2(**shared_args)
 
-
     # Color ticklabels
-    color_ticklabels('x', xticklabel_colors, ax)
-    color_ticklabels('y', yticklabel_colors, ax)
+    color_ticklabels("x", xticklabel_colors, ax)
+    color_ticklabels("y", yticklabel_colors, ax)
 
     if not is_categorical:
         return res
@@ -402,8 +403,6 @@ def heatmap3(
         else:
             # noinspection PyUnboundLocalVariable
             ax.legend(patches, levels, **guide_args)
-
-
 
     # Label stretches
     if annotate == "stretches":
@@ -428,7 +427,7 @@ def color_ticklabels(axis: str, colors: Union[Iterable, Dict], ax: Axes) -> None
         ax: single Axes
     """
 
-    axis = [ax.xaxis, ax.yaxis][axis == 'y']
+    axis = [ax.xaxis, ax.yaxis][axis == "y"]
     if isinstance(colors, dict):
         ax.figure.canvas.draw()
         for tick in axis.get_ticklabels():
@@ -507,8 +506,7 @@ def find_stretches2(arr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray
 
     Each element is assumed to have unit size in data coordinates
 
-    Returns:
-        Multiple arrays
+    Returns multiple arrays
         - boundaries,  stretches go from 0:b[0], b[0]:b[1]
         - middle points: coordinate of middle of stretches
         - values: values for each stretch
@@ -1129,7 +1127,7 @@ class CutDendrogram:
                 adjust_coords,
                 clusters=self.spacing_groups[leaves_list(self.Z)],
                 spacer_size=self.spacer_size,
-                    max_coord=np.ceil(xcoords.max().max() / 10),
+                max_coord=np.ceil(xcoords.max().max() / 10),
             )
         # y coords are link height coords
         ycoords = dcoords.reset_index(drop=True)
@@ -1938,56 +1936,240 @@ def heatmap2(
     return cbar_args
 
 
-def adjust_coords(coords, spacing_groups, spacer_size, max_coord='infer') -> np.ndarray:
+def adjust_coords(
+    coords: np.ndarray,
+    spacing_group_ids: np.ndarray,
+    spacer_size: float,
+    right_open: bool = True,
+) -> np.ndarray:
     """Adjust data coordinates to account for spacers
 
     Currently assumes constant spacer size
 
-    Coordinates are adjusted for a plot with unit size elements (eg heatmap rows or columns) in data coordinates, where spacers are introduced between groups of elements
-
+    This function is meant for plots containing or annotating elements of unit size (in data coordinates), e.g. heatmap rows or columns. The spacing_group_ids indicate where spacers should be introduced between groups of elements. For consistent handling of such spaced plots, the original unit size coordinates are transformed to the interval [0, 1]
 
     Args:
-        coords: x or y coordinates, for a plot with unit size elements
-        spacing_groups: spacing group indicators, one per element, eg [1, 1, 1, 2, 2, 2]
+        coords: x or y coordinates, for a plot with unit size elements. May be numerical or categorical. Categorical coordinates are translated to unit size coordinates.
+        spacing_group_ids: spacing group indicators, one per element, eg [1, 1, 1, 2, 2, 2]
         spacer_size: in percentage of Axes
 
     Returns:
-        Adjusted coordinates
-
+        Adjusted coordinates \in [0, 1]
     """
     # Possible improvements
     # - allow different spacer sizes
+    # - allow unsorted coordinates
+    # - allow multiple occurences of same coordinate
 
-    # Y coords may be numeric or categorical
-    # Categorical coordinates need to be translated to numeric coordinates, each
-    # category gets a bin of size 1 on the axis
+    # list would fail is_numeric_dtype_test
+    assert isinstance(coords, np.ndarray)
+
+    # Coords may be numeric or categorical
+    # Categorical coordinates need to be translated to unit-sized numeric coordinates
     if not is_numeric_dtype(coords):
-        # TODO:
-        #    - unsorted Y
-        #    - multiple occurences of same y
         # We assume that for categorical data, the y coord should be in the middle of a bin of size 1 for each element
         numeric_y_coords = np.arange(len(coords)) + 0.5
-        # the last bin ends at
-        max_coord = numeric_y_coords.max() + 0.5
     else:
         numeric_y_coords = coords
-        # max_y_coord =
-        if max_coord == 'infer':
-            max_coord = np.ceil(numeric_y_coords.max())
-        # else: max coord is given as number
 
-    thresholds, *_ = co.plotting.find_stretches2(spacing_groups)
+    thresholds, *_ = co.plotting.find_stretches2(spacing_group_ids)
     thresholds = thresholds[:-1]
-    idx = np.searchsorted(thresholds, coords, "right")
+
+    side = "right" if right_open else "left"
+    idx = np.searchsorted(thresholds, coords, side)
 
     scaled_y_coords_int = (
         # first scale y_coords to [0, 1]
-            coords
-            / max_coord
-            # then scale them to the space available after reducing the spacers, eg. [0, 0.8]
-            * (1 - spacer_size * len(thresholds))
+        numeric_y_coords
+        / len(spacing_group_ids)
+        # then scale them to the space available after reducing the spacers, eg. [0, 0.8]
+        * (1 - spacer_size * len(thresholds))
     )
     # add one or more spacers according to searchsorted index
     adjusted_y_coords = scaled_y_coords_int + idx * spacer_size
 
     return adjusted_y_coords
+
+
+def label_groups(
+    group_ids: np.ndarray,
+    ax: Axes,
+    x: Optional[float] = None,
+    y: Optional[float] = None,
+    spacer_size: Optional[float] = None,
+    labels: Optional[Union[Dict, Iterable]] = None,
+    **kwargs,
+):
+    """Add text labels in the middle of stretches of group ids
+
+    - Meant for plot with unit-sized elements, such as heatmap rows and columns.
+    - Addition of spacers leads to transformation of coordinates to interval [0, 1]
+    - sets limits along the directional axis, either (0, 1) when spacers are used, else (0, len(group_ids)
+
+    Args:
+        group_ids: one id per element
+        ax: Axes to plto on
+        x: if given, plot text labels in y direction, at the fixed x
+        y: if given, plot text labels in x direction, at the fixed y
+        spacer_size: if given, coordinates are adjusted for spacers between the groups
+        labels: labels for groups, either iterable with one element per group occurence, or dict group_id -> label
+        kwargs: passed to ax.text, note that ha and va default to 'center' and rotation to 90 (for text along y axis) if no kwargs are passed
+
+    Returns:
+
+    """
+
+    assert (x is not None) + (y is not None) == 1, "Specify either x OR y"
+
+    # ha and va default to center, rotation defaults to 90 if text goes along x axis
+    kwargs = tz.merge(dict(ha="center", va="center"), kwargs)
+    if x and "rotation" not in kwargs:
+        kwargs["rotation"] = 90
+
+    # values: one value per consecutive group id stretch, may be replaced based on labels
+    bounds, mids, values = find_stretches2(group_ids)
+    if isinstance(labels, dict):
+        values_ser = pd.Series(values).replace(labels)
+        assert not values_ser.isnull().any()
+        values = values_ser.array
+    elif labels is not None:
+        assert len(labels) == len(values)
+        assert isinstance(labels, np.ndarray)
+        values = labels
+    # else: use group ids as values, as returned by find_stretches2
+
+    # adjust coordinates to account for spacers if necessary
+    # in this case, the axis limits of the direction axis must be set to 0, 1
+    # otherwise, they are set to (0, len(group_ids))
+    if spacer_size:
+        coords = co.plotting.adjust_coords(mids, group_ids, 0.1)
+        if x:
+            ax.set_ylim(0, 1)
+        else:
+            ax.set_xlim(0, 1)
+    else:
+        coords = mids
+        if x:
+            ax.set_ylim(0, len(group_ids))
+        else:
+            ax.set_xlim(0, len(group_ids))
+
+    # Place values in middle of stretches, at the fixed x or y coordinate
+    # Place along direction without fixed value (x or y will be None)
+    for value, coord in zip(values, coords):
+        t = (coord, y) if y else (x, coord)
+        ax.text(*t, value, **kwargs)
+
+
+def frame_groups(
+    group_ids: np.ndarray,
+    ax: Axes,
+    direction: str,
+    colors: Optional[Union[Iterable, Dict]] = None,
+    spacer_size: Optional[float] = None,
+    origin=(0, 0),
+    size=1,
+    **kwargs,
+):
+    """Frame groups of elements
+
+    - Meant for plot with unit-sized elements, such as heatmap rows and columns.
+    - Addition of spacers leads to transformation of coordinates to interval [0, 1]
+    - sets limits along the directional axis, either (0, 1) when spacers are used, else (0, len(group_ids)
+
+
+    Args:
+        ax: single Axes
+        group_ids: array of group ids
+        spacer_size: if given, coordinates are adjusted for spacers between the groups
+        direction: axis along which to place the patches ('x' or 'y')
+        origin: origin of first rectangle patch
+        colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+        size: extent of rectangle patch along the unused axis (constant for all patches)
+        **kwargs: passed to mpatches.FancyBboxPatch. Default args: dict((fill = False, boxstyle = mpatches.BoxStyle("Round", pad=0), edgecolor = 'black'). Edgecolor is ignored if colors is passed.
+
+    Returns:
+
+    """
+
+    bounds, mids, values = co.plotting.find_stretches2(group_ids)
+
+    defaults = dict(
+        fill=False, boxstyle=mpatches.BoxStyle("Round", pad=0), edgecolor="black"
+    )
+    kwargs = tz.merge(defaults, kwargs)
+
+    # We need colors as an iterable, matching the group stretches - or empty
+    # If colors is given, edgecolor specification is ignored
+    if isinstance(colors, dict):
+        colors = pd.Series(colors)[values]
+    if colors is not None:
+        kwargs.pop("edgecolor")
+    else:
+        colors = np.array([])
+
+    # if spacers are used, axis limits along the directional axis must be set to (0, 1)
+    # in the other case, one will usually want (0, len(group_ids))
+    ax.set(**{f"{direction}lim": (0, 1) if spacer_size else (0, len(group_ids))})
+
+    # Get starts and ends of the patches, adjusting for spacers if necessary
+    if spacer_size:
+        adjust_bounds = adjust_coords(
+            coords=bounds[:-1],
+            spacing_group_ids=group_ids,
+            spacer_size=spacer_size,
+            right_open=True,
+        )
+        starts = np.insert(adjust_bounds, 0, 0)
+    else:
+        starts = np.insert(bounds[:-1], 0, 0)
+
+    if spacer_size:
+        ends = adjust_coords(
+            coords=bounds,
+            spacing_group_ids=group_ids,
+            spacer_size=spacer_size,
+            right_open=False,
+        )
+    else:
+        ends = bounds
+
+    # Add patches
+
+    linewidth_in = (kwargs.get("linewidth") or mpl.rcParams["patch.linewidth"]) * 1 / 72
+
+    slice_direction = 1 if direction == "x" else -1
+    directional_axis_idx = 0 if direction == "x" else 1
+    start_shift = (
+        ax.transData
+        + mtransforms.ScaledTranslation(
+            *(linewidth_in / 2, 0)[::slice_direction], ax.figure.dpi_scale_trans
+        )
+        + ax.transData.inverted()
+    )
+
+    end_shift = (
+        ax.transData
+        + mtransforms.ScaledTranslation(
+            *(-linewidth_in / 2, 0)[::slice_direction], ax.figure.dpi_scale_trans
+        )
+        + ax.transData.inverted()
+    )
+    for color, start, end in zip_longest(colors, starts, ends):
+        # if colors is empty, color will always be none
+        if direction == "x":
+            curr_origin = (start, origin[1])
+        else:
+            curr_origin = (origin[0], start)
+        patch_size_in_direction = (
+            end_shift.transform((end, 0)[::slice_direction])[directional_axis_idx]
+            - start_shift.transform((start, 0)[::slice_direction])[directional_axis_idx]
+        )
+        patch = mpatches.FancyBboxPatch(
+            curr_origin,
+            *(patch_size_in_direction, size)[::slice_direction],
+            # use color as edgecolor if defined; otherwise, kwargs will contain an edgecolor kwarg
+            **dict(edgecolor=color) if color else {},
+            **kwargs,
+        )
+        ax.add_artist(patch)
