@@ -2,6 +2,7 @@
 
 # * Setup
 import itertools
+from collections import defaultdict
 from copy import copy, deepcopy
 from functools import wraps
 from inspect import getfullargspec, signature
@@ -76,7 +77,7 @@ class ArrayElement:
 def array_to_figure(
     plot_array: np.ndarray,
     figsize: Tuple[float],
-    merge_by_name: bool = True,
+    merge_by_name: Union[bool, List[str]] = True,
     constrained_layout_pads: Optional[Dict] = None,
     gridspec_pads: Optional[Dict] = None,
     constrained_layout=True,
@@ -98,6 +99,7 @@ def array_to_figure(
 
     Args:
         plot_array: array of ArrayElements detailing plotting instructions
+        merge_by_name: bool or List of names to be considered for merging
 
     Returns:
         dict with keys
@@ -144,7 +146,8 @@ def array_to_figure(
 
     axes_d = {}
     axes_arr = np.empty_like(inner_array)
-    plot_returns = {}
+    plot_returns_d = {}
+    plot_returns_arr = np.empty_like(inner_array)
     seen = []
     for t in itertools.product(
         range(inner_array.shape[0]), range(inner_array.shape[1])
@@ -155,37 +158,53 @@ def array_to_figure(
         if ge is None:
             continue
 
-        if merge_by_name:
+        if (
+            ge.name is not None
+            and merge_by_name
+            and (ge.name in merge_by_name if isinstance(merge_by_name, list) else True)
+        ):
             if ge.name in seen:
                 continue
             else:
-                next_col = t[1]
+                # allow skipping None elements, assume these are spacers
+                col_slice_end = t[1] + 1
                 for next_col in range(t[1] + 1, inner_array.shape[1]):
                     next_ge = inner_array[t[0], next_col]
-                    if next_ge is None or not next_ge.name == ge.name:
+                    if next_ge is None:
+                        continue
+                    if next_ge.name == ge.name:
+                        col_slice_end = next_col + 1
+                    if next_ge.name != ge.name:
                         break
-                else:
-                    next_col += 1
-                next_row = t[0]
+
+                # allow skipping None elements, assume these are spacers
+                row_slice_end = t[0] + 1
                 for next_row in range(t[0] + 1, inner_array.shape[0]):
                     next_ge = inner_array[next_row, t[1]]
-                    if next_ge is None or not next_ge.name == ge.name:
+                    if next_ge is None:
+                        continue
+                    if next_ge.name == ge.name:
+                        row_slice_end = next_row + 1
+                    if next_ge.name != ge.name:
                         break
-                else:
-                    next_row += 1
-                if next_row > t[0] + 1 or next_col > t[1] + 1:
+
+                # TODO: this assertion has a naive handling of None elements
+                if row_slice_end > t[0] + 1 or col_slice_end > t[1] + 1:
                     assert (
                         len(
                             {
                                 ge.name
                                 for ge in np.ravel(
-                                    inner_array[t[0] : next_row, t[1] : next_col]
+                                    inner_array[
+                                        t[0] : row_slice_end, t[1] : col_slice_end
+                                    ]
                                 )
+                                if ge is not None
                             }
                         )
                         == 1
                     )
-                    t = (slice(t[0], next_row), slice(t[1], next_col))
+                    t = (slice(t[0], row_slice_end), slice(t[1], col_slice_end))
                 seen.append(ge.name)
 
         ax = fig.add_subplot(gs[t])
@@ -211,12 +230,16 @@ def array_to_figure(
         plotter_args = signature(ge.func).parameters.keys()
         if "ax" in plotter_args:
             ge.kwargs["ax"] = ax
-        plot_returns[ge.name] = ge.func(*ge.args, **ge.kwargs)
+        res = ge.func(*ge.args, **ge.kwargs)
+        plot_returns_arr[t] = res
+        if ge.name is not None:
+            plot_returns_d[ge.name] = res
 
     return {
         "axes_d": axes_d,
         "axes_arr": axes_arr,
-        "plot_returns": plot_returns,
+        "plot_returns_d": plot_returns_d,
+        "plot_returns_arr": plot_returns_arr,
         "fig": fig,
     }
 
@@ -252,9 +275,39 @@ def compute_gridspec_ratios(sizes: np.ndarray, total_size_in: float) -> np.ndarr
 # * Add guides
 
 
-def add_guides(guide_spec_l, ax, xpad_in, ypad_in):
+def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1):
+    """Pack Legends and colorbars into ax
+
+    Args:
+        guide_spec_l: list of dicts (None elements are allowed and ignored),
+         each dict provides key-value pairs required to either draw a legend or a colorbar.
+            For legend
+                - handles
+                - labels
+                - optional: other Legend args, eg. title
+            For colorbars:
+                - mappable (ScalarMappable, eg. returned by pcolormesh, scatter)
+                - optional: other colorbar args
+                - optional: title
+        guide_titles: if given, only guides with these titles are considered, in the given order. Multiple guides with the same title will all be printed, in indefinite order.
+        ax: Axes onto which to draw the guides. The Axes is assumed to be completely empty.
+        xpad_in: padding between guides in inch (final size may differ if a layout optimization such as constrained_layout is applied)
+        ypad_in: padding between guides in inch (size may vary, see xpad_in)
+
+    Returns:
+
+    """
     ax.axis("off")
-    guide_placement_params_df = get_guide_placement_params(guide_spec_l, ax)
+    if guide_titles:
+        selected_guide_specs_l = []
+        for title in guide_titles:
+            for guide_spec in guide_spec_l:
+                if guide_spec is not None and guide_spec.get("title") == title:
+                    selected_guide_specs_l.append(guide_spec)
+    else:
+        selected_guide_specs_l = guide_spec_l
+
+    guide_placement_params_df = get_guide_placement_params(selected_guide_specs_l, ax)
     place_guides(
         ax=ax, placement_df=guide_placement_params_df, xpad_in=xpad_in, ypad_in=ypad_in
     )
@@ -267,17 +320,6 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
     """Get dataframe with required height and width for all guides
 
     Args:
-        guide_spec_l: list of optional dicts, each dict provides key-value pairs
-            required to either draw a legend or a colorbar.
-            For legend
-                - handles
-                - labels
-                - optional: other Legend args, eg. title
-            For colorbars:
-                - mappable (ScalarMappable, eg. returned by pcolormesh, scatter)
-                - optional: other colorbar args
-                - optional: title
-        ax: Axes onto which to draw the guides. The Axes is assumed to be completely empty.
 
     Returns:
          pd.DataFrame with columns: title, height, width, contents
@@ -432,12 +474,11 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
             ax.transAxes.inverted()
         )
         title_width_axes_coord = title_axes_bbox.width
-        title_height_axes_coord = (
-            title_axes_bbox.height
-            + mpl.rcParams["legend.labelspacing"]
+        title_height_axes_coord = title_axes_bbox.height + (
+            mpl.rcParams["legend.labelspacing"]
             * mpl.rcParams["legend.fontsize"]
-            * 1
             / 72
+            / ax_height_in
         )
         title_text.remove()
     else:
@@ -455,9 +496,7 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
     )
     fig.colorbar(**row_ser.contents, cax=cbar_ax)
     if row_ser["title"]:
-        cbar_ax.text(
-            curr_x, curr_y, row_ser["title"], fontdict=fontdict, transform=ax.transAxes
-        )
+        ax.text(curr_x, curr_y, row_ser["title"], fontdict=fontdict)
 
     # To get the dimensions of this guide, we must take into account
     # ticklabels and the colorbar title (which is placed as axes title)
@@ -514,7 +553,7 @@ def get_axes_dim_in(ax):
     transform = ax.figure.dpi_scale_trans.inverted()
     bbox = ax.get_window_extent().transformed(transform)
     ax_width_in, ax_height_in = bbox.width, bbox.height
-    return ax_height_in, ax_width_in
+    return ax_width_in, ax_height_in
 
 
 # * Tests
@@ -943,6 +982,12 @@ def cross_plot(
     center_col_sizes=None,
     center_row_pad=(0.05, "rel"),
     center_col_pad=(0.05, "rel"),
+    legend_side="right",
+    legend_extent=("center",),  # select from 'top, 'bottom', 'center'
+    legend_args: Optional[Dict] = None,
+    legend_axes_selectors: Optional[List[Union[str, Tuple[int, int]]]] = None,
+    legend_size=(1, "rel"),
+    legend_pad=(0.2, "abs"),
     pads_around_center: Optional[Union[float, Tuple[float]]] = None,
     figsize=(5, 5),
     constrained_layout=True,
@@ -989,6 +1034,7 @@ def cross_plot(
         default_func: called if plot spec dict does not contain _func key
         aligned_arg_names: if not None and plot spec does not override with a _align key, align arguments of that name based on row order (left, right), col order (top, bottom) or both (center)
         pads_around_center: (top, right, bottom, left) - clockwise sides. pads around center plots as (number, type), e.g. (1, 'rel') or (0.5, 'abs')
+        legend_axes_selectors: list of Axes names and axes coordinates (x, y), specifies selection and order of displayed guides
 
     Returns:
         dict with keys
@@ -999,11 +1045,16 @@ def cross_plot(
 
     """
 
+    if legend_args is None:
+        legend_args = {}
+
     if isinstance(pads_around_center, (int, float)):
         pads_around_center = [pads_around_center] * 4
     elif pads_around_center is None:
         pads_around_center = [None] * 4
-    pads_around_center_d = dict(zip('top right bottom left'.split(), pads_around_center))
+    pads_around_center_d = dict(
+        zip("top right bottom left".split(), pads_around_center)
+    )
 
     # add default func
     for elem in itertools.chain.from_iterable(
@@ -1132,28 +1183,27 @@ def cross_plot(
         row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
         row_spacer[0, -1] = center_row_pad
         plot_arr = np.insert(
-            plot_arr, slice(first_center_row + 1, last_center_row_p1), row_spacer, axis=0
+            plot_arr,
+            slice(first_center_row + 1, last_center_row_p1),
+            row_spacer,
+            axis=0,
         )
     # adjust center_row indices to account for new rows
     last_center_row_p1 += center_arr.shape[0] - 1
 
     ## before and after center plots
-    if pads_around_center_d['top']:
+    if pads_around_center_d["top"]:
         row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
-        row_spacer[0, -1] = pads_around_center_d['top']
-        plot_arr = np.insert(
-                plot_arr, first_center_row, row_spacer, axis=0
-        )
+        row_spacer[0, -1] = pads_around_center_d["top"]
+        plot_arr = np.insert(plot_arr, first_center_row, row_spacer, axis=0)
     # adjust center_row indices to account for new row
+    first_center_row += 1
     last_center_row_p1 += 1
 
-    if pads_around_center_d['bottom']:
+    if pads_around_center_d["bottom"]:
         row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
-        row_spacer[0, -1] = pads_around_center_d['bottom']
-        plot_arr = np.insert(
-                plot_arr, last_center_row_p1, row_spacer, axis=0
-        )
-
+        row_spacer[0, -1] = pads_around_center_d["bottom"]
+        plot_arr = np.insert(plot_arr, last_center_row_p1, row_spacer, axis=0)
 
     # taking into account the new rows, add enlarged col spacers
     ## between center plots
@@ -1161,35 +1211,86 @@ def cross_plot(
         col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
         col_spacer[-1, 0] = center_col_pad
         plot_arr = np.insert(
-            plot_arr, slice(first_center_col + 1, last_center_col_p1), col_spacer, axis=1
+            plot_arr,
+            slice(first_center_col + 1, last_center_col_p1),
+            col_spacer,
+            axis=1,
         )
     # adjust center col indices to account for inserted columns
     last_center_col_p1 += center_arr.shape[1] - 1
 
     ## left and right of center plots
-    if pads_around_center_d['left']:
+    if pads_around_center_d["left"]:
         col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
-        col_spacer[-1, 0] = pads_around_center_d['left']
+        col_spacer[-1, 0] = pads_around_center_d["left"]
         plot_arr = np.insert(plot_arr, first_center_col, col_spacer.flatten(), axis=1)
     # adjust center col indices to account for inserted column
+    first_center_col += 1
     last_center_col_p1 += 1
 
-    if pads_around_center_d['right']:
+    if pads_around_center_d["right"]:
         col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
-        col_spacer[-1, 0] = pads_around_center_d['right']
+        col_spacer[-1, 0] = pads_around_center_d["right"]
         plot_arr = np.insert(plot_arr, last_center_col_p1, col_spacer.flatten(), axis=1)
 
-    # plot
+    # Add legend Axes, rely on merging functionality of array_to_figure
+    # cover a selection of the top, center and bottom rows based on legend_extent
+    if legend_side is not None:
+        if legend_side != "right":
+            raise NotImplementedError
+        legend_arr = np.empty(plot_arr.shape[0], dtype=object)
+        legend_spacer = ArrayElement(name="legend_ax", func=spacer)
+        if "top" in legend_extent:
+            legend_arr[:first_center_row] = legend_spacer
+        if "center" in legend_extent:
+            legend_arr[first_center_row:last_center_row_p1] = legend_spacer
+        if "bottom" in legend_extent:
+            legend_arr[last_center_row_p1:-1] = legend_spacer
+        legend_arr[-1] = legend_size
+        legend_spacer_arr = np.empty(plot_arr.shape[0], dtype=object)
+        legend_spacer_arr[-1] = legend_pad
+        plot_arr = np.insert(plot_arr, plot_arr.shape[1] - 1, legend_spacer_arr, axis=1)
+        plot_arr = np.insert(plot_arr, plot_arr.shape[1] - 1, legend_arr, axis=1)
+
+    # Create plot, this will also collect guide specs
     res = array_to_figure(
         plot_array=plot_arr,
         figsize=figsize,
-        merge_by_name=False,
         constrained_layout_pads=constrained_layout_pads,
         gridspec_pads=gridspec_pads,
         constrained_layout=constrained_layout,
+        merge_by_name=["legend_ax"],
     )
 
+    # Add guides
+    if legend_side is not None:
+        if legend_axes_selectors is None:
+            guide_spec_l = res["plot_returns_arr"].flatten()
+        else:
+            guide_spec_l = []
+            for selector in legend_axes_selectors:
+                if isinstance(selector, str):
+                    # we may have a scalar ArrayElement or List[ArrayElement] under one name
+                    to_add = res["plot_returns_d"][selector]
+                    if isinstance(to_add, list):
+                        guide_spec_l.extend(to_add)
+                    else:
+                        guide_spec_l.append(to_add)
+                else:  # coord tuple
+                    guide_spec_l.append(res["plot_returns_arr"][selector])
+
+        add_guides(
+            # Note that the order is relevant if guide_titles is not given
+            # Flatten may not provide the most intuitive order
+            guide_spec_l=guide_spec_l,
+            ax=res["axes_d"]["legend_ax"],
+            # guide titles, padding...
+            **legend_args,
+        )
+
     return res, plot_arr
+
+
 # %%
 
 
@@ -1208,6 +1309,7 @@ def test_cross_plot():
     col_linkage = linkage(df.T)
     row_order = leaves_list(row_linkage)
     col_order = leaves_list(col_linkage)
+
     spacers = dict(
         row_clusters=row_clusters[row_order],
         col_clusters=col_clusters[col_order],
@@ -1220,6 +1322,7 @@ def test_cross_plot():
     col_spacers = dict(
         col_clusters=col_clusters[col_order], col_spacer_size=global_spacer_size
     )
+
     figsize = (20 / 2.54, 20 / 2.54)
     figsize_ratio = figsize[0] / figsize[1]
     res, plot_array = cross_plot(
@@ -1227,29 +1330,41 @@ def test_cross_plot():
         constrained_layout=False,
         constrained_layout_pads=dict(h_pad=0, w_pad=0, hspace=0.03, wspace=0.03),
         gridspec_pads=dict(hspace=0.03, wspace=0.03),
-        center_col_pad=(0.1 / figsize_ratio, "rel"),
-        center_row_pad=(0.1, "rel"),
-            pads_around_center=[(1/2.54, 'abs')] * 4,
+        center_col_pad=(0.25 / figsize_ratio, "rel"),
+        center_row_pad=(0.25, "rel"),
+        pads_around_center=[
+            (0.2 / 2.54, "abs"),
+            (1 / 2.54, "abs"),
+            (1 / 2.54, "abs"),
+            (0.2 / 2.54, "abs"),
+        ],
+        legend_args=dict(xpad_in=0.2, guide_titles=None),
+        legend_extent=["center"],
+        legend_axes_selectors=["ae1", "ae2", "ae3", (4, 1)],
         center=np.array(
             [
                 [
                     ArrayElement(
+                        name="ae1",
                         kwargs=dict(
                             df=df.iloc[row_order, col_order],
                             pcolormesh_args=dict(cmap="RdBu_r"),
-                            xticklabels=True,
-                            yticklabels=True,
+                            xticklabels=False,
+                            yticklabels=False,
                             **spacers,
-                        )
+                            guide_args=dict(title="Title1", shrink=0.2, aspect=4),
+                        ),
                     ),
                     ArrayElement(
+                        name="ae2",
                         kwargs=dict(
                             df=df.iloc[row_order, col_order] * 10,
                             pcolormesh_args=dict(cmap="YlOrBr"),
-                            xticklabels=True,
+                            xticklabels=False,
                             yticklabels=True,
+                            guide_args=dict(title="Title2", shrink=0.2, aspect=4),
                             **spacers,
-                        )
+                        ),
                     ),
                 ],
                 [
@@ -1258,7 +1373,8 @@ def test_cross_plot():
                             df=df.iloc[row_order, col_order] * 5,
                             pcolormesh_args=dict(cmap="RdBu_r"),
                             xticklabels=True,
-                            yticklabels=True,
+                            yticklabels=False,
+                            guide_args=dict(title="Title3", shrink=0.2, aspect=4),
                             **spacers,
                         )
                     ),
@@ -1268,6 +1384,7 @@ def test_cross_plot():
                             pcolormesh_args=dict(cmap="viridis"),
                             xticklabels=True,
                             yticklabels=True,
+                            guide_args=dict(title="Title4", shrink=0.2, aspect=4),
                             **spacers,
                         )
                     ),
@@ -1276,15 +1393,21 @@ def test_cross_plot():
         ),
         top=[
             ArrayElement(
+                name="ae3",
                 kwargs=dict(
                     df=pd.DataFrame({"anno1": col_clusters}).T.iloc[:, col_order],
                     is_categorical=True,
                     pcolormesh_args=dict(cmap="Set1"),
+                    guide_args=dict(title="Anno1"),
                     **col_spacers,
-                )
+                ),
             ),
             ArrayElement(
-                kwargs=dict(df=pd.DataFrame({"values": np.arange(11)}).T, **col_spacers)
+                kwargs=dict(
+                    df=pd.DataFrame({"values": np.arange(11)}).T,
+                    **col_spacers,
+                    guide_args=dict(title="Anno2", shrink=0.2, aspect=4),
+                )
             ),
         ],
         top_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
@@ -1294,23 +1417,23 @@ def test_cross_plot():
                     df=pd.DataFrame(
                         {"anno2": pd.Series(row_clusters)[row_order].astype(str)}
                     ),
+                    guide_args=dict(title="Anno3"),
                     **row_spacers,
                 )
             ),
             ArrayElement(
-                    func=anno_axes(loc='left')(co.plotting.frame_groups),
-                    kwargs=dict(
-                            group_ids=row_clusters[row_order],
-                            direction='y',
-                            colors=dict(zip([1, 2, 3], sns.color_palette('Set1', 3))),
-                            spacer_size=global_spacer_size,
-                            linewidth=2,
-                            add_labels=True,
-                            labels=['1', '2', '3'],
-                            label_colors=None,
-                            label_groups_kwargs=dict(rotation=0),
-
-                    ),
+                func=anno_axes(loc="left", prune_all=True)(co.plotting.frame_groups),
+                kwargs=dict(
+                    group_ids=row_clusters[row_order],
+                    direction="y",
+                    colors=dict(zip([1, 2, 3], sns.color_palette("Set1", 3))),
+                    spacer_size=global_spacer_size,
+                    linewidth=2,
+                    add_labels=True,
+                    labels=["1", "2", "3"],
+                    label_colors=None,
+                    label_groups_kwargs=dict(rotation=0),
+                ),
             ),
         ],
         left_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
@@ -1328,9 +1451,9 @@ def test_cross_plot():
                     height=0.05,
                     color="gray",
                 ),
-            ),
+            )
         ],
-        right_sizes=[(2, "abs")],
+        right_sizes=[(2 / 2.54, "abs")],
         # left=None,
         # left_sizes=None,
         bottom=[
@@ -1346,9 +1469,9 @@ def test_cross_plot():
                     width=0.1,
                     color="gray",
                 ),
-            ),
+            )
         ],
-        bottom_sizes=[(2, "abs")],
+        bottom_sizes=[(2.5 / 2.54, "abs")],
         row_dendrogram=True,
         col_dendrogram=True,
         row_order=row_linkage,
@@ -1359,7 +1482,11 @@ def test_cross_plot():
         col_spacer_size=global_spacer_size,
         default_func=co.plotting.heatmap3,
     )
-    res['fig'].savefig('/home/stephen/temp/test.pdf')
+    res["fig"].savefig("/home/stephen/temp/test.pdf")
+
+    # add guides
+    # res["axes_d"]["legend_ax"].axis("on")
+    res["fig"]
 
 
 def spacer(ax):
@@ -1376,25 +1503,48 @@ def spacer(ax):
     )
 
 
-def anno_axes(loc):
+def anno_axes(loc, prune_all=False, normalized=True):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # Get Axes
             if "ax" in kwargs:
                 ax = kwargs["ax"]
             else:
                 ax = plt.gca()
-            ax.axis("off")
-            if loc in ["top", "bottom"]:
-                ax.set_xlim((0, 1))
-                if loc == "bottom":
-                    ax.invert_yaxis()
+
+            # Remove both axis completely, or let informative axis remain
+            if prune_all:
+                ax.axis("off")
             else:
-                ax.set_ylim(0, 1)
-                if loc == "left":
-                    ax.invert_xaxis()
+                if loc == "top":
+                    sns.despine(ax=ax, left=True)
+                    ax.tick_params(labelbottom=False, bottom=False)
+                elif loc == "bottom":
+                    sns.despine(ax=ax, bottom=True)
+                    ax.tick_params(labelbottom=False, bottom=False)
+                elif loc == "right":
+                    sns.despine(ax=ax, left=True)
+                    ax.tick_params(labelleft=False, left=False)
+                elif loc == "left":
+                    sns.despine(ax=ax, left=True)
+                    ax.tick_params(labelleft=False, left=False)
+
+            # Set x or ylim to accomodate normalized coordinates
+            if normalized:
+                if loc in ["top", "bottom"]:
+                    ax.set_xlim((0, 1))
+                    if loc == "bottom":
+                        ax.invert_yaxis()
+                else:
+                    ax.set_ylim(0, 1)
+                    if loc == "left":
+                        ax.invert_xaxis()
+
             func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -1423,9 +1573,14 @@ def test_heatmap3():
         zip(list(df.index.astype(str)), np.repeat(["blue", "red", "black"], 3))
     )
 
-    fig, axes = plt.subplots(2, 2, dpi=180, figsize=(2.5, 2.5),
-                                      constrained_layout=True,
-                                      gridspec_kw=dict(height_ratios=(8, 1), width_ratios = (1, 8)))
+    fig, axes = plt.subplots(
+        2,
+        2,
+        dpi=180,
+        figsize=(2.5, 2.5),
+        constrained_layout=True,
+        gridspec_kw=dict(height_ratios=(8, 1), width_ratios=(1, 8)),
+    )
     ax = axes[0, 1]
     anno_ax = axes[1, 1]
     fig.set_constrained_layout_pads(h_pad=0, w_pad=0)
@@ -1441,9 +1596,9 @@ def test_heatmap3():
         row_clusters=row_clusters,
         col_clusters=col_clusters,
         # row_spacer_size=0.1,
-            row_spacer_size=[0.1, 0.2],
+        row_spacer_size=[0.1, 0.2],
         col_spacer_size=[0.2, 0.1],
-            # col_spacer_size=0.1,
+        # col_spacer_size=0.1,
         show_guide=True,
         # is_categorical=True,
         # heatmap_args={},
@@ -1452,57 +1607,48 @@ def test_heatmap3():
     # ax.tick_params(bottom=False, labelbottom=False, left=True, labelleft=True, size=0, width=0.5)
 
     co.plotting.label_groups(
-            group_ids=col_clusters,
-            ax=anno_ax,
-            y=0.5,
-            spacer_size=[0.2, 0.1],
-            labels=np.array(['AA', 'aa', 'gg']),
+        group_ids=col_clusters,
+        ax=anno_ax,
+        y=0.5,
+        spacer_size=[0.2, 0.1],
+        labels=np.array(["AA", "aa", "gg"]),
     )
 
-    anno_ax.axis('off')
+    anno_ax.axis("off")
 
     co.plotting.label_groups(
-            group_ids=row_clusters,
-            ax=axes[0, 0],
-            x=0.5,
-            spacer_size=[0.1, 0.2],
-            labels=np.array(['AA', 'aa', 'gg'])
+        group_ids=row_clusters,
+        ax=axes[0, 0],
+        x=0.5,
+        spacer_size=[0.1, 0.2],
+        labels=np.array(["AA", "aa", "gg"]),
     )
 
     co.plotting.frame_groups(
-            group_ids=col_clusters,
-            ax=anno_ax,
-            direction='x',
-            colors=['black', 'orange', 'blue'],
-            linewidth=4,
-            spacer_size=[0.2, 0.1],
+        group_ids=col_clusters,
+        ax=anno_ax,
+        direction="x",
+        colors=["black", "orange", "blue"],
+        linewidth=4,
+        spacer_size=[0.2, 0.1],
     )
 
     co.plotting.frame_groups(
-            group_ids=row_clusters,
-            ax=axes[0, 0],
-            direction='y',
-            colors=['black', 'orange', 'red'],
-            linewidth=1,
-            spacer_size=[0.1, 0.2],
+        group_ids=row_clusters,
+        ax=axes[0, 0],
+        direction="y",
+        colors=["black", "orange", "red"],
+        linewidth=1,
+        spacer_size=[0.1, 0.2],
     )
-    axes[0, 0].axis('off')
+    axes[0, 0].axis("off")
 
-    fig.savefig('/home/stephen/temp/test.pdf')
+    fig.savefig("/home/stephen/temp/test.pdf")
 
     # %%
-
-
 
     # code to mark groups in a plot
     # %%
-
-
-
-
-
-
-
 
     # plt.setp(
     #     ax.get_xticklabels(),

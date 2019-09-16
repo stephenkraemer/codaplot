@@ -295,9 +295,11 @@ def heatmap3(
     xticklabels: Union[bool, List[str]] = None,
     xticklabel_rotation=90,
     xticklabel_colors: Optional[Union[Iterable, Dict]] = None,
+        xticklabel_side = 'bottom',
     xlabel: Optional[str] = None,
     yticklabels: Union[bool, List[str]] = None,
     yticklabel_colors: Optional[Union[Iterable, Dict]] = None,
+        yticklabel_side = 'right',
     ylabel: Optional[str] = None,
     show_guide=False,
     guide_args: Optional[Dict] = None,
@@ -381,10 +383,55 @@ def heatmap3(
         # normal heatmap
         res = heatmap2(**shared_args)
 
-    # Color ticklabels
-    color_ticklabels("x", xticklabel_colors, ax)
-    color_ticklabels("y", yticklabel_colors, ax)
+    # Axis and tick labels
+    if xticklabels:
+        if xticklabel_side == 'bottom':
+            ax.tick_params(labelbottom=True, labeltop=False)
+        elif xticklabel_side == 'top':
+            ax.tick_params(labelbottom=False, labeltop=True)
+        else:
+            raise ValueError('Unknown xticklabel_side')
+    else:
+        ax.tick_params(labelbottom=False, labeltop=False)
 
+    if yticklabels:
+        if yticklabel_side == 'right':
+            ax.tick_params(labelright=True, labelleft=False)
+        elif yticklabel_side == 'left':
+            ax.tick_params(labelright=False, labelleft=True)
+        else:
+            raise ValueError('Unknown yticklabel_side')
+    else:
+        ax.tick_params(labelright=False, labelleft=False)
+
+    # Color ticklabels
+    if xticklabels:
+        color_ticklabels("x", xticklabel_colors, ax)
+    if yticklabels:
+        color_ticklabels("y", yticklabel_colors, ax)
+
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    if ylabel:
+        if yticklabel_side == 'right':
+            ax.yaxis.set_label_position("right")
+        else:
+            ax.yaxis.set_label_position("left")
+        ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+
+    # General aesthetics
+    ax.tick_params(length=0, which="both", axis="both")
+    sns.despine(ax=ax, bottom=True, left=True)
+
+    # add colorbar for continuous data (if requested)
+    if not is_categorical and show_guide:
+        cb = ax.figure.colorbar(res['mappable'], ax=ax, **guide_args)
+        cb.outline.set_linewidth(0)
+        cb.ax.tick_params(length=0, which="both", axis="both")
+
+    # Done with continous data, return the result
     if not is_categorical:
         return res
 
@@ -1842,21 +1889,6 @@ def spaced_heatmap2(
             np.concatenate(x_ticklabels), ha="center", rotation=xticklabel_rotation
         )
 
-    if xlabel:
-        ax.set_xlabel(xlabel)
-    if ylabel:
-        ax.set_ylabel(ylabel)
-    if title:
-        ax.set_title(title)
-
-    ax.tick_params(length=0, which="both", axis="both")
-    sns.despine(ax=ax, bottom=True, left=True)
-
-    if add_colorbar:
-        cb = fig.colorbar(qm, ax=ax, **cbar_args)
-        cb.outline.set_linewidth(0)
-        cb.ax.tick_params(length=0, which="both", axis="both")
-
     new_cbar_args = deepcopy(cbar_args)
     new_cbar_args["mappable"] = qm
 
@@ -1891,10 +1923,6 @@ def heatmap2(
 
     qm = ax.pcolormesh(df, **pcolormesh_args)
 
-    # General aesthetics: ylabel to the right, no ticks
-    ax.tick_params(length=0, which="both", axis="both")
-    ax.yaxis.set_label_position("right")
-
     if xticklabels:
         if not isinstance(xticklabels, list):
             xticklabels = df.columns
@@ -1902,33 +1930,14 @@ def heatmap2(
         # centering with label alignment fails for large cells
         ax.set_xticks(np.arange(0, df.shape[1]) + 0.5)
         ax.set_xticklabels(xticklabels, ha="center", rotation=xticklabel_rotation)
-    else:
-        ax.tick_params(labelbottom=False)
 
-    # Left side is reserved for dendrogram and annotations
-    ax.tick_params(labelleft=False)
     if yticklabels:
-        ax.tick_params(labelright=True)
         if not isinstance(yticklabels, list):
             yticklabels = df.index
         # the default locator will likely not set ticks at each column
         # centering with label alignment fails for large cells
         ax.set_yticks(np.arange(0, df.shape[0]) + 0.5)
         ax.set_yticklabels(yticklabels, va="center")
-
-    if xlabel:
-        ax.set_xlabel(xlabel)
-    if ylabel:
-        ax.set_ylabel(ylabel)
-    if title:
-        ax.set_title(title)
-
-    if add_colorbar:
-        cb = ax.figure.colorbar(qm, ax=ax, **cbar_args)
-        cb.outline.set_linewidth(0)
-        cb.ax.tick_params(length=0, which="both", axis="both")
-
-    sns.despine(ax=ax, bottom=True, left=True)
 
     cbar_args["mappable"] = qm
 
