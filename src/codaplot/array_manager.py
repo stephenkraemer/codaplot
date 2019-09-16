@@ -1385,7 +1385,7 @@ def test_heatmap3():
         pcolormesh_args=dict(**pcm_display_kwargs),
         row_clusters=row_clusters,
         col_clusters=col_clusters,
-        row_spacer_size=0.1,
+        row_spacer_size=[0.1, 0.2],
         col_spacer_size=0.1,
         show_guide=True,
         # is_categorical=True,
@@ -1417,7 +1417,7 @@ def test_heatmap3():
             ax=anno_ax,
             direction='x',
             colors=['black', 'orange', 'blue'],
-            linewidth=2,
+            linewidth=4,
             spacer_size=0.1,
     )
 

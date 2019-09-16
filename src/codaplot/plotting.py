@@ -2135,11 +2135,23 @@ def frame_groups(
         ends = bounds
 
     # Add patches
+    # Patches are specified as (x, y), width, height; x, y is the origin
+    # The edges of the patch are centered on x, x + height, y, y + width, ie half of the line is to the left and right of the coordinate
+    # For directly consecutive patches (in heatmaps without spacers), this means that edges will overlap
+    # To avoid this, and also to get perfect alignment with elements in spaced heatmaps, we shift the coordinates by half a linewidth towards the inside of the patch
+    # because the linewidth is given in points, we need to do some transformation magics
 
+    # Get transformations:
+    # 1. bring coordinates to display coords
+    # 2. Add offset in inch
+    # 3. bring back to axes coord
+
+    # Get line width in inch, for use with dpi_scale_trans
     linewidth_in = (kwargs.get("linewidth") or mpl.rcParams["patch.linewidth"]) * 1 / 72
 
+    # Get transformations for start (shift to right/up) and end (shift to left/down)
     slice_direction = 1 if direction == "x" else -1
-    directional_axis_idx = 0 if direction == "x" else 1
+
     start_shift = (
         ax.transData
         + mtransforms.ScaledTranslation(
@@ -2155,16 +2167,20 @@ def frame_groups(
         )
         + ax.transData.inverted()
     )
+
+    # Add patches iteratively, using the transforms to manipulate the origin point and calculate the appropriate size to add
+    # either height or width is fixed, and the other marks patch position along the directional axis
+    # so we only need to change height (y direction) or width (x direction)
     for color, start, end in zip_longest(colors, starts, ends):
         # if colors is empty, color will always be none
         if direction == "x":
-            curr_origin = (start, origin[1])
+            curr_origin = start_shift.transform((start, origin[1]))
+            end = end_shift.transform((end, 0))[0]
+            patch_size_in_direction = end - curr_origin[0]
         else:
-            curr_origin = (origin[0], start)
-        patch_size_in_direction = (
-            end_shift.transform((end, 0)[::slice_direction])[directional_axis_idx]
-            - start_shift.transform((start, 0)[::slice_direction])[directional_axis_idx]
-        )
+            curr_origin = start_shift.transform((origin[0], start))
+            end = end_shift.transform((0, end))[1]
+            patch_size_in_direction = end - curr_origin[1]
         patch = mpatches.FancyBboxPatch(
             curr_origin,
             *(patch_size_in_direction, size)[::slice_direction],
