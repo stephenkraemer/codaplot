@@ -941,8 +941,9 @@ def cross_plot(
     center: Union[List, np.ndarray],
     center_row_sizes=None,
     center_col_sizes=None,
-    center_row_spacer=(0.05, "rel"),
-    center_col_spacer=(0.05, "rel"),
+    center_row_pad=(0.05, "rel"),
+    center_col_pad=(0.05, "rel"),
+    pads_around_center: Optional[Union[float, Tuple[float]]] = None,
     figsize=(5, 5),
     constrained_layout=True,
     constrained_layout_pads: Optional[Dict] = None,
@@ -987,7 +988,7 @@ def cross_plot(
         col_dendrogram: kwargs passed to co.plotting.cutdendrogram
         default_func: called if plot spec dict does not contain _func key
         aligned_arg_names: if not None and plot spec does not override with a _align key, align arguments of that name based on row order (left, right), col order (top, bottom) or both (center)
-
+        pads_around_center: (top, right, bottom, left) - clockwise sides. pads around center plots as (number, type), e.g. (1, 'rel') or (0.5, 'abs')
 
     Returns:
         dict with keys
@@ -997,6 +998,12 @@ def cross_plot(
         - axes_arr
 
     """
+
+    if isinstance(pads_around_center, (int, float)):
+        pads_around_center = [pads_around_center] * 4
+    elif pads_around_center is None:
+        pads_around_center = [None] * 4
+    pads_around_center_d = dict(zip('top right bottom left'.split(), pads_around_center))
 
     # add default func
     for elem in itertools.chain.from_iterable(
@@ -1120,17 +1127,57 @@ def cross_plot(
     plot_arr[-1, :] = width_ratios
 
     # add row spacers
-    row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
-    row_spacer[0, -1] = center_row_spacer
-    plot_arr = np.insert(
-        plot_arr, slice(first_center_row + 1, last_center_row_p1), row_spacer, axis=0
-    )
+    ## between center plots
+    if center_row_pad:
+        row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
+        row_spacer[0, -1] = center_row_pad
+        plot_arr = np.insert(
+            plot_arr, slice(first_center_row + 1, last_center_row_p1), row_spacer, axis=0
+        )
+    # adjust center_row indices to account for new rows
+    last_center_row_p1 += center_arr.shape[0] - 1
+
+    ## before and after center plots
+    if pads_around_center_d['top']:
+        row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
+        row_spacer[0, -1] = pads_around_center_d['top']
+        plot_arr = np.insert(
+                plot_arr, first_center_row, row_spacer, axis=0
+        )
+    # adjust center_row indices to account for new row
+    last_center_row_p1 += 1
+
+    if pads_around_center_d['bottom']:
+        row_spacer = np.empty((1, plot_arr.shape[1]), dtype=object)
+        row_spacer[0, -1] = pads_around_center_d['bottom']
+        plot_arr = np.insert(
+                plot_arr, last_center_row_p1, row_spacer, axis=0
+        )
+
+
     # taking into account the new rows, add enlarged col spacers
-    col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
-    col_spacer[-1, 0] = center_col_spacer
-    plot_arr = np.insert(
-        plot_arr, slice(first_center_col + 1, last_center_col_p1), col_spacer, axis=1
-    )
+    ## between center plots
+    if center_col_pad:
+        col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
+        col_spacer[-1, 0] = center_col_pad
+        plot_arr = np.insert(
+            plot_arr, slice(first_center_col + 1, last_center_col_p1), col_spacer, axis=1
+        )
+    # adjust center col indices to account for inserted columns
+    last_center_col_p1 += center_arr.shape[1] - 1
+
+    ## left and right of center plots
+    if pads_around_center_d['left']:
+        col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
+        col_spacer[-1, 0] = pads_around_center_d['left']
+        plot_arr = np.insert(plot_arr, first_center_col, col_spacer.flatten(), axis=1)
+    # adjust center col indices to account for inserted column
+    last_center_col_p1 += 1
+
+    if pads_around_center_d['right']:
+        col_spacer = np.empty((plot_arr.shape[0], 1), dtype=object)
+        col_spacer[-1, 0] = pads_around_center_d['right']
+        plot_arr = np.insert(plot_arr, last_center_col_p1, col_spacer.flatten(), axis=1)
 
     # plot
     res = array_to_figure(
@@ -1142,9 +1189,7 @@ def cross_plot(
         constrained_layout=constrained_layout,
     )
 
-    return res
-
-
+    return res, plot_arr
 # %%
 
 
@@ -1177,13 +1222,14 @@ def test_cross_plot():
     )
     figsize = (20 / 2.54, 20 / 2.54)
     figsize_ratio = figsize[0] / figsize[1]
-    res = cross_plot(
+    res, plot_array = cross_plot(
         figsize=figsize,
         constrained_layout=False,
         constrained_layout_pads=dict(h_pad=0, w_pad=0, hspace=0.03, wspace=0.03),
         gridspec_pads=dict(hspace=0.03, wspace=0.03),
-        center_col_spacer=(0.2 / figsize_ratio, "rel"),
-        center_row_spacer=(0.2, "rel"),
+        center_col_pad=(0.1 / figsize_ratio, "rel"),
+        center_row_pad=(0.1, "rel"),
+            pads_around_center=[(1/2.54, 'abs')] * 4,
         center=np.array(
             [
                 [
@@ -1240,9 +1286,8 @@ def test_cross_plot():
             ArrayElement(
                 kwargs=dict(df=pd.DataFrame({"values": np.arange(11)}).T, **col_spacers)
             ),
-            ArrayElement(func=spacer),
         ],
-        top_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs"), (0.5 / 2.54, "abs")],
+        top_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
         left=[
             ArrayElement(
                 kwargs=dict(
@@ -1252,11 +1297,24 @@ def test_cross_plot():
                     **row_spacers,
                 )
             ),
-            ArrayElement(func=spacer),
+            ArrayElement(
+                    func=anno_axes(loc='left')(co.plotting.frame_groups),
+                    kwargs=dict(
+                            group_ids=row_clusters[row_order],
+                            direction='y',
+                            colors=dict(zip([1, 2, 3], sns.color_palette('Set1', 3))),
+                            spacer_size=global_spacer_size,
+                            linewidth=2,
+                            add_labels=True,
+                            labels=['1', '2', '3'],
+                            label_colors=None,
+                            label_groups_kwargs=dict(rotation=0),
+
+                    ),
+            ),
         ],
-        left_sizes=[(1 / 2.54, "abs"), (0.5 / 2.54, "abs")],
+        left_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
         right=[
-            ArrayElement(func=spacer),
             ArrayElement(
                 func=spaced_barplot,
                 kwargs=dict(
@@ -1272,11 +1330,10 @@ def test_cross_plot():
                 ),
             ),
         ],
-        right_sizes=[(0.5, "abs"), (2, "abs")],
+        right_sizes=[(2, "abs")],
         # left=None,
         # left_sizes=None,
         bottom=[
-            ArrayElement(func=spacer),
             ArrayElement(
                 func=anno_axes("bottom")(plt.bar),
                 kwargs=dict(
@@ -1284,7 +1341,6 @@ def test_cross_plot():
                         co.plotting.find_stretches2(col_clusters[col_order])[1],
                         col_clusters[col_order],
                         global_spacer_size,
-                        max_coord=df.shape[1],
                     ),
                     height=df.groupby(col_clusters, axis=1).sum().sum(axis=0),
                     width=0.1,
@@ -1292,7 +1348,7 @@ def test_cross_plot():
                 ),
             ),
         ],
-        bottom_sizes=[(0.5, "abs"), (2, "abs")],
+        bottom_sizes=[(2, "abs")],
         row_dendrogram=True,
         col_dendrogram=True,
         row_order=row_linkage,
@@ -1303,6 +1359,7 @@ def test_cross_plot():
         col_spacer_size=global_spacer_size,
         default_func=co.plotting.heatmap3,
     )
+    res['fig'].savefig('/home/stephen/temp/test.pdf')
 
 
 def spacer(ax):
@@ -1337,9 +1394,7 @@ def anno_axes(loc):
                 if loc == "left":
                     ax.invert_xaxis()
             func(*args, **kwargs)
-
         return wrapper
-
     return decorator
 
 
@@ -1385,8 +1440,10 @@ def test_heatmap3():
         pcolormesh_args=dict(**pcm_display_kwargs),
         row_clusters=row_clusters,
         col_clusters=col_clusters,
-        row_spacer_size=[0.1, 0.2],
-        col_spacer_size=0.1,
+        # row_spacer_size=0.1,
+            row_spacer_size=[0.1, 0.2],
+        col_spacer_size=[0.2, 0.1],
+            # col_spacer_size=0.1,
         show_guide=True,
         # is_categorical=True,
         # heatmap_args={},
@@ -1398,7 +1455,7 @@ def test_heatmap3():
             group_ids=col_clusters,
             ax=anno_ax,
             y=0.5,
-            spacer_size=0.1,
+            spacer_size=[0.2, 0.1],
             labels=np.array(['AA', 'aa', 'gg']),
     )
 
@@ -1406,9 +1463,9 @@ def test_heatmap3():
 
     co.plotting.label_groups(
             group_ids=row_clusters,
-            ax=ax,
-            x=0.1,
-            spacer_size=0.1,
+            ax=axes[0, 0],
+            x=0.5,
+            spacer_size=[0.1, 0.2],
             labels=np.array(['AA', 'aa', 'gg'])
     )
 
@@ -1418,7 +1475,7 @@ def test_heatmap3():
             direction='x',
             colors=['black', 'orange', 'blue'],
             linewidth=4,
-            spacer_size=0.1,
+            spacer_size=[0.2, 0.1],
     )
 
     co.plotting.frame_groups(
@@ -1427,7 +1484,7 @@ def test_heatmap3():
             direction='y',
             colors=['black', 'orange', 'red'],
             linewidth=1,
-            spacer_size=0.1,
+            spacer_size=[0.1, 0.2],
     )
     axes[0, 0].axis('off')
 

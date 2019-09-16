@@ -1125,9 +1125,8 @@ class CutDendrogram:
             # thus, max_coord must be calculated and passed to all column applies
             xcoords = xcoords.divide(10).apply(
                 adjust_coords,
-                clusters=self.spacing_groups[leaves_list(self.Z)],
+                spacing_group_ids=self.spacing_groups[leaves_list(self.Z)],
                 spacer_size=self.spacer_size,
-                max_coord=np.ceil(xcoords.max().max() / 10),
             )
         # y coords are link height coords
         ycoords = dcoords.reset_index(drop=True)
@@ -1937,14 +1936,12 @@ def heatmap2(
 
 
 def adjust_coords(
-    coords: np.ndarray,
+    coords: Union[np.ndarray, pd.Series],
     spacing_group_ids: np.ndarray,
-    spacer_size: float,
+    spacer_size: Union[float, List[float]],
     right_open: bool = True,
 ) -> np.ndarray:
     """Adjust data coordinates to account for spacers
-
-    Currently assumes constant spacer size
 
     This function is meant for plots containing or annotating elements of unit size (in data coordinates), e.g. heatmap rows or columns. The spacing_group_ids indicate where spacers should be introduced between groups of elements. For consistent handling of such spaced plots, the original unit size coordinates are transformed to the interval [0, 1]
 
@@ -1957,20 +1954,21 @@ def adjust_coords(
         Adjusted coordinates \in [0, 1]
     """
     # Possible improvements
-    # - allow different spacer sizes
-    # - allow unsorted coordinates
-    # - allow multiple occurences of same coordinate
-
-    # list would fail is_numeric_dtype_test
-    assert isinstance(coords, np.ndarray)
+    # - what happens with unsorted coordinates?
+    # - does this allow multiple occurences of same coordinate?
 
     # Coords may be numeric or categorical
     # Categorical coordinates need to be translated to unit-sized numeric coordinates
+    assert isinstance(
+        coords, (np.ndarray, pd.Series)
+    )  # list would fail is_numeric_dtype_test
+    coords = np.array(coords)
+    assert coords.ndim == 1
     if not is_numeric_dtype(coords):
         # We assume that for categorical data, the y coord should be in the middle of a bin of size 1 for each element
-        numeric_y_coords = np.arange(len(coords)) + 0.5
+        numeric_coords = np.arange(len(coords)) + 0.5
     else:
-        numeric_y_coords = coords
+        numeric_coords = coords
 
     thresholds, *_ = co.plotting.find_stretches2(spacing_group_ids)
     thresholds = thresholds[:-1]
@@ -1978,17 +1976,27 @@ def adjust_coords(
     side = "right" if right_open else "left"
     idx = np.searchsorted(thresholds, coords, side)
 
-    scaled_y_coords_int = (
+    # if a scalar spacer_size is given, convert to array of spacers
+    if isinstance(spacer_size, float):
+        spacer_size = np.repeat(spacer_size, len(thresholds))
+    total_spacer_size = np.sum(spacer_size)
+    # We look up the spacer value to be added to coords from the cumsum of spacers
+    # starting with 0 spacer for elements before the first spacer
+    spacer_size_cumsum = np.insert(np.cumsum(spacer_size), 0, 0)
+
+    # Scale coordinates
+    scaled_coords = (
         # first scale y_coords to [0, 1]
-        numeric_y_coords
+        numeric_coords
         / len(spacing_group_ids)
         # then scale them to the space available after reducing the spacers, eg. [0, 0.8]
-        * (1 - spacer_size * len(thresholds))
+        * (1 - total_spacer_size)
     )
-    # add one or more spacers according to searchsorted index
-    adjusted_y_coords = scaled_y_coords_int + idx * spacer_size
 
-    return adjusted_y_coords
+    # add one or more spacers according to searchsorted index
+    adjusted_coords = scaled_coords + spacer_size_cumsum[idx]
+
+    return adjusted_coords
 
 
 def label_groups(
@@ -1996,8 +2004,9 @@ def label_groups(
     ax: Axes,
     x: Optional[float] = None,
     y: Optional[float] = None,
-    spacer_size: Optional[float] = None,
+    spacer_size: Optional[Union[float, List[float]]] = None,
     labels: Optional[Union[Dict, Iterable]] = None,
+        colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
     **kwargs,
 ):
     """Add text labels in the middle of stretches of group ids
@@ -2013,6 +2022,7 @@ def label_groups(
         y: if given, plot text labels in x direction, at the fixed y
         spacer_size: if given, coordinates are adjusted for spacers between the groups
         labels: labels for groups, either iterable with one element per group occurence, or dict group_id -> label
+        colors: either iterable of color specs of same length as number of groups, or a dict group id -> color
         kwargs: passed to ax.text, note that ha and va default to 'center' and rotation to 90 (for text along y axis) if no kwargs are passed
 
     Returns:
@@ -2026,23 +2036,29 @@ def label_groups(
     if x and "rotation" not in kwargs:
         kwargs["rotation"] = 90
 
-    # values: one value per consecutive group id stretch, may be replaced based on labels
     bounds, mids, values = find_stretches2(group_ids)
-    if isinstance(labels, dict):
-        values_ser = pd.Series(values).replace(labels)
-        assert not values_ser.isnull().any()
-        values = values_ser.array
-    elif labels is not None:
-        assert len(labels) == len(values)
-        assert isinstance(labels, np.ndarray)
-        values = labels
-    # else: use group ids as values, as returned by find_stretches2
+    # values: one value per consecutive group id stretch
+    # in the absence of labels arg, use values as final_labels
+    # if labels is a dict, look up final_labels based on values
+    final_labels = get_list_of_stretch_annos(stretch_ids=values, annos=labels)
+
+    # Get final colors, if colors is None, do not use colors
+    # First, convert scalar color spec to list of repeated colorspec, if given
+    if isinstance(colors, (str, tuple)):
+        # can't use np.repeat or tile with tuples
+        colors = [colors] * len(values)
+    if colors is not None:
+        # the function returns array of stretch ids if annos=None, so we handle that case separately
+        final_colors = get_list_of_stretch_annos(stretch_ids=values, annos=colors)
+    else:
+        # for iteration, create array of None objects
+        final_colors = np.repeat(None, len(values))
 
     # adjust coordinates to account for spacers if necessary
     # in this case, the axis limits of the direction axis must be set to 0, 1
     # otherwise, they are set to (0, len(group_ids))
     if spacer_size:
-        coords = co.plotting.adjust_coords(mids, group_ids, 0.1)
+        coords = co.plotting.adjust_coords(mids, group_ids, spacer_size=spacer_size)
         if x:
             ax.set_ylim(0, 1)
         else:
@@ -2054,23 +2070,56 @@ def label_groups(
         else:
             ax.set_xlim(0, len(group_ids))
 
-    # Place values in middle of stretches, at the fixed x or y coordinate
+    # Place labels in middle of stretches, at the fixed x or y coordinate
     # Place along direction without fixed value (x or y will be None)
-    for value, coord in zip(values, coords):
+    for final_label, coord, final_color in zip(final_labels, coords, final_colors):
+        # Final color supersedes constan color in kwargs, if its present
+        used_color = kwargs.pop('color', None) if final_color is None else final_color
         t = (coord, y) if y else (x, coord)
-        ax.text(*t, value, **kwargs)
+        ax.text(*t, final_label, color=used_color, **kwargs)
+
+
+def get_list_of_stretch_annos(stretch_ids: Iterable, annos: Optional[Union[Iterable, Dict]]) -> np.ndarray:
+    """Create array with one annotation value per stretch
+
+    Args:
+        annos: iterable of annotation values, or dict mapping stretch ids to annotation values. If None, the stretch_ids will be used as annotations
+        stretch_ids: unique value contained in each stretch
+
+    Returns:
+          array with one annotation per stretch
+    """
+
+    if isinstance(annos, dict):
+        annos_ser = pd.Series(stretch_ids).replace(annos)
+        assert not annos_ser.isnull().any()
+        return annos_ser.array
+
+    if annos is not None:
+        # else: annos are iterable
+        assert len(annos) == len(stretch_ids)
+        annos = np.array(annos)
+        assert annos.ndim == 1
+        return annos
+
+    else:
+        return np.array(stretch_ids)
 
 
 def frame_groups(
     group_ids: np.ndarray,
     ax: Axes,
     direction: str,
-    colors: Optional[Union[Iterable, Dict]] = None,
-    spacer_size: Optional[float] = None,
+    colors: Optional[Union[Iterable, Dict, str, Tuple[float]]] = None,
+    spacer_size: Optional[Union[float, List[float]]] = None,
     origin=(0, 0),
     size=1,
+    add_labels: bool = False,
+    labels: Optional[Union[Dict, Iterable]] = None,
+    label_groups_kwargs: Optional[Dict] = None,
+    label_colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
     **kwargs,
-):
+) -> None:
     """Frame groups of elements
 
     - Meant for plot with unit-sized elements, such as heatmap rows and columns.
@@ -2087,10 +2136,11 @@ def frame_groups(
         colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
         size: extent of rectangle patch along the unused axis (constant for all patches)
         **kwargs: passed to mpatches.FancyBboxPatch. Default args: dict((fill = False, boxstyle = mpatches.BoxStyle("Round", pad=0), edgecolor = 'black'). Edgecolor is ignored if colors is passed.
-
-    Returns:
-
+        add_labels: if True, call label_groups(..., labels, **label_groups_kwargs)
+        labels: passed to label_groups
+        label_groups_kwargs: passed to label_groups
     """
+    # TODO: the edges in the non-directional axis are only half visible because axis limits are set to (0, 1), but the middle of the lines is placed on 0 or 1 resp.
 
     bounds, mids, values = co.plotting.find_stretches2(group_ids)
 
@@ -2102,8 +2152,11 @@ def frame_groups(
     # We need colors as an iterable, matching the group stretches - or empty
     # If colors is given, edgecolor specification is ignored
     if isinstance(colors, dict):
-        colors = pd.Series(colors)[values]
+        colors = pd.Series(colors)[values].array
     if colors is not None:
+        if isinstance(colors, (tuple, str)):
+            # can't use np.repeat or tile with tuple elements
+            colors = np.array([colors] * len(values))
         kwargs.pop("edgecolor")
     else:
         colors = np.array([])
@@ -2189,3 +2242,17 @@ def frame_groups(
             **kwargs,
         )
         ax.add_artist(patch)
+
+    if add_labels:
+        if not label_groups_kwargs:
+            label_groups_kwargs = {}
+        label_groups(
+            group_ids=group_ids,
+            ax=ax,
+            x=0.5 if direction == "y" else None,
+            y=0.5 if direction == "x" else None,
+            spacer_size=spacer_size,
+            labels=labels,
+                colors=colors if label_colors is None else label_colors,
+            **label_groups_kwargs,
+        )
