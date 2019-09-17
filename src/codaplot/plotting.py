@@ -304,12 +304,13 @@ def heatmap3(
     show_guide=False,
     guide_args: Optional[Dict] = None,
     guide_ax: Optional[Axes] = None,
+    guide_title: Optional[str] = None,
     title: Optional[str] = None,
     annotate: Union[str, bool] = False,
-    row_clusters: Union[np.ndarray, pd.Series] = None,
-    col_clusters: Union[np.ndarray, pd.Series] = None,
-    row_spacer_size: Union[float, Iterable[float]] = 0.01,
-    col_spacer_size: Union[float, Iterable[float]] = 0.01,
+    row_spacing_group_ids: Union[np.ndarray, pd.Series] = None,
+    col_spacing_group_ids: Union[np.ndarray, pd.Series] = None,
+    row_spacer_sizes: Union[float, Iterable[float]] = 0.01,
+    col_spacer_sizes: Union[float, Iterable[float]] = 0.01,
     frame_spaced_elements=False,
     frame_kwargs=None,
 ) -> Dict:
@@ -327,9 +328,9 @@ def heatmap3(
     """
 
     if guide_args is None:
-        guide_args = {}
+        guide_args_copy = {}
     else:
-        guide_args = deepcopy(guide_args)
+        guide_args_copy = deepcopy(guide_args)
 
     if pcolormesh_args is None:
         pcolormesh_args = {}
@@ -359,29 +360,26 @@ def heatmap3(
         pcolormesh_args=pcolormesh_args,
         xticklabels=xticklabels,
         xticklabel_rotation=xticklabel_rotation,
-        xlabel=xlabel,
         yticklabels=yticklabels,
-        ylabel=ylabel,
-        cbar_args=guide_args,
         # For categorical, no colorbar, legend is added later on
-        add_colorbar=False if is_categorical else show_guide,
-        title=title,
     )
 
-    if row_clusters is not None or col_clusters is not None:
+    if row_spacing_group_ids is not None or col_spacing_group_ids is not None:
         # we need a spaced heatmap
-        res = spaced_heatmap2(
+        qm = spaced_heatmap2(
             **shared_args,
-            row_clusters=row_clusters,
-            col_clusters=col_clusters,
-            row_spacer_size=row_spacer_size,
-            col_spacer_size=col_spacer_size,
+            row_clusters=row_spacing_group_ids,
+            col_clusters=col_spacing_group_ids,
+            row_spacer_size=row_spacer_sizes,
+            col_spacer_size=col_spacer_sizes,
             frame_spaced_elements=frame_spaced_elements,
             frame_kwargs=frame_kwargs,
         )
     else:
         # normal heatmap
-        res = heatmap2(**shared_args)
+        qm = heatmap2(**shared_args)
+    
+    guide_args_copy['mappable'] = qm
 
     # Axis and tick labels
     if xticklabels:
@@ -427,15 +425,19 @@ def heatmap3(
 
     # add colorbar for continuous data (if requested)
     if not is_categorical and show_guide:
-        cb = ax.figure.colorbar(res['mappable'], ax=ax, **guide_args)
+        cb = ax.figure.colorbar(guide_args_copy['mappable'], ax=ax, **guide_args_copy)
         cb.outline.set_linewidth(0)
         cb.ax.tick_params(length=0, which="both", axis="both")
 
     # Done with continous data, return the result
     if not is_categorical:
-        return res
+        # return guide_args_copy, it will be used as legend spec, therefore add title
+        guide_args_copy['title'] = guide_title
+        return guide_args_copy
 
     # This is a cateogrical heatmap, take care of the legend
+    # Unlike fig.colorbar, Legend takes a title arg
+    guide_args_copy['title'] = guide_title
 
     # Legend with proxy artists
     # noinspection PyUnboundLocalVariable
@@ -446,10 +448,10 @@ def heatmap3(
     if show_guide:
         if guide_ax is not None:
             # noinspection PyUnboundLocalVariable
-            guide_ax.legend(patches, levels, **guide_args)
+            guide_ax.legend(patches, levels, **guide_args_copy)
         else:
             # noinspection PyUnboundLocalVariable
-            ax.legend(patches, levels, **guide_args)
+            ax.legend(patches, levels, **guide_args_copy)
 
     # Label stretches
     if annotate == "stretches":
@@ -462,7 +464,7 @@ def heatmap3(
             for curr_y, curr_s in zip(list(y), s):
                 ax.text(x, curr_y, str(curr_s), va="center", ha="center")
 
-    return {"handles": patches, "labels": levels, **guide_args}
+    return {"handles": patches, "labels": levels, **guide_args_copy}
 
 
 def color_ticklabels(axis: str, colors: Union[Iterable, Dict], ax: Axes) -> None:
@@ -1173,7 +1175,7 @@ class CutDendrogram:
             xcoords = xcoords.divide(10).apply(
                 adjust_coords,
                 spacing_group_ids=self.spacing_groups[leaves_list(self.Z)],
-                spacer_size=self.spacer_size,
+                spacer_sizes=self.spacer_size,
             )
         # y coords are link height coords
         ycoords = dcoords.reset_index(drop=True)
@@ -1575,12 +1577,7 @@ def spaced_heatmap2(
     pcolormesh_args=None,
     xticklabels: Union[bool, List[str]] = None,
     xticklabel_rotation=90,
-    xlabel: Optional[str] = None,
     yticklabels: Union[bool, List[str]] = None,
-    ylabel: Optional[str] = None,
-    cbar_args: Optional[Dict] = None,
-    add_colorbar=True,
-    title: Optional[str] = None,
     row_clusters: Union[np.ndarray, pd.Series] = None,
     col_clusters: Union[np.ndarray, pd.Series] = None,
     row_spacer_size: Union[float, Iterable[float]] = 0.01,
@@ -1614,11 +1611,8 @@ def spaced_heatmap2(
         quadmesh, for use in colorbar plotting etc.
     """
 
-    fig = ax.figure
     if pcolormesh_args is None:
         pcolormesh_args = {}
-    if cbar_args is None:
-        cbar_args = {}
 
     # Argument checking and pre-processing
     if row_clusters is None and col_clusters is None:
@@ -1889,10 +1883,7 @@ def spaced_heatmap2(
             np.concatenate(x_ticklabels), ha="center", rotation=xticklabel_rotation
         )
 
-    new_cbar_args = deepcopy(cbar_args)
-    new_cbar_args["mappable"] = qm
-
-    return new_cbar_args
+    return qm
 
 
 def index_to_labels(index):
@@ -1908,18 +1899,11 @@ def heatmap2(
     pcolormesh_args=None,
     xticklabels: Union[bool, List[str]] = None,
     xticklabel_rotation=90,
-    xlabel: Optional[str] = None,
     yticklabels: Union[bool, List[str]] = None,
-    ylabel: Optional[str] = None,
-    cbar_args: Optional[Dict] = None,
-    add_colorbar=True,
-    title: Optional[str] = None,
 ) -> Dict:
 
     if pcolormesh_args is None:
         pcolormesh_args = {}
-    if cbar_args is None:
-        cbar_args = {}
 
     qm = ax.pcolormesh(df, **pcolormesh_args)
 
@@ -1939,15 +1923,13 @@ def heatmap2(
         ax.set_yticks(np.arange(0, df.shape[0]) + 0.5)
         ax.set_yticklabels(yticklabels, va="center")
 
-    cbar_args["mappable"] = qm
-
-    return cbar_args
+    return qm
 
 
 def adjust_coords(
     coords: Union[np.ndarray, pd.Series],
     spacing_group_ids: np.ndarray,
-    spacer_size: Union[float, List[float]],
+    spacer_sizes: Union[float, List[float]],
     right_open: bool = True,
 ) -> np.ndarray:
     """Adjust data coordinates to account for spacers
@@ -1957,7 +1939,7 @@ def adjust_coords(
     Args:
         coords: x or y coordinates, for a plot with unit size elements. May be numerical or categorical. Categorical coordinates are translated to unit size coordinates.
         spacing_group_ids: spacing group indicators, one per element, eg [1, 1, 1, 2, 2, 2]
-        spacer_size: in percentage of Axes
+        spacer_sizes: in percentage of Axes
 
     Returns:
         Adjusted coordinates \in [0, 1]
@@ -1986,12 +1968,12 @@ def adjust_coords(
     idx = np.searchsorted(thresholds, coords, side)
 
     # if a scalar spacer_size is given, convert to array of spacers
-    if isinstance(spacer_size, float):
-        spacer_size = np.repeat(spacer_size, len(thresholds))
-    total_spacer_size = np.sum(spacer_size)
+    if isinstance(spacer_sizes, float):
+        spacer_sizes = np.repeat(spacer_sizes, len(thresholds))
+    total_spacer_size = np.sum(spacer_sizes)
     # We look up the spacer value to be added to coords from the cumsum of spacers
     # starting with 0 spacer for elements before the first spacer
-    spacer_size_cumsum = np.insert(np.cumsum(spacer_size), 0, 0)
+    spacer_size_cumsum = np.insert(np.cumsum(spacer_sizes), 0, 0)
 
     # Scale coordinates
     scaled_coords = (
@@ -2067,7 +2049,7 @@ def label_groups(
     # in this case, the axis limits of the direction axis must be set to 0, 1
     # otherwise, they are set to (0, len(group_ids))
     if spacer_size:
-        coords = co.plotting.adjust_coords(mids, group_ids, spacer_size=spacer_size)
+        coords = co.plotting.adjust_coords(mids, group_ids, spacer_sizes=spacer_size)
         if x:
             ax.set_ylim(0, 1)
         else:
@@ -2120,7 +2102,7 @@ def frame_groups(
     ax: Axes,
     direction: str,
     colors: Optional[Union[Iterable, Dict, str, Tuple[float]]] = None,
-    spacer_size: Optional[Union[float, List[float]]] = None,
+    spacer_sizes: Optional[Union[float, List[float]]] = None,
     origin=(0, 0),
     size=1,
     add_labels: bool = False,
@@ -2139,7 +2121,7 @@ def frame_groups(
     Args:
         ax: single Axes
         group_ids: array of group ids
-        spacer_size: if given, coordinates are adjusted for spacers between the groups
+        spacer_sizes: if given, coordinates are adjusted for spacers between the groups
         direction: axis along which to place the patches ('x' or 'y')
         origin: origin of first rectangle patch
         colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
@@ -2172,25 +2154,25 @@ def frame_groups(
 
     # if spacers are used, axis limits along the directional axis must be set to (0, 1)
     # in the other case, one will usually want (0, len(group_ids))
-    ax.set(**{f"{direction}lim": (0, 1) if spacer_size else (0, len(group_ids))})
+    ax.set(**{f"{direction}lim": (0, 1) if spacer_sizes else (0, len(group_ids))})
 
     # Get starts and ends of the patches, adjusting for spacers if necessary
-    if spacer_size:
+    if spacer_sizes:
         adjust_bounds = adjust_coords(
             coords=bounds[:-1],
             spacing_group_ids=group_ids,
-            spacer_size=spacer_size,
+            spacer_sizes=spacer_sizes,
             right_open=True,
         )
         starts = np.insert(adjust_bounds, 0, 0)
     else:
         starts = np.insert(bounds[:-1], 0, 0)
 
-    if spacer_size:
+    if spacer_sizes:
         ends = adjust_coords(
             coords=bounds,
             spacing_group_ids=group_ids,
-            spacer_size=spacer_size,
+            spacer_sizes=spacer_sizes,
             right_open=False,
         )
     else:
@@ -2260,7 +2242,7 @@ def frame_groups(
             ax=ax,
             x=0.5 if direction == "y" else None,
             y=0.5 if direction == "x" else None,
-            spacer_size=spacer_size,
+            spacer_size=spacer_sizes,
             labels=labels,
                 colors=colors if label_colors is None else label_colors,
             **label_groups_kwargs,
