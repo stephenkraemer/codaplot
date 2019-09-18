@@ -1042,7 +1042,8 @@ cross_plot_supply_tasks = dict(
     ),
 )
 cross_plot_adjust_coord_tasks = dict(topbottom=["x"], leftright=["y"])
-cross_plot_align_tasks=('data', 'df', 'arr')
+cross_plot_align_tasks = ("data", "df", "arr")
+
 
 def cross_plot(
     center: Union[List, np.ndarray],
@@ -1085,7 +1086,7 @@ def cross_plot(
     col_spacer_sizes=0.02,
     supply_tasks=cross_plot_supply_tasks,
     adjust_coords_tasks=cross_plot_adjust_coord_tasks,
-        align_args = cross_plot_align_tasks,
+    align_args=cross_plot_align_tasks,
     # aligned_arg_names: Optional[Tuple[str]] = ('df', 'data'),
     # cluster_data = None,
     # col_cluster: Union[bool, int] = False,
@@ -1122,15 +1123,24 @@ def cross_plot(
 
     if legend_args is None:
         legend_args = {}
-    if isinstance(pads_around_center, (int, float)):
+    if default_func_kwargs is None:
+        default_func_kwargs = {}
+    if isinstance(pads_around_center, tuple):
         pads_around_center = [pads_around_center] * 4
     elif pads_around_center is None:
         pads_around_center = [None] * 4
     pads_around_center_d = dict(
-            zip("top right bottom left".split(), pads_around_center)
+        zip("top right bottom left".split(), pads_around_center)
     )
     # replace None sides with empty lists, to allow for iteration
-    top, right, bottom, left = [x if x is not None else [] for x in [top, right, bottom, left]]
+    top, right, bottom, left = [
+        x if x is not None else [] for x in [top, right, bottom, left]
+    ]
+    # center is list, list of list, 1d array or 2d array
+    # convert to 2d array
+    center_arr = np.array(center)
+    if center_arr.ndim == 1:
+        center_arr = center_arr[np.newaxis, :]
 
     if row_order.ndim == 2:
         row_linkage = row_order
@@ -1155,7 +1165,7 @@ def cross_plot(
 
     # add default func and default func kwargs
     for elem in itertools.chain.from_iterable(
-        it for it in [left, top, bottom, right, np.ravel(center)] if it is not None
+        it for it in [left, top, bottom, right, np.ravel(center_arr)] if it is not None
     ):
         if elem.get("_func") is None:
             elem["_func"] = default_func
@@ -1170,7 +1180,7 @@ def cross_plot(
     # fill supplied kwargs
     for name, elems in zip(
         "center topbottom leftright topbottom leftright".split(),
-        [center.flatten(), top, right, bottom, left],
+        [center_arr.flatten(), top, right, bottom, left],
     ):
         for elem in elems:
             for var_name, supply_targets in cross_plot_supply_tasks[name].items():
@@ -1189,20 +1199,19 @@ def cross_plot(
     # align
     if align_args:
         for name, elems in zip(
-                "center  topbottom leftright topbottom leftright".split(),
-                [center.flatten(), top, right, bottom, left],
+            "center  topbottom leftright topbottom leftright".split(),
+            [center_arr.flatten(), top, right, bottom, left],
         ):
-            if name == 'center':
+            if name == "center":
                 df_2d_slice = row_idx, col_idx
                 arr_2d_slice = np.ix_(row_idx, col_idx)
                 df_1d_slice = arr_1d_slice = None
-            elif name == 'topbottom':
+            elif name == "topbottom":
                 df_2d_slice = arr_2d_slice = slice(None), col_idx
                 df_1d_slice = arr_1d_slice = col_idx
             else:  # name == 'leftright':
                 df_2d_slice = arr_2d_slice = row_idx, slice(None)
                 df_1d_slice = arr_1d_slice = row_idx
-
 
             for elem in elems:
                 for align_target in align_args:
@@ -1212,22 +1221,19 @@ def cross_plot(
                             elem[align_target] = val.iloc[df_2d_slice]
                         elif isinstance(val, np.ndarray) and val.ndim == 2:
                             elem[align_target] = val[arr_2d_slice]
-                        elif name == 'center':
-                            raise ValueError('Dont know how to align')
+                        elif name == "center":
+                            raise ValueError("Dont know how to align")
                         elif isinstance(val, pd.Series):
                             elem[align_target] = val.iloc[df_1d_slice]
                         elif isinstance(val, np.ndarray) and val.ndim == 1:
                             elem[align_target] = val[arr_1d_slice]
                         else:
-                            raise ValueError('Dont know how to align')
-
-
-
+                            raise ValueError("Dont know how to align")
 
     # adjust coords
     for name, elems in zip(
         "topbottom leftright topbottom leftright topbottom leftright".split(),
-        [center.flatten(), center.flatten(), top, right, bottom, left],
+        [center_arr.flatten(), center_arr.flatten(), top, right, bottom, left],
     ):
         if name == "topbottom":
             adjust_coords_args = dict(
@@ -1302,12 +1308,6 @@ def cross_plot(
             return 0
         else:
             return len(x)
-
-    # center is list, list of list, 1d array or 2d array
-    # convert to 2d array
-    center_arr = np.array(center)
-    if center_arr.ndim == 1:
-        center_arr = center_arr[np.newaxis, :]
 
     # configure for margin ticklabels if requested
     if center_margin_ticklabels:
@@ -1509,7 +1509,6 @@ def index_list_np_or_pd(o, idx):
 
 def test_cross_plot():
 
-    global_spacer_size = 0.06
     rng = np.random.RandomState(1234)
     row_clusters = np.array([2, 1, 1, 2, 3, 3, 2, 2, 3, 1, 2])
     col_clusters = np.array([2, 1, 2, 3, 1, 3, 1, 1, 2, 3, 1])
@@ -1549,25 +1548,25 @@ def test_cross_plot():
                         _name="ae1",
                         guide_title="1",
                         df=df.iloc[row_order, col_order],
-                        pcolormesh_args=dict(cmap="RdBu_r"),
+                        cmap="RdBu_r",
                     ),
                     dict(
                         _name="ae2",
                         guide_title="2",
                         df=df.iloc[row_order, col_order] * 10,
-                        pcolormesh_args=dict(cmap="YlOrBr"),
+                        cmap="YlOrBr",
                     ),
                 ],
                 [
                     dict(
                         guide_title="3",
                         df=df.iloc[row_order, col_order] * 5,
-                        pcolormesh_args=dict(cmap="RdBu_r"),
+                        cmap="RdBu_r",
                     ),
                     dict(
                         guide_title="3",
                         df=df.iloc[row_order, col_order] * 2,
-                        pcolormesh_args=dict(cmap="viridis"),
+                        cmap="viridis",
                     ),
                 ],
             ]
@@ -1578,7 +1577,7 @@ def test_cross_plot():
                 guide_title="Anno1",
                 df=pd.DataFrame({"anno1": col_clusters}).T.iloc[:, col_order],
                 is_categorical=True,
-                pcolormesh_args=dict(cmap="Set1"),
+                cmap="Set1",
                 guide_args=dict(),
             ),
             dict(df=pd.DataFrame({"values": np.arange(11)}).T, guide_title="anno2"),
@@ -1645,143 +1644,174 @@ def test_cross_plot():
 
 def test_cross_plot_aligned():
 
-# %%
+    # %%
     rng = np.random.RandomState(1234)
     row_clusters = np.array([2, 1, 1, 2, 3, 3, 2, 2, 3, 1, 2])
     col_clusters = np.array([2, 1, 2, 3, 1, 3, 1, 1, 2, 3, 1])
     df = (
         pd.DataFrame(rng.randn(11, 11))
-            .add(row_clusters * 2, axis=0)
-            .add(col_clusters * 4, axis=1)
+        .add(row_clusters * 2, axis=0)
+        .add(col_clusters * 4, axis=1)
     )
     row_linkage = linkage(df)
     col_linkage = linkage(df.T)
 
-    @anno_axes(loc='right')
+    @anno_axes(loc="right")
     def spaced_barplot2(df, spacing_group_ids, spacer_sizes, ax):
         ax.barh(
-                y = adjust_coords(np.arange(0, df.shape[0]) + 0.5,
-                                  spacing_group_ids=spacing_group_ids,
-                                  spacer_sizes=spacer_sizes
-                                  ),
-
-                width = df.sum(axis=1),
-                # TODO: height not calculated automatically
-                height = 0.05,
-                color = "gray",
+            y=adjust_coords(
+                np.arange(0, df.shape[0]) + 0.5,
+                spacing_group_ids=spacing_group_ids,
+                spacer_sizes=spacer_sizes,
+            ),
+            width=df.sum(axis=1),
+            # TODO: height not calculated automatically
+            height=0.05,
+            color="gray",
         )
 
-    @anno_axes(loc='right')
+    @anno_axes(loc="right")
     def spaced_barplot3(df, y, ax):
         ax.barh(
-                y=y,
-                width = df.sum(axis=1),
-                # TODO: height not calculated automatically
-                height = 0.05,
-                color = "gray",
+            y=y,
+            width=df.sum(axis=1),
+            # TODO: height not calculated automatically
+            height=0.05,
+            color="gray",
         )
-
 
     figsize = (20 / 2.54, 20 / 2.54)
     figsize_ratio = figsize[0] / figsize[1]
     res, plot_array = cross_plot(
-            figsize=figsize,
-            constrained_layout=False,
-            layout_pads=dict(h_pad=0, w_pad=0, hspace=0.03, wspace=0.03),
-            center_margin_ticklabels=True,
-            center_col_pad=(0.25 / figsize_ratio, "rel"),
-            center_row_pad=(0.25, "rel"),
-            pads_around_center=[
-                (0.2 / 2.54, "abs"),
-                (1 / 2.54, "abs"),
-                (1 / 2.54, "abs"),
-                (0.2 / 2.54, "abs"),
-            ],
-            legend_args=dict(xpad_in=0.2, guide_titles=None),
-            legend_extent=["center"],
-            legend_axes_selectors=["ae1", "ae2", "ae3", (4, 1)],
-            row_dendrogram=True,
-            col_dendrogram=True,
-            row_order=row_linkage,
-            col_order=col_linkage,
-            row_spacing_group_ids=pd.Series(row_clusters),
-            col_spacing_group_ids=pd.Series(col_clusters),
-            row_spacer_sizes=[0.2, 0.1],
-            col_spacer_sizes=[0.1, 0.2],
-            default_func=co.plotting.heatmap3,
-            default_func_kwargs=dict(
-                    guide_args=dict(shrink=0.4, aspect=4), xticklabel_rotation=90
+        figsize=figsize,
+        constrained_layout=False,
+        layout_pads=dict(h_pad=0, w_pad=0, hspace=0.03, wspace=0.03),
+        center_margin_ticklabels=True,
+        center_col_pad=(0.25 / figsize_ratio, "rel"),
+        center_row_pad=(0.25, "rel"),
+        pads_around_center=[
+            (0.2 / 2.54, "abs"),
+            (1 / 2.54, "abs"),
+            (1 / 2.54, "abs"),
+            (0.2 / 2.54, "abs"),
+        ],
+        legend_args=dict(xpad_in=0.2, guide_titles=None),
+        legend_extent=["center"],
+        legend_axes_selectors=["ae1", "ae2", "ae3", (4, 1)],
+        row_dendrogram=True,
+        col_dendrogram=True,
+        row_order=row_linkage,
+        col_order=col_linkage,
+        row_spacing_group_ids=pd.Series(row_clusters),
+        col_spacing_group_ids=pd.Series(col_clusters),
+        row_spacer_sizes=[0.2, 0.1],
+        col_spacer_sizes=[0.1, 0.2],
+        default_func=co.plotting.heatmap3,
+        default_func_kwargs=dict(
+            guide_args=dict(shrink=0.4, aspect=4), xticklabel_rotation=90
+        ),
+        center=np.array(
+            [
+                [
+                    dict(_name="ae1", guide_title="1", df=df, cmap="RdBu_r"),
+                    dict(_name="ae2", guide_title="2", df=df, cmap="YlOrBr"),
+                ],
+                [
+                    dict(guide_title="3", df=df, cmap="RdBu_r"),
+                    dict(guide_title="3", df=df, cmap="viridis"),
+                ],
+            ]
+        ),
+        top=[
+            dict(
+                _name="ae3",
+                guide_title="Anno1",
+                df=pd.DataFrame({"anno1": col_clusters}).T,
+                is_categorical=True,
+                cmap="Set1",
+                guide_args=dict(),
             ),
-            center=np.array(
-                    [
-                        [
-                            dict(
-                                    _name="ae1",
-                                    guide_title="1",
-                                    df=df,
-                                    pcolormesh_args=dict(cmap="RdBu_r"),
-                            ),
-                            dict(
-                                    _name="ae2",
-                                    guide_title="2",
-                                    df=df,
-                                    pcolormesh_args=dict(cmap="YlOrBr"),
-                            ),
-                        ],
-                        [
-                            dict(
-                                    guide_title="3",
-                                    df=df,
-                                    pcolormesh_args=dict(cmap="RdBu_r"),
-                            ),
-                            dict(
-                                    guide_title="3",
-                                    df=df,
-                                    pcolormesh_args=dict(cmap="viridis"),
-                            ),
-                        ],
-                    ]
+            dict(df=pd.DataFrame({"values": col_clusters}).T, guide_title="anno2"),
+        ],
+        top_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
+        left=[
+            dict(
+                df=pd.DataFrame({"anno2": pd.Series(row_clusters).astype(str)}),
+                guide_title="Anno3",
             ),
-            top=[
-                dict(
-                        _name="ae3",
-                        guide_title="Anno1",
-                        df=pd.DataFrame({"anno1": col_clusters}).T,
-                        is_categorical=True,
-                        pcolormesh_args=dict(cmap="Set1"),
-                        guide_args=dict(),
-                ),
-                dict(df=pd.DataFrame({"values": col_clusters}).T, guide_title="anno2"),
-            ],
-            top_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
-            left=[
-                dict(
-                        df=pd.DataFrame(
-                                {"anno2": pd.Series(row_clusters).astype(str)}
-                        ),
-                        guide_title="Anno3",
-                ),
-                dict(
-                        _func=anno_axes(loc="left", prune_all=True)(co.plotting.frame_groups),
-                        # group_ids=row_clusters[row_order],
-                        direction="y",
-                        colors=dict(zip([1, 2, 3], sns.color_palette("Set1", 3))),
-                        linewidth=2,
-                        add_labels=True,
-                        labels=["1", "2", "3"],
-                        label_colors=None,
-                        label_groups_kwargs=dict(rotation=0),
-                ),
-            ],
-            left_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
-            right=[
-                dict(_func=spaced_barplot2, df=df),
-                dict(_func=spaced_barplot3, y=np.arange(df.shape[1]) + 0.5, df=df)
-            ],
-            right_sizes=[(2 / 2.54, "abs"), (2 / 2.54, 'abs')],
+            dict(
+                _func=anno_axes(loc="left", prune_all=True)(co.plotting.frame_groups),
+                # group_ids=row_clusters[row_order],
+                direction="y",
+                colors=dict(zip([1, 2, 3], sns.color_palette("Set1", 3))),
+                linewidth=2,
+                add_labels=True,
+                labels=["1", "2", "3"],
+                label_colors=None,
+                label_groups_kwargs=dict(rotation=0),
+            ),
+        ],
+        left_sizes=[(1 / 2.54, "abs"), (1 / 2.54, "abs")],
+        right=[
+            dict(_func=spaced_barplot2, df=df),
+            dict(_func=spaced_barplot3, y=np.arange(df.shape[1]) + 0.5, df=df),
+        ],
+        right_sizes=[(2 / 2.54, "abs"), (2 / 2.54, "abs")],
     )
     res["fig"].savefig("/home/stephen/temp/test.pdf")
-# %%
+
+
+def test_simple_anno_heatmap():
+
+    rng = np.random.RandomState(1234)
+    row_clusters = pd.Series(np.array([2, 1, 1, 2, 3, 3, 2, 2, 3, 1, 2]))
+    col_clusters = pd.Series(np.array([2, 1, 2, 3, 1, 3, 1, 1, 2, 3, 1]))
+    df = (
+        pd.DataFrame(rng.randn(11, 11))
+        .add(row_clusters * 2, axis=0)
+        .add(col_clusters * 4, axis=1)
+    )
+    row_linkage = linkage(df)
+    col_linkage = linkage(df.T)
+
+    mpl.rcParams["legend.frameon"] = False
+
+    with mpl.rc_context({"legend.title_fontsize": 7, "legend.fontsize": 7}):
+        cross_plot(
+            center=[{"df": df, "cmap": "RdBu_r", 'guide_title': '% Meth.'}],
+            center_margin_ticklabels=True,
+            pads_around_center=(0.2 / 2.54, "abs"),
+            figsize=(15 / 2.54, 10 / 2.54),
+            constrained_layout=False,
+            layout_pads=dict(wspace=0.05, hspace=0.05),
+            top=[
+                {
+                    "df": pd.DataFrame({"col clusters": col_clusters}).T,
+                    "cmap": "Set1",
+                    "guide_title": "Col cluster",
+                    "is_categorical": True,
+                }
+            ],
+            top_sizes=[(0.5 / 2.54, "abs")],
+            left=[
+                {
+                    "df": pd.DataFrame({"row clusters": row_clusters}),
+                    "cmap": "Set2",
+                    "guide_title": "Row cluster",
+                    "is_categorical": True,
+                }
+            ],
+            left_sizes=[(0.5 / 2.54, "abs")],
+            row_order=row_linkage,
+            col_order=col_linkage,
+            row_spacing_group_ids=row_clusters,
+            col_spacing_group_ids=col_clusters,
+            row_spacer_sizes=0.05,
+            col_spacer_sizes=0.05,
+            col_dendrogram=True,
+            row_dendrogram=dict(colors='Set2'),
+            default_func_kwargs=dict(guide_args=dict(shrink=0.3, aspect=8)),
+        )
 
 
 def spacer(ax):

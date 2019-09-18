@@ -94,9 +94,9 @@ class Linkage:
         - cluster ids are assigned to links, not to branches of links
         - links with children in more than one cluster are assigned id -1
         """
+        # TODO: add test
 
         assert self.cluster_ids is not None
-        # TODO: add test
         n_leaves = self.matrix.shape[0] + 1
 
         link_cluster_ids = -2 * np.ones(self.matrix.shape[0])

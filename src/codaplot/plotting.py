@@ -289,7 +289,6 @@ def categorical_heatmap2(
 def heatmap3(
     df: pd.DataFrame,
     ax: Axes,
-    pcolormesh_args=None,
     is_categorical: bool = False,
     categorical_colors: Optional[List] = None,
     xticklabels: Union[bool, List[str]] = None,
@@ -313,6 +312,7 @@ def heatmap3(
     col_spacer_sizes: Union[float, Iterable[float]] = 0.01,
     frame_spaced_elements=False,
     frame_kwargs=None,
+        **kwargs,
 ) -> Dict:
     """General heatmap
 
@@ -322,6 +322,7 @@ def heatmap3(
         ax: heatmap Axes
         xticklabel_colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
         yticklabel_colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+        kwargs: pcolormesh args
 
     Returns:
         Dict with values required for drawing the legend
@@ -332,10 +333,10 @@ def heatmap3(
     else:
         guide_args_copy = deepcopy(guide_args)
 
-    if pcolormesh_args is None:
+    if kwargs is None:
         pcolormesh_args = {}
     else:
-        pcolormesh_args = deepcopy(pcolormesh_args)
+        pcolormesh_args = deepcopy(kwargs)
 
     if not df.dtypes.unique().shape[0] == 1:
         raise ValueError("All columns must have the same dtype")
@@ -999,7 +1000,22 @@ class CutDendrogram:
         point_params: Optional[Dict] = None,
         min_cluster_size: Optional[int] = None,
         min_height: str = "auto",
+            colors: Union[str, List, Dict] = 'Set1',
+            no_member_color: [Tuple[int], str] = 'black'
     ):
+        """
+
+        Args:
+            show_cluster_points:
+            point_params:
+            min_cluster_size:
+            min_height:
+            colors: either name of cmap, list of color specs or dict cluster_id -> color spec; should not contain cluster id -1 (no membership), this is handled by no_member_color
+            no_member_color: color for links which connect clusters (which are not a member in a single cluster)
+
+        Returns:
+
+        """
 
         if not self._args_processed:
             self._process_args()
@@ -1010,9 +1026,30 @@ class CutDendrogram:
             min_height = self._linkage_estimate_min_height()
         if min_cluster_size is None:
             min_cluster_size = self.n_leaves * 0.02
-        link_colors = pd.Series(self.link_cluster_ids).map(
-            CMAP_DICT["cluster_id_to_color"]
-        )
+
+        # Annotate each link with its color
+        # 1. we want a dict cluster_id -> color spec
+        sorted_unique_cluster_ids = np.setdiff1d(np.unique(self.link_cluster_ids), [-1])
+        n_clusters = len(sorted_unique_cluster_ids)
+        if isinstance(colors, dict):
+            # assert that colors dict contains all cluster ids and nothing else
+            assert np.all(np.sort(list(colors.keys())) == sorted_unique_cluster_ids)
+            clusterid_color_d = colors
+        elif isinstance(colors, str):
+            clusterid_color_d = dict(zip(
+                    sorted_unique_cluster_ids,
+                    sns.color_palette(colors, n_clusters)
+            ))
+        elif isinstance(colors, list):
+            assert len(list) == n_clusters
+            clusterid_color_d = dict(zip(sorted_unique_cluster_ids, colors))
+        else:
+            raise TypeError('colors has inappropriate type')
+        # 2. links without cluster id (annotate with id -1) get no_member_color
+        clusterid_color_d[-1] = no_member_color
+        # 3. map link_cluster_ids to their colors using the color dict
+        link_colors = pd.Series(self.link_cluster_ids).map(clusterid_color_d)
+
         # cluster_ids_ser, link_colors = linkage_get_link_cluster_ids(Z, cluster_ids_ser)
         # ys = []
         # _linkage_get_child_y_coords(Z, ys, Z.shape[0] * 2, 3)
@@ -1185,7 +1222,9 @@ class CutDendrogram:
 def cut_dendrogram(
     linkage_mat: np.ndarray,
     cluster_ids_data_order: pd.Series,
-    ax: Axes,
+        ax: Axes,
+        colors: Union[str, List, Dict] = 'Set1',
+        no_member_color: [Tuple[int], str] = 'black',
     spacing_groups: Optional[np.ndarray] = None,
     spacer_size: float = 0.02,
     pretty: bool = True,
@@ -1213,6 +1252,8 @@ def cut_dendrogram(
             point_params=point_params,
             min_cluster_size=min_cluster_size,
             min_height=min_height,
+            colors = colors,
+                no_member_color=no_member_color,
         )
 
 
