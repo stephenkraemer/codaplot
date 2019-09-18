@@ -274,6 +274,7 @@ def get_plot_id_array(arr, none_repr=""):
         # return at most 10 chars, right aligned
         if len(s) > max_chars:
             s = s[0 : max_chars // 2] + ".." + s[-max_chars // 2 :]
+        # noinspection PyStringFormat
         return f"{{:>{max_chars}}}".format(s)
 
     return np.vectorize(format_object_strings)(arr)
@@ -1045,6 +1046,7 @@ cross_plot_adjust_coord_tasks = dict(topbottom=["x"], leftright=["y"])
 cross_plot_align_tasks = ("data", "df", "arr")
 
 
+# noinspection PyDefaultArgument
 def cross_plot(
     center: Union[List, np.ndarray],
     center_row_sizes=None,
@@ -1159,8 +1161,10 @@ def cross_plot(
         col_idx = col_order
 
     if align_args:
-        row_spacing_group_ids = index_list_np_or_pd(row_spacing_group_ids, row_idx)
-        col_spacing_group_ids = index_list_np_or_pd(col_spacing_group_ids, col_idx)
+        if row_spacing_group_ids is not None:
+            row_spacing_group_ids = index_list_np_or_pd(row_spacing_group_ids, row_idx)
+        if col_spacing_group_ids is not None:
+            col_spacing_group_ids = index_list_np_or_pd(col_spacing_group_ids, col_idx)
         # spacer sizes are not aligned
 
     # add default func and default func kwargs
@@ -1253,13 +1257,26 @@ def cross_plot(
                             elem[adjust_target], **adjust_coords_args
                         )
 
+    cut_dendrogram_defaults = dict(
+            stop_at_cluster_level=False,
+            min_height=0,
+            min_cluster_size=0,
+    )
     # add dendrograms to left / top
     if isinstance(col_dendrogram, dict) or col_dendrogram:
         if not isinstance(col_dendrogram, dict):
             col_dendrogram = {}
         else:
             col_dendrogram = deepcopy(col_dendrogram)
+        col_dendrogram = tz.merge(cut_dendrogram_defaults, col_dendrogram)
         col_dendrogram["orientation"] = "vertical"
+        # if no cluster ids are specified, use col_spacing_groups (may be None)
+        if 'cluster_ids_data_order' not in col_dendrogram:
+            col_dendrogram['cluster_ids_data_order'] = col_spacing_group_ids
+        # if cluster ids are specified, align them if alignment mode is on
+        elif col_dendrogram['cluster_ids_data_order'] is not None and align_args:
+            col_dendrogram['cluster_ids_data_order'] = col_dendrogram['cluster_ids_data_order'][col_idx] 
+            
         assert (
             col_order.ndim == 2
         ), "col order not linkage mat, but dendrogram requested"
@@ -1267,11 +1284,7 @@ def cross_plot(
             dict(
                 _func=co.plotting.cut_dendrogram,
                 linkage_mat=col_order,
-                cluster_ids_data_order=col_spacing_group_ids,
                 spacing_groups=col_spacing_group_ids,
-                stop_at_cluster_level=False,
-                min_height=0,
-                min_cluster_size=0,
                 spacer_size=col_spacer_sizes,
                 **col_dendrogram,
             )
@@ -1283,6 +1296,13 @@ def cross_plot(
             row_dendrogram = {}
         else:
             row_dendrogram = deepcopy(row_dendrogram)
+        row_dendrogram = tz.merge(cut_dendrogram_defaults, row_dendrogram)
+        # if no cluster ids are specified, use row_spacing_groups (may be None)
+        if 'cluster_ids_data_order' not in row_dendrogram:
+            row_dendrogram['cluster_ids_data_order'] = row_spacing_group_ids
+        # if cluster ids are specified, align them if alignment mode is on
+        elif align_args:
+            row_dendrogram['cluster_ids_data_order'] = row_dendrogram['cluster_ids_data_order'][row_idx] 
         row_dendrogram["orientation"] = "horizontal"
         assert (
             row_order.ndim == 2
@@ -1291,12 +1311,8 @@ def cross_plot(
             dict(
                 _func=co.plotting.cut_dendrogram,
                 linkage_mat=row_order,
-                cluster_ids_data_order=row_spacing_group_ids,
-                stop_at_cluster_level=False,
                 spacing_groups=row_spacing_group_ids,
-                min_height=0,
                 spacer_size=row_spacer_sizes,
-                min_cluster_size=0,
                 **row_dendrogram,
             )
         ] + (left if left else [])
@@ -1778,28 +1794,30 @@ def test_simple_anno_heatmap():
 
     with mpl.rc_context({"legend.title_fontsize": 7, "legend.fontsize": 7}):
         cross_plot(
-            center=[{"df": df, "cmap": "RdBu_r", 'guide_title': '% Meth.'}],
+            center=[dict(df=df, cmap="RdBu_r", guide_title="% Meth.", edgecolor='white')],
             center_margin_ticklabels=True,
             pads_around_center=(0.2 / 2.54, "abs"),
             figsize=(15 / 2.54, 10 / 2.54),
             constrained_layout=False,
             layout_pads=dict(wspace=0.05, hspace=0.05),
             top=[
-                {
-                    "df": pd.DataFrame({"col clusters": col_clusters}).T,
-                    "cmap": "Set1",
-                    "guide_title": "Col cluster",
-                    "is_categorical": True,
-                }
+                dict(
+                    df=pd.DataFrame({"col clusters": col_clusters}).T,
+                    cmap="Set1",
+                    guide_title="Col cluster",
+                    is_categorical=True,
+                        edgecolor='white',
+                )
             ],
             top_sizes=[(0.5 / 2.54, "abs")],
             left=[
-                {
-                    "df": pd.DataFrame({"row clusters": row_clusters}),
-                    "cmap": "Set2",
-                    "guide_title": "Row cluster",
-                    "is_categorical": True,
-                }
+                dict(
+                    df=pd.DataFrame({"row clusters": row_clusters}),
+                    cmap="Set2",
+                    guide_title="Row cluster",
+                    is_categorical=True,
+                        edgecolor='white1'
+                )
             ],
             left_sizes=[(0.5 / 2.54, "abs")],
             row_order=row_linkage,
@@ -1808,8 +1826,8 @@ def test_simple_anno_heatmap():
             col_spacing_group_ids=col_clusters,
             row_spacer_sizes=0.05,
             col_spacer_sizes=0.05,
-            col_dendrogram=True,
-            row_dendrogram=dict(colors='Set2'),
+            col_dendrogram=dict(cluster_ids_data_order=None, base_color='darkgray'),
+            row_dendrogram=dict(colors="Set2", min_cluster_size=4, base_color=(.2, .2, .2)),
             default_func_kwargs=dict(guide_args=dict(shrink=0.3, aspect=8)),
         )
 

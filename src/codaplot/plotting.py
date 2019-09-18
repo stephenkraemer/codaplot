@@ -294,11 +294,11 @@ def heatmap3(
     xticklabels: Union[bool, List[str]] = None,
     xticklabel_rotation=90,
     xticklabel_colors: Optional[Union[Iterable, Dict]] = None,
-        xticklabel_side = 'bottom',
+    xticklabel_side="bottom",
     xlabel: Optional[str] = None,
     yticklabels: Union[bool, List[str]] = None,
     yticklabel_colors: Optional[Union[Iterable, Dict]] = None,
-        yticklabel_side = 'right',
+    yticklabel_side="right",
     ylabel: Optional[str] = None,
     show_guide=False,
     guide_args: Optional[Dict] = None,
@@ -312,7 +312,7 @@ def heatmap3(
     col_spacer_sizes: Union[float, Iterable[float]] = 0.01,
     frame_spaced_elements=False,
     frame_kwargs=None,
-        **kwargs,
+    **kwargs,
 ) -> Dict:
     """General heatmap
 
@@ -379,27 +379,27 @@ def heatmap3(
     else:
         # normal heatmap
         qm = heatmap2(**shared_args)
-    
-    guide_args_copy['mappable'] = qm
+
+    guide_args_copy["mappable"] = qm
 
     # Axis and tick labels
     if xticklabels:
-        if xticklabel_side == 'bottom':
+        if xticklabel_side == "bottom":
             ax.tick_params(labelbottom=True, labeltop=False)
-        elif xticklabel_side == 'top':
+        elif xticklabel_side == "top":
             ax.tick_params(labelbottom=False, labeltop=True)
         else:
-            raise ValueError('Unknown xticklabel_side')
+            raise ValueError("Unknown xticklabel_side")
     else:
         ax.tick_params(labelbottom=False, labeltop=False)
 
     if yticklabels:
-        if yticklabel_side == 'right':
+        if yticklabel_side == "right":
             ax.tick_params(labelright=True, labelleft=False)
-        elif yticklabel_side == 'left':
+        elif yticklabel_side == "left":
             ax.tick_params(labelright=False, labelleft=True)
         else:
-            raise ValueError('Unknown yticklabel_side')
+            raise ValueError("Unknown yticklabel_side")
     else:
         ax.tick_params(labelright=False, labelleft=False)
 
@@ -412,7 +412,7 @@ def heatmap3(
     if xlabel:
         ax.set_xlabel(xlabel)
     if ylabel:
-        if yticklabel_side == 'right':
+        if yticklabel_side == "right":
             ax.yaxis.set_label_position("right")
         else:
             ax.yaxis.set_label_position("left")
@@ -426,19 +426,19 @@ def heatmap3(
 
     # add colorbar for continuous data (if requested)
     if not is_categorical and show_guide:
-        cb = ax.figure.colorbar(guide_args_copy['mappable'], ax=ax, **guide_args_copy)
+        cb = ax.figure.colorbar(guide_args_copy["mappable"], ax=ax, **guide_args_copy)
         cb.outline.set_linewidth(0)
         cb.ax.tick_params(length=0, which="both", axis="both")
 
     # Done with continous data, return the result
     if not is_categorical:
         # return guide_args_copy, it will be used as legend spec, therefore add title
-        guide_args_copy['title'] = guide_title
+        guide_args_copy["title"] = guide_title
         return guide_args_copy
 
     # This is a cateogrical heatmap, take care of the legend
     # Unlike fig.colorbar, Legend takes a title arg
-    guide_args_copy['title'] = guide_title
+    guide_args_copy["title"] = guide_title
 
     # Legend with proxy artists
     # noinspection PyUnboundLocalVariable
@@ -944,8 +944,8 @@ class CutDendrogram:
     """Plot dendrogram with link filtering, coloring and downsampling"""
 
     Z: np.ndarray
-    cluster_ids_data_order: pd.Series
     ax: Axes
+    cluster_ids_data_order: Optional[pd.Series] = None
     # spacing groups do not need to match cluster ids, eg a spacing group may
     # contain multiple clusters
     # in data order
@@ -957,7 +957,7 @@ class CutDendrogram:
     def __post_init__(self):
         self._args_processed = False
 
-    def plot_links_until_clusters(self):
+    def plot_links_until_clusters(self, color='black'):
 
         if not self._args_processed:
             self._process_args()
@@ -988,9 +988,9 @@ class CutDendrogram:
                 y["ylow_right"] = 0
 
             if self.orientation == "horizontal":
-                self.ax.plot(y, x, color="black")
+                self.ax.plot(y, x, color=color)
             else:
-                self.ax.plot(x, y, color="black")
+                self.ax.plot(x, y, color=color)
 
         self._plot_post_processing()
 
@@ -1000,8 +1000,8 @@ class CutDendrogram:
         point_params: Optional[Dict] = None,
         min_cluster_size: Optional[int] = None,
         min_height: str = "auto",
-            colors: Union[str, List, Dict] = 'Set1',
-            no_member_color: [Tuple[int], str] = 'black'
+        colors: Union[str, List, Dict] = "Set1",
+        no_member_color: [Tuple[int], str] = "black",
     ):
         """
 
@@ -1036,15 +1036,14 @@ class CutDendrogram:
             assert np.all(np.sort(list(colors.keys())) == sorted_unique_cluster_ids)
             clusterid_color_d = colors
         elif isinstance(colors, str):
-            clusterid_color_d = dict(zip(
-                    sorted_unique_cluster_ids,
-                    sns.color_palette(colors, n_clusters)
-            ))
+            clusterid_color_d = dict(
+                zip(sorted_unique_cluster_ids, sns.color_palette(colors, n_clusters))
+            )
         elif isinstance(colors, list):
             assert len(list) == n_clusters
             clusterid_color_d = dict(zip(sorted_unique_cluster_ids, colors))
         else:
-            raise TypeError('colors has inappropriate type')
+            raise TypeError("colors has inappropriate type")
         # 2. links without cluster id (annotate with id -1) get no_member_color
         clusterid_color_d[-1] = no_member_color
         # 3. map link_cluster_ids to their colors using the color dict
@@ -1129,16 +1128,30 @@ class CutDendrogram:
 
         self._plot_post_processing()
 
+    def plot_all_links(self, color='black'):
+        if not self._args_processed:
+            self._process_args()
+        for i in range(self.Z.shape[0]):
+            x = self.xcoords.loc[i, :].copy()
+            y = self.ycoords.loc[i, :].copy()
+            if self.orientation == "vertical":
+                self.ax.plot(x, y, color=color)
+            else:
+                self.ax.plot(y, x, color=color)
+        self._plot_post_processing()
+
     def _process_args(self):
         self.n_leaves = self.Z.shape[0] + 1
-        linkage_mat = Linkage(
-            self.Z,
-            cluster_ids=ClusterIDs(self.cluster_ids_data_order.to_frame("clustering1")),
-        )
-        self.link_cluster_ids = linkage_mat.get_link_cluster_ids("clustering1")
+        if self.cluster_ids_data_order is not None:
+            cluster_ids = ClusterIDs(self.cluster_ids_data_order.to_frame("clustering1"))
+        else:
+            cluster_ids = None
+        linkage_mat = Linkage(self.Z, cluster_ids=cluster_ids)
         self.Z_df = linkage_mat.df
-        self.Z_df["cluster_ids"] = self.link_cluster_ids
         self.xcoords, self.ycoords = self._linkage_get_coord_dfs()
+        if self.cluster_ids_data_order is not None:
+            self.link_cluster_ids = linkage_mat.get_link_cluster_ids("clustering1")
+            self.Z_df["cluster_ids"] = self.link_cluster_ids
 
         assert self.orientation in ["horizontal", "vertical"]
 
@@ -1222,9 +1235,9 @@ class CutDendrogram:
 def cut_dendrogram(
     linkage_mat: np.ndarray,
     cluster_ids_data_order: pd.Series,
-        ax: Axes,
-        colors: Union[str, List, Dict] = 'Set1',
-        no_member_color: [Tuple[int], str] = 'black',
+    ax: Axes,
+    colors: Union[str, List, Dict] = "Set1",
+    base_color: [Tuple[int], str] = "black",
     spacing_groups: Optional[np.ndarray] = None,
     spacer_size: float = 0.02,
     pretty: bool = True,
@@ -1244,16 +1257,18 @@ def cut_dendrogram(
         spacing_groups=spacing_groups,
         spacer_size=spacer_size,
     )
-    if stop_at_cluster_level:
-        cut_dendrogram.plot_links_until_clusters()
+    if cluster_ids_data_order is None:
+        cut_dendrogram.plot_all_links(color=base_color)
+    elif stop_at_cluster_level:
+        cut_dendrogram.plot_links_until_clusters(color=base_color)
     else:
         cut_dendrogram.plot_links_with_cluster_inspection(
             show_cluster_points=show_cluster_points,
             point_params=point_params,
             min_cluster_size=min_cluster_size,
             min_height=min_height,
-            colors = colors,
-                no_member_color=no_member_color,
+            colors=colors,
+            no_member_color=base_color,
         )
 
 
@@ -2038,7 +2053,7 @@ def label_groups(
     y: Optional[float] = None,
     spacer_size: Optional[Union[float, List[float]]] = None,
     labels: Optional[Union[Dict, Iterable]] = None,
-        colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
+    colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
     **kwargs,
 ):
     """Add text labels in the middle of stretches of group ids
@@ -2106,12 +2121,14 @@ def label_groups(
     # Place along direction without fixed value (x or y will be None)
     for final_label, coord, final_color in zip(final_labels, coords, final_colors):
         # Final color supersedes constan color in kwargs, if its present
-        used_color = kwargs.pop('color', None) if final_color is None else final_color
+        used_color = kwargs.pop("color", None) if final_color is None else final_color
         t = (coord, y) if y else (x, coord)
         ax.text(*t, final_label, color=used_color, **kwargs)
 
 
-def get_list_of_stretch_annos(stretch_ids: Iterable, annos: Optional[Union[Iterable, Dict]]) -> np.ndarray:
+def get_list_of_stretch_annos(
+    stretch_ids: Iterable, annos: Optional[Union[Iterable, Dict]]
+) -> np.ndarray:
     """Create array with one annotation value per stretch
 
     Args:
@@ -2285,6 +2302,6 @@ def frame_groups(
             y=0.5 if direction == "x" else None,
             spacer_size=spacer_sizes,
             labels=labels,
-                colors=colors if label_colors is None else label_colors,
+            colors=colors if label_colors is None else label_colors,
             **label_groups_kwargs,
         )
