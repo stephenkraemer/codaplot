@@ -426,7 +426,7 @@ def heatmap3(
 
     # add colorbar for continuous data (if requested)
     if not is_categorical and show_guide:
-        cb = ax.figure.colorbar(guide_args_copy["mappable"], ax=ax, **guide_args_copy)
+        cb = ax.figure.colorbar(ax=ax, **guide_args_copy)
         cb.outline.set_linewidth(0)
         cb.ax.tick_params(length=0, which="both", axis="both")
 

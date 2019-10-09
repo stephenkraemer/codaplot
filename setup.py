@@ -32,7 +32,7 @@ setup(
             # currently needs private fixed version, still need to submit PR
             'dynamicTreeCut',
             # only for python 3.6, improve this
-            'dataclasses',
+            # 'dataclasses',
             'numpy',
             'numba',
             'scipy',
