@@ -286,7 +286,7 @@ def categorical_heatmap2(
     return {"handles": patches, "labels": levels, **legend_args}
 
 
-def heatmap3(
+def heatmap(
     df: pd.DataFrame,
     ax: Axes,
     is_categorical: bool = False,
@@ -429,6 +429,9 @@ def heatmap3(
         cb = ax.figure.colorbar(ax=ax, **guide_args_copy)
         cb.outline.set_linewidth(0)
         cb.ax.tick_params(length=0, which="both", axis="both")
+        if guide_title is not None:
+            cb.set_label(guide_title)
+
 
     # Done with continous data, return the result
     if not is_categorical:
@@ -609,7 +612,7 @@ class MidpointNormalize(mpl.colors.Normalize):
 # - document
 #   - cbar is added to ax
 #   - if labels are not given, take them from the dataframe
-def heatmap(
+def heatmap_depr(
     df: pd.DataFrame,
     ax: Axes,
     fig: Figure,
@@ -1287,7 +1290,7 @@ def grouped_rows_heatmap(
     if sort:
         levels = np.sort(levels)
     agg_df = agg_df.loc[levels, :]
-    heatmap(df=agg_df, ax=ax, fig=fig, cmap=cmap, **kwargs)
+    heatmap_depr(df=agg_df, ax=ax, fig=fig, cmap=cmap, **kwargs)
 
     # xticks = np.arange(0.5, df.shape[1])
     # xticklabels = df.columns.values
@@ -2167,6 +2170,7 @@ def frame_groups(
     labels: Optional[Union[Dict, Iterable]] = None,
     label_groups_kwargs: Optional[Dict] = None,
     label_colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
+    axis_off: bool = True,
     **kwargs,
 ) -> None:
     """Frame groups of elements
@@ -2188,8 +2192,12 @@ def frame_groups(
         add_labels: if True, call label_groups(..., labels, **label_groups_kwargs)
         labels: passed to label_groups
         label_groups_kwargs: passed to label_groups
+        axis_off: if True, remove spines and turn of ticks and ticklabels
     """
     # TODO: the edges in the non-directional axis are only half visible because axis limits are set to (0, 1), but the middle of the lines is placed on 0 or 1 resp.
+
+    if axis_off:
+        ax.axis('off')
 
     bounds, mids, values = co.plotting.find_stretches2(group_ids)
 

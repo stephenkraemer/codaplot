@@ -15,7 +15,7 @@ from scipy.cluster.hierarchy import linkage, leaves_list
 
 from codaplot.dynamic_grid import GridManager, GridElement, Spacer, FacetedGridElement
 from codaplot.plotting import (
-    categorical_heatmap, dendrogram_wrapper, heatmap, simple_line,
+    categorical_heatmap, dendrogram_wrapper, heatmap_depr, simple_line,
     cluster_size_plot, col_agg_plot, row_group_agg_plot,
     grouped_rows_violin,
     grouped_rows_line_collections,
@@ -372,7 +372,7 @@ class ClusteredDataGrid:
 class Heatmap(ClusteredDataGridElement):
     align_vars = ['df']
     supply_vars = {'df': 'main_df'}
-    plotter = staticmethod(heatmap)
+    plotter = staticmethod(heatmap_depr)
 
 class CategoricalHeatmap(ClusteredDataGridElement):
     align_vars = ['df']

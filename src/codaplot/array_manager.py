@@ -19,7 +19,7 @@ import seaborn as sns
 import toolz as tz
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from scipy.cluster.hierarchy import leaves_list
+from scipy.cluster.hierarchy import leaves_list, linkage
 
 import codaplot as co
 from codaplot.plotting import adjust_coords
@@ -295,7 +295,6 @@ def compute_gridspec_ratios(sizes: np.ndarray, total_size_in: float) -> np.ndarr
     return heights
 
 
-
 def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1) -> None:
     """Pack Legends and colorbars into ax
 
@@ -333,7 +332,6 @@ def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1) ->
     place_guides(
         ax=ax, placement_df=guide_placement_params_df, xpad_in=xpad_in, ypad_in=ypad_in
     )
-
 
 
 def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
@@ -404,11 +402,13 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
 # *** Place guides
 
 
-def place_guides(ax: Axes, placement_df: pd.DataFrame, xpad_in=0.2, ypad_in=0.2 / 2.54) -> None:
+def place_guides(
+    ax: Axes, placement_df: pd.DataFrame, xpad_in=0.2, ypad_in=0.2 / 2.54
+) -> None:
     """Pack guides into Axes
 
     If constrained_layout is enabled, the Axes may be shrunk. This happens after
-    this function was applied, and may bring the guides to close together, or even
+    this function was applied, and may bring the guides too close together, or even
     make them overlap. This can be adjusted for by increasing xpad_in and ypad_in, which
     also become shrinked by constrained_layout.
 
@@ -479,7 +479,6 @@ def _add_legend(ax, curr_x, curr_y, row_ser):
     ax.add_artist(l)
 
 
-
 def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
     """Add cbar to ax (as inset axes)
 
@@ -488,7 +487,10 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
     fig: Figure = ax.figure
     cbar_ax: Axes
     ax_width_in, ax_height_in = get_axes_dim_in(ax)
-    fontdict = {"fontsize": mpl.rcParams["legend.title_fontsize"], "verticalalignment": "top"}
+    fontdict = {
+        "fontsize": mpl.rcParams["legend.title_fontsize"],
+        "verticalalignment": "top",
+    }
 
     if row_ser["title"]:
         # What would be more idiomatic code? This seems suboptimal
@@ -575,6 +577,7 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
 
 # helpers
 
+
 def get_axes_dim_in(ax):
     transform = ax.figure.dpi_scale_trans.inverted()
     bbox = ax.get_window_extent().transformed(transform)
@@ -583,28 +586,28 @@ def get_axes_dim_in(ax):
 
 
 cross_plot_supply_tasks_d = dict(
-        center=dict(
-                row_spacing_group_ids=["row_spacing_group_ids"],
-                row_spacer_sizes=["row_spacer_sizes"],
-                col_spacing_group_ids=["col_spacing_group_ids"],
-                col_spacer_sizes=["col_spacer_sizes"],
-        ),
-        leftright=dict(
-                row_spacing_group_ids=[
-                    "row_spacing_group_ids",
-                    "spacing_group_ids",
-                    "group_ids",
-                ],
-                row_spacer_sizes=["row_spacer_sizes", "spacer_sizes"],
-        ),
-        topbottom=dict(
-                col_spacing_group_ids=[
-                    "col_spacing_group_ids",
-                    "spacing_group_ids",
-                    "group_ids",
-                ],
-                col_spacer_sizes=["col_spacer_sizes", "spacer_sizes"],
-        ),
+    center=dict(
+        row_spacing_group_ids=["row_spacing_group_ids"],
+        row_spacer_sizes=["row_spacer_sizes"],
+        col_spacing_group_ids=["col_spacing_group_ids"],
+        col_spacer_sizes=["col_spacer_sizes"],
+    ),
+    leftright=dict(
+        row_spacing_group_ids=[
+            "row_spacing_group_ids",
+            "spacing_group_ids",
+            "group_ids",
+        ],
+        row_spacer_sizes=["row_spacer_sizes", "spacer_sizes"],
+    ),
+    topbottom=dict(
+        col_spacing_group_ids=[
+            "col_spacing_group_ids",
+            "spacing_group_ids",
+            "group_ids",
+        ],
+        col_spacer_sizes=["col_spacer_sizes", "spacer_sizes"],
+    ),
 )
 cross_plot_adjust_coord_tasks_d = dict(topbottom=["x"], leftright=["y"])
 cross_plot_align_tasks = ("data", "df", "arr")
@@ -613,204 +616,216 @@ Array1DLike = Union[List, pd.Series, np.ndarray]
 
 # noinspection PyDefaultArgument
 def cross_plot(
-    center: Union[List, np.ndarray],
-    center_row_sizes: Optional[List[Tuple[float, str]], ...] = None,
-    center_col_sizes: Optional[List[Tuple[float, str]], ...] = None,
+    # main panel
+    center_plots: Union[List, np.ndarray],
+    center_row_sizes: Optional[List[Tuple[float, str]]] = None,
+    center_col_sizes: Optional[List[Tuple[float, str]]] = None,
     center_row_pad: Tuple[float, str] = (0.05, "rel"),
     center_col_pad: Tuple[float, str] = (0.05, "rel"),
-    center_margin_ticklabels: bool = False,
+    # ticklabels
     xticklabels: Optional[Union[List[str], bool]] = None,
     yticklabels: Optional[Union[List[str], bool]] = None,
+    center_margin_ticklabels: bool = False,
+    # Clustering, partitioning and dendrograms
+    row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
+    row_linkage: Union[bool, Dict, np.ndarray] = False,
+    row_partitioning: Union[bool, Dict] = False,
+    row_dendrogram: Optional[Dict] = None,
+    row_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
+    col_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
+    col_linkage: Union[bool, Dict, np.ndarray] = False,
+    col_partitioning: Union[bool, Dict] = False,
+    col_dendrogram: Optional[Dict] = None,
+    col_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
+    # spacing
+    row_spacing_group_ids: Optional[Array1DLike] = None,
+    row_spacer_sizes: Union[float, Array1DLike] = 0.02,
+    col_spacing_group_ids: Optional[Array1DLike] = None,
+    col_spacer_sizes: Union[float, Array1DLike] = 0.02,
+    # Annotation panels
+    top_plots: Optional[Iterable[Dict]] = None,
+    top_row_sizes: Optional[List[Tuple[float, str]]] = None,
+    left_plots: Optional[Iterable[Dict]] = None,
+    left_col_sizes: Optional[List[Tuple[float, str]]] = None,
+    bottom_plots: Optional[Iterable[Dict]] = None,
+    bottom_row_sizes: Optional[List[Tuple[float, str]]] = None,
+    right_plots: Optional[Iterable[Dict]] = None,
+    right_row_sizes: Optional[List[Tuple[float, str]]] = None,
+    # optional legend axes
     legend_side: str = "right",
-    legend_extent: Tuple[str, ...] = ("center",),  # select from 'top, 'bottom', 'center'
+    legend_extent: Tuple[str, ...] = (
+        "center",
+    ),  # select from 'top, 'bottom', 'center'
     legend_args: Optional[Dict] = None,
     legend_axes_selectors: Optional[List[Union[str, Tuple[int, int]]]] = None,
-    legend_size: Tuple[float, str] = (1, "rel"),
+    legend_size: Tuple[float, str] = (0.3, "rel"),
     legend_pad: Tuple[float, str] = (0.2, "abs"),
-    pads_around_center: Optional[List[Tuple[float], ...]] = None,
+    # plotting args
     figsize: Tuple[float, float] = (5, 5),
     constrained_layout: bool = True,
     layout_pads: Optional[Dict] = None,
-    top: Optional[Iterable[Dict]] = None,
-    top_sizes: Optional[List[Tuple[float, str]], ...] = None,
-    left: Optional[Iterable[Dict]] = None,
-    left_sizes: Optional[List[Tuple[float, str]], ...] = None,
-    bottom: Optional[Iterable[Dict]] = None,
-    bottom_sizes: Optional[List[Tuple[float, str]], ...] = None,
-    right: Optional[Iterable[Dict]] = None,
-    right_sizes: Optional[List[Tuple[float, str]], ...] = None,
-    row_dendrogram: Optional[Dict] = None,
-    row_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
-    col_dendrogram: Optional[Dict] = None,
-    col_dendrogram_size: Tuple[float, str] =(1 / 2.54, "abs"),
-    row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
-    col_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
-    default_func: Callable = co.plotting.heatmap3,
-    default_func_kwargs: Optional[Dict] = None,
-    row_spacing_group_ids: Array1DLike = None,
-    row_spacer_sizes: Union[float, Array1DLike] = 0.02,
-    col_spacing_group_ids: Array1DLike = None,
-    col_spacer_sizes: Union[float, Array1DLike] = 0.02,
+    pads_around_center: Optional[List[Tuple[float]]] = None,
+    # default plotting function
+    default_plotting_func: Callable = co.plotting.heatmap,
+    default_plotting_func_kwargs: Optional[Dict] = None,
+    # automatic alignment, spacing-adjustment and data distribution
     supply_tasks: Optional[Dict] = cross_plot_supply_tasks_d,
     adjust_coords_tasks: Optional[Dict] = cross_plot_adjust_coord_tasks_d,
     align_args: Optional[Tuple[str, ...]] = cross_plot_align_tasks,
-    # aligned_arg_names: Optional[Tuple[str]] = ('df', 'data'),
-    # cluster_data = None,
-    # col_cluster: Union[bool, int] = False,
-    # col_cluster_metric = 'euclidean',
-    # col_cluster_method = 'average',
-    # row_cluster: Union[bool, int] = False,
-    # row_cluster_metric = 'euclidean',
-    # row_cluster_method = 'average',
 ):
+    # noinspection PyUnresolvedReferences
     """
-
-    Parameters
-    ----------
-    center: Union[List, np.ndarray]
-        1d or 2d array of center plots, eg. heatmaps or scatterplots drawn
-        in a grid
-    center_row_sizes: optionally, one or more size spec tuples
-        if one size spec tuple and several rows, all rows have the same size
-        defaults to (1, 'rel')
-    center_col_sizes: optionally, one or more size spec tuples
-        if one size spec tuple and several rows, all rows have the same size
-        defaults to (1, 'rel')
-    center_row_pad: size spec tuple
-        padding between center plot rows
-    center_col_pad: size spec tuple
-        padding between center plot cols
-    center_margin_ticklabels
-        if True, set xticklabel and yticklabel to True at the bottom and left edges of the center plots, and to False elsewhere
-    xticklabels: array like of ticklabels (str) or bool
-        passed on to center plot arg xticklabels
-    yticklabels: array like of ticklabels (str) or bool
-        passed on to center plot arg xticklabels
-    legend_side: one of "right", (not yet implemented)
-        side where legend Axes is created
-    legend_extent: Tuple[str, ...], select from 'top, 'bottom', 'center'
-        legend Axes is created at legend_side, and takes up the space of the given center plot areas, e.g. ('center', 'bottom') will create a legend axes next to the center and bottom plotting areas, while leaving the top plotting area empty
-    legend_args:
-    legend_axes_selectors: list of axes identifiers (name or gridspec coordinate tuple)
-        if not None, guides are only shown for the selected Axes
-    legend_size: size spec tuple
-        legend width
-    legend_pad: size spec tuple
-        padding between legend and center plots
-    pads_around_center: list with one or four size spec tuples
-        If not None, paddings are added around the center plots.
-        If a single pad is given, all paddings are same size.
-        Alternatively, specify for paddings [top, right, bottom, left]
-    figsize
-        required to be able to estimate gridspec width and height ratios,
-        if absolute sizes are requested. Due to the current implementation, figsize also needs to
-        be given if only relative sizes are requested.
-    constrained_layout
-        whether to apply constrained_layout
-        Note that applying constrained layout distorts the Axes placed with
-        absolute height or width, so that the absolute size is no longer guaranteed
-    layout_pads: Optional[Dict] = None
-        passed to fig.set_constrained_layout_pads or to Gridspec otherwise
-    top: Optional[Iterable[Dict]] = None
-        top annotation plot specs
-    top_sizes=None
-        size spec tuples for top annotations, if top contains plot specs, top_sizes must be defined
-    left: Optional[Iterable[Dict]] = None
-    left_sizes=None
-    bottom: Optional[Iterable[Dict]] = None
-    bottom_sizes=None
-    right: Optional[Iterable[Dict]] = None
-    right_sizes=None
-    row_dendrogram: Optional[Union[Dict, bool]] = None
-        if truthy, draw a row dendrogram. If non-empty dict, use dict
-        as kwargs for co.plotting.cut_dendrogram.
-    row_dendrogram_size=(1 / 2.54, "abs")
-    col_dendrogram: Optional[Dict] = None
-        if truthy, draw a col dendrogram. If non-empty dict, use dict
-        as kwargs for the dendrogram function.
-    col_dendrogram_size=(1 / 2.54, "abs")
-    row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None
-        integer index specifying row order for center plots and aligned annotations
-        if all center rows have the same row order, pass one array-like
-        alternatively, specify one row order array(-like) per center row and pass as list of arrays
-    col_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None
-        integer index specifying col order for center plots and aligned annotations
-        if all center cols have the same col order, pass one array-like
-        alternatively, specify one col order array(-like) per center col and pass as list of arrays
-    default_func=co.plotting.heatmap3
-        if the plot spec dict does not contain a '_func' keyword, use the default_func to draw the plot
-    default_func_kwargs: Optional[Dict] = None
-        if the plot is drawn with the default func (user specified or by falling back on the default_func),
-        use these kwargs as defaults arguments (which may be overriden by the plot spec)
-    row_spacing_group_ids: Optional[Union[Array1DLike, List[Array1DLike]]] = None
-        if all center rows have the same row order and spacing spec:
-        integer array-like specifying group membership for plot spacing.
-        spacers are added between rows belonging to the same group.
-        Each ID is expected to be present in a single, consecutive stretch, ie a group id may not
-        occur in multiple places separated by other group ids.
-        if each center row has its own order and grouping, pass list of array-likes (not implemented yet)
-    row_spacer_sizes: Union[float, List[float]] = 0.02
-        float if same spacer size is used between all groups, else List[float] indicating
-        size of spacer between each group. Size is given as fraction of axes width.
-    col_spacing_group_ids=None
-        see row_spacing_group_ids
-    col_spacer_sizes=0.02
-        see row_spacer_sizes
-    supply_tasks=cross_plot_supply_tasks
-    adjust_coords_tasks=cross_plot_adjust_coord_tasks
-    align_args=cross_plot_align_tasks
-
-
-    Spacers between row or column groups
-    ------------------------------------
-
-    **Spacers in coordinate-based plots**
-    - spacers can be automatically introduced into coordinate-based plots, such as  scatter, line or bar plots
-    - this can be used to introduce spacers in coordinate-based center plots (e.g. categorical scatterplots) or to align plots in the annotation panels with their targets (heatmap rows, scatterplot rows for categorical scatterplots) in the presence of spacers
-    - variable names holding x or y coordinate names to be adjusted can be specified globally in adjust_coords_tasks (defaults to cross_plot_adjust_coord_tasks_d) or per plotting spec via the _adjust argument (the latter not yet implemented)
-    - depending on the panel where a given plot is placed, only x or y or both coordinates are adjusted for spacers
-    - spacer are introduced using adjust_coords, with additional args given by adjust_coord_args
-    - Note: currently, adjust_coord_tasks defines tasks in a panel-based manner, this will be changed to a x/y-based task dict
-
-
-    Automatic alignment
-    -------------------
-    - alignment is active if align_args is not None (default: cross_plot_align_tasks, ie alignment is active by default)
-    - if alignment is active, row_spacing_group_ids and col_spacing_group_ids are  automatically aligned using row_order and col_order resp.
-    - alignment is done based on the integer indices in row_order and col_order
-    - Note that row_order and col_order either specify a global order for all center rows and columns, or one order per row or column respectively.
-    - align_args is a list specifying arg names to be always aligned: If a plotting spec contains one of these argument names, its value will be aligned as detailed below.
-    - additionally, function arguments whose value should be aligned can be specified on a per-plot basis using the _align keyword in the plot spec (not yet implemented)
-    - the performed alignment depends on where the plot is drawn
-        - center plots: rows and cols are aligned. Align_args are expected to point to DFs or 2D arrays, otherwise a ValueError is raised.
-        - left/right annotations: rows are aligned. Align_arg values may be 2D array or DataFrame (columns will be left as is) or 1D arrays or Series
-        - top/bottom annotations: columns are aligned. Allowed values: see left/right annotations.
-
-    Passing on cross_plot args to plotting funcs
-    --------------------------------------------
-    cross_plot args can be passed on to plotting funcs according to
-    rules specified in a dict. For an example, see the default rules dict defined in  array_manager.cross_plot_supply_tasks_d
-    This dict specifies rules for the center, left+right and top+bottom plotting areas, indicating which cross_plot arguments should be passed on to plotting functions in these areas, and which arguments in the plotting functions can accept these data.
-    For each area, a dict mapping crossplot args -> one or more plotting function arg names is specified.
-    A crossplot arg is passed on to a plotting function, if this function
-    accepts one of the specified arg names. It is an error if the function accepts several of the possible arg names.
-    The crossplot arg is not passed on, if it is None or if the plotting spec
-    defines a value for the corresponding arg name (i.e. plotting specs
-    have precedence over crossplot arg passing)
-
-
-    Guides
-    ------
-    - all guides are collected into one legend axes at *legend_side*
-    - the size of the legend panel is controlled by *legend_extent*, *legend_size* and *legend_pad*
-    - guides can be
-      - colorbars for ScalarMappables (e.g. for heatmaps, scatterplots with continuous color dimension)
-      - legends for any plot with legend handles and labels
-    - the guides axes is drawn with *add_guides*, and legend_args are passed as kwargs if given
-    - if legend_axes_selectors is given
-       - only show guides for the specified axes
-       - legend_axes selectors may contain names, each name indicating one more plotting axes (several axes may have the same name) or coordinates (as tuple) of axes in the final figure array. If a name points to multiple axes, each axes will still receive a separate legend.
-    """
+    
+        Parameters
+        ----------
+        center_plots: Union[List, np.ndarray]
+            1d or 2d array of center plots, eg. heatmaps or scatterplots drawn
+            in a grid
+        center_row_sizes: optionally, one or more size spec tuples
+            if one size spec tuple and several rows, all rows have the same size
+            defaults to (1, 'rel')
+        center_col_sizes: optionally, one or more size spec tuples
+            if one size spec tuple and several rows, all rows have the same size
+            defaults to (1, 'rel')
+        center_row_pad: size spec tuple
+            padding between center plot rows
+        center_col_pad: size spec tuple
+            padding between center plot cols
+        center_margin_ticklabels
+            if True, set xticklabel and yticklabel to True at the bottom and left edges of the center plots, and to False elsewhere
+        xticklabels: array like of ticklabels (str) or bool
+            passed on to center plot arg xticklabels
+        yticklabels: array like of ticklabels (str) or bool
+            passed on to center plot arg xticklabels
+        legend_side: one of "right", (not yet implemented)
+            side where legend Axes is created
+        legend_extent: Tuple[str, ...], select from 'top, 'bottom', 'center'
+            legend Axes is created at legend_side, and takes up the space of the given center plot areas, e.g. ('center', 'bottom') will create a legend axes next to the center and bottom plotting areas, while leaving the top plotting area empty
+        legend_args:
+        legend_axes_selectors: list of axes identifiers (name or gridspec coordinate tuple)
+            if not None, guides are only shown for the selected Axes
+        legend_size: size spec tuple
+            legend width
+        legend_pad: size spec tuple
+            padding between legend and center plots
+        pads_around_center: list with one or four size spec tuples
+            If not None, paddings are added around the center plots.
+            If a single pad is given, all paddings are same size.
+            Alternatively, specify for paddings [top, right, bottom, left]
+        figsize
+            required to be able to estimate gridspec width and height ratios,
+            if absolute sizes are requested. Due to the current implementation, figsize also needs to
+            be given if only relative sizes are requested.
+        constrained_layout
+            whether to apply constrained_layout
+            Note that applying constrained layout distorts the Axes placed with
+            absolute height or width, so that the absolute size is no longer guaranteed
+        layout_pads: Optional[Dict] = None
+            passed to fig.set_constrained_layout_pads or to Gridspec otherwise
+        top_plots: Optional[Iterable[Dict]] = None
+            top annotation plot specs
+        top_sizes=None
+            size spec tuples for top annotations, if top contains plot specs, top_sizes must be defined
+        left_plots: Optional[Iterable[Dict]] = None
+        left_sizes=None
+        bottom_plots: Optional[Iterable[Dict]] = None
+        bottom_sizes=None
+        right_plots: Optional[Iterable[Dict]] = None
+        right_sizes=None
+        row_dendrogram: Optional[Union[Dict, bool]] = None
+            if truthy, draw a row dendrogram. If non-empty dict, use dict
+            as kwargs for co.plotting.cut_dendrogram.
+        row_dendrogram_size=(1 / 2.54, "abs")
+        col_dendrogram: Optional[Dict] = None
+            if truthy, draw a col dendrogram. If non-empty dict, use dict
+            as kwargs for the dendrogram function.
+        col_dendrogram_size=(1 / 2.54, "abs")
+        row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None
+            integer index specifying row order for center plots and aligned annotations
+            if all center rows have the same row order, pass one array-like
+            alternatively, specify one row order array(-like) per center row and pass as list of arrays
+        col_order: see row_order
+        default_func=co.plotting.heatmap3
+            if the plot spec dict does not contain a '_func' keyword, use the default_func to draw the plot
+        default_plotting_func_kwargs: Optional[Dict] = None
+            if the plot is drawn with the default func (user specified or by falling back on the default_func),
+            use these kwargs as defaults arguments (which may be overriden by the plot spec)
+        row_spacing_group_ids: Optional[Union[Array1DLike, List[Array1DLike]]] = None
+            if all center rows have the same row order and spacing spec:
+            integer array-like specifying group membership for plot spacing.
+            spacers are added between rows belonging to the same group.
+            Each ID is expected to be present in a single, consecutive stretch, ie a group id may not
+            occur in multiple places separated by other group ids.
+            if each center row has its own order and grouping, pass list of array-likes (not implemented yet)
+        row_spacer_sizes: Union[float, List[float]] = 0.02
+            float if same spacer size is used between all groups, else List[float] indicating
+            size of spacer between each group. Size is given as fraction of axes width.
+        col_spacing_group_ids=None
+            see row_spacing_group_ids
+        col_spacer_sizes=0.02
+            see row_spacer_sizes
+        row_linkage: True or dict to trigger clustering, or pass linkage matrix
+            if not a linkage matrix, but truthy and row_order is None, perform hierarchical clustering with scipy.cluster.hierarchy.linkage.
+            Use a dict to pass kwargs to the linkage function.
+        row_partitioning: bool or dict
+            if truthy and row_linkage is available, perform partitioning with dynamicCutTree.cutreeHybrid.
+            Use dict to pass arguments to the partitioning function
+        col_linkage: see row_linkage
+        col_partitioning: see row_partitioning
+        supply_tasks=cross_plot_supply_tasks
+        adjust_coords_tasks=cross_plot_adjust_coord_tasks
+        align_args=cross_plot_align_tasks
+    
+    
+        Spacers between row or column groups
+        ------------------------------------
+    
+        **Spacers in coordinate-based plots**
+        - spacers can be automatically introduced into coordinate-based plots, such as  scatter, line or bar plots
+        - this can be used to introduce spacers in coordinate-based center plots (e.g. categorical scatterplots) or to align plots in the annotation panels with their targets (heatmap rows, scatterplot rows for categorical scatterplots) in the presence of spacers
+        - variable names holding x or y coordinate names to be adjusted can be specified globally in adjust_coords_tasks (defaults to cross_plot_adjust_coord_tasks_d) or per plotting spec via the _adjust argument (the latter not yet implemented)
+        - depending on the panel where a given plot is placed, only x or y or both coordinates are adjusted for spacers
+        - spacer are introduced using adjust_coords, with additional args given by adjust_coord_args
+        - Note: currently, adjust_coord_tasks defines tasks in a panel-based manner, this will be changed to a x/y-based task dict
+    
+    
+        Automatic alignment
+        -------------------
+        - alignment is active if align_args is not None (default: cross_plot_align_tasks, ie alignment is active by default)
+        - if alignment is active, row_spacing_group_ids and col_spacing_group_ids are  automatically aligned using row_order and col_order resp.
+        - alignment is done based on the integer indices in row_order and col_order
+        - Note that row_order and col_order either specify a global order for all center rows and columns, or one order per row or column respectively.
+        - align_args is a list specifying arg names to be always aligned: If a plotting spec contains one of these argument names, its value will be aligned as detailed below.
+        - additionally, function arguments whose value should be aligned can be specified on a per-plot basis using the _align keyword in the plot spec (not yet implemented)
+        - the performed alignment depends on where the plot is drawn
+            - center plots: rows and cols are aligned. Align_args are expected to point to DFs or 2D arrays, otherwise a ValueError is raised.
+            - left/right annotations: rows are aligned. Align_arg values may be 2D array or DataFrame (columns will be left as is) or 1D arrays or Series
+            - top/bottom annotations: columns are aligned. Allowed values: see left/right annotations.
+    
+        Passing on cross_plot args to plotting funcs
+        --------------------------------------------
+        cross_plot args can be passed on to plotting funcs according to
+        rules specified in a dict. For an example, see the default rules dict defined in  array_manager.cross_plot_supply_tasks_d
+        This dict specifies rules for the center, left+right and top+bottom plotting areas, indicating which cross_plot arguments should be passed on to plotting functions in these areas, and which arguments in the plotting functions can accept these data.
+        For each area, a dict mapping crossplot args -> one or more plotting function arg names is specified.
+        A crossplot arg is passed on to a plotting function, if this function
+        accepts one of the specified arg names. It is an error if the function accepts several of the possible arg names.
+        The crossplot arg is not passed on, if it is None or if the plotting spec
+        defines a value for the corresponding arg name (i.e. plotting specs
+        have precedence over crossplot arg passing)
+    
+        Guides
+        ------
+        - all guides are collected into one legend axes at *legend_side*
+        - the size of the legend panel is controlled by *legend_extent*, *legend_size* and *legend_pad*
+        - guides can be
+          - colorbars for ScalarMappables (e.g. for heatmaps, scatterplots with continuous color dimension)
+          - legends for any plot with legend handles and labels
+        - the guides axes is drawn with *add_guides*, and legend_args are passed as kwargs if given
+        - if legend_axes_selectors is given
+           - only show guides for the specified axes
+           - legend_axes selectors may contain names, each name indicating one more plotting axes (several axes may have the same name) or coordinates (as tuple) of axes in the final figure array. If a name points to multiple axes, each axes will still receive a separate legend.
+        """
 
     # Implementation notes
     # --------------------
@@ -821,7 +836,6 @@ def cross_plot(
     # over in arbitrary flattened order and the modified as needed
     # The returned plotting array contains the modified plot specs
 
-
     # Check and process args
 
     # Replace sentinel values with empty mutables
@@ -829,16 +843,20 @@ def cross_plot(
     # empty kwarg dicts
     if legend_args is None:
         legend_args = {}
-    if default_func_kwargs is None:
-        default_func_kwargs = {}
+    if default_plotting_func_kwargs is None:
+        default_plotting_func_kwargs = {}
 
     # replace plotting area=None with empty lists, to allow for iteration
-    top, right, bottom, left = [
-        x if x is not None else [] for x in [top, right, bottom, left]
+    top_plots, right_plots, bottom_plots, left_plots = [
+        x if x is not None else [] for x in [top_plots, right_plots, bottom_plots, left_plots]
     ]
 
     # TODO: breaking change: pads_around_center is now always list
     # We need to create size specs (tuples or None) as dict for [top, right, bottom, left]
+    if not isinstance(pads_around_center, list):
+        raise ValueError(
+            f"pads_around_center must be list of tuples, given was: {pads_around_center}"
+        )
     if pads_around_center is None:
         pads_around_center = [None] * 4
     elif len(pads_around_center) == 1:
@@ -850,7 +868,7 @@ def cross_plot(
 
     # center is list, list of list, 1d array or 2d array
     # convert to 2d array
-    center_arr = np.array(center)
+    center_arr = np.array(center_plots)
     if center_arr.ndim == 1:
         center_arr = center_arr[np.newaxis, :]
     # center plot size specs default to (1, 'rel')
@@ -859,50 +877,95 @@ def cross_plot(
     if center_col_sizes is None:
         center_col_sizes = [(1, "rel")] * center_arr.shape[1]
 
-    # row_order/col_order is either a linkage matrix (2d array) or a 1d array like integer index
-    # if possible, we record both linkage matrix and the corresponding integer index (leaves list), otherwise we only record the index
-    if row_order.ndim == 2:
-        # we have a linkage matrix
-        row_linkage = row_order
+    # # assemble row and col ordering information
+
+    # row and col ordering information is either passed via the row/col_order or
+    # the row/col_linkage args, which may provide a linkage matrix or request computation of it
+    # because a provided/computed linkage matrix defines the row and col order, it is an
+    # error of the col/row_order and col/row_linkage args are both defined
+
+    if isinstance(row_linkage, (dict, np.ndarray)) or row_linkage:
+        if row_order is not None:
+            raise ValueError("row_order and row_linkage may not be specified together")
+    if isinstance(col_linkage, (dict, np.ndarray)) or col_linkage:
+        if col_order is not None:
+            raise ValueError("col_order and col_linkage may not be specified together")
+
+    # ## compute row linkage if necessary
+    # row_linkage is either a bool or dict (to indicate whether hierarchical clustering
+    if isinstance(row_linkage, np.ndarray):
+        # assert that this has the dimensions of a linkage matrix
+        assert row_linkage.ndim == 2
+    elif row_linkage:
+        if not isinstance(row_linkage, dict):
+            row_linkage = {}
+        row_linkage = linkage(center_arr[0, 0]["df"], **row_linkage)
+    # at this point, row_linkage is either a linkage matrix or False
+
+    # if we have a linkage matrix, use it to compute the row idx
+    if isinstance(row_linkage, np.ndarray):
         row_idx = leaves_list(row_linkage)
-    else:
+    # else, use row_order as row_idx if possible
+    elif row_order is not None:
+        # row_order is given as array or Series
         assert row_order.ndim == 1
-        row_linkage = None
         row_idx = row_order
-
-    if col_order.ndim == 2:
-        col_linkage = col_order
-        col_idx = leaves_list(col_linkage)
     else:
-        assert col_order.ndim == 1
-        col_linkage = None
-        col_idx = col_order
+        row_idx = None
 
+    # ## compute col linkage if necessary
+    # col_linkage is either a bool or dict (to indicate whether hierarchical clustering
+    if isinstance(col_linkage, np.ndarray):
+        # assert that this has the dimensions of a linkage matrix
+        assert col_linkage.ndim == 2
+    elif col_linkage:
+        if not isinstance(col_linkage, dict):
+            col_linkage = {}
+        col_linkage = linkage(center_arr[0, 0]["df"].T, **col_linkage)
+    # at this point, col_linkage is either a linkage matrix or False
+
+    # if we have a linkage matrix, use it to compute the col idx
+    if isinstance(col_linkage, np.ndarray):
+        col_idx = leaves_list(col_linkage)
+    # else, use col_order as col_idx if possible
+    elif col_order is not None:
+        # col_order is given as array or Series
+        assert col_order.ndim == 1
+        col_idx = col_order
+    else:
+        col_idx = None
+
+    # Check whether we have any information to align args
+    if col_idx is None and row_idx is None:
+        align_args = False
 
     # if align_args is not None, automatic alignment is active
     # in this case, the spacing group ids are automatically aligned
-    # using row_idx and col_idx resp.
+    # using row_idx and col_idx resp. (if available)
     if align_args:
-        if row_spacing_group_ids is not None:
-            row_spacing_group_ids = index_into_list_np_or_pd(row_spacing_group_ids, row_idx)
-        if col_spacing_group_ids is not None:
-            col_spacing_group_ids = index_into_list_np_or_pd(col_spacing_group_ids, col_idx)
+        if row_idx is not None and row_spacing_group_ids is not None:
+            row_spacing_group_ids = index_into_list_np_or_pd(
+                row_spacing_group_ids, row_idx
+            )
+        if col_idx is not None and col_spacing_group_ids is not None:
+            col_spacing_group_ids = index_into_list_np_or_pd(
+                col_spacing_group_ids, col_idx
+            )
         # spacer sizes are not aligned
-
 
     # add default func and default func kwargs
     # to all plotting spec (from all plotting areas)
     for elem in itertools.chain.from_iterable(
-        it for it in [left, top, bottom, right, np.ravel(center_arr)] if it is not None
+            it for it in [left_plots, top_plots, bottom_plots, right_plots, np.ravel(center_arr)] if it is not None
     ):
         # supply default_func if _func kwarg is not defined
         if elem.get("_func") is None:
-            elem["_func"] = default_func
+            elem["_func"] = default_plotting_func
         # check whether plotting func is default_func (supplied or explicitely defined)
         # if so, provide default arguments where required
-        if elem["_func"] == default_func:
+        if elem["_func"] == default_plotting_func:
             # note: elem edited in place
-            for default_k, default_v in default_func_kwargs.items():
+            for default_k, default_v in default_plotting_func_kwargs.items():
                 # only provide default if the argument is not defined
                 # in the plotting spec dict
                 if default_k in elem:
@@ -914,7 +977,7 @@ def cross_plot(
     # see docstring for details and cross_plot_supply_tasks_d for the default rules
     for name, elems in zip(
         "center topbottom leftright topbottom leftright".split(),
-        [center_arr.flatten(), top, right, bottom, left],
+        [center_arr.flatten(), top_plots, right_plots, bottom_plots, left_plots],
     ):
         for elem in elems:
             for var_name, supply_targets in cross_plot_supply_tasks_d[name].items():
@@ -939,20 +1002,39 @@ def cross_plot(
     if align_args:
         for name, elems in zip(
             "center  topbottom leftright topbottom leftright".split(),
-            [center_arr.flatten(), top, right, bottom, left],
+            [center_arr.flatten(), top_plots, right_plots, bottom_plots, left_plots],
         ):
             # For center plot, always align both rows and columns
             # If the value for a center plot align arg is not 2D, it is an error
             if name == "center":
-                df_2d_slice = row_idx, col_idx
-                arr_2d_slice = np.ix_(row_idx, col_idx)
-                df_1d_slice = arr_1d_slice = None
+                if row_idx is not None and col_idx is not None:
+                    df_2d_slice = row_idx, col_idx
+                    arr_2d_slice = np.ix_(row_idx, col_idx)
+                    df_1d_slice = arr_1d_slice = None
+                elif row_idx is None:
+                    df_2d_slice = slice(None), col_idx
+                    arr_2d_slice = slice(None), col_idx
+                    df_1d_slice = arr_1d_slice = None
+                elif col_idx is None:
+                    df_2d_slice = row_idx, slice(None)
+                    arr_2d_slice = row_idx, slice(None)
+                    df_1d_slice = arr_1d_slice = None
+                else:
+                    # this shouldn't happen, because align_args is set to False in the absence of alignment information
+                    raise RuntimeError('Alignment information is not available, but it should be')
+
             # For top/bottom or left/right plots only align columns or rows respectively
             # Accept either 2D or 1D arrays / Series
             elif name == "topbottom":
+                # we cannot align anything in top/bottom without col_idx
+                if col_idx is None:
+                    continue
                 df_2d_slice = arr_2d_slice = slice(None), col_idx
                 df_1d_slice = arr_1d_slice = col_idx
             else:  # name == 'leftright':
+                # we cannot align anything in left/right without row_idx
+                if row_idx is None:
+                    continue
                 df_2d_slice = arr_2d_slice = row_idx, slice(None)
                 df_1d_slice = arr_1d_slice = row_idx
 
@@ -976,6 +1058,7 @@ def cross_plot(
                         else:
                             raise ValueError("Dont know how to align")
 
+    # add spacers
     # spacers can be introduced into coordinate plots in a manner equivalent to the
     # introduction of spacers in heatmaps
     # this is used to introduce spacers in coordinate-based center plots (e.g. scatter plots)
@@ -987,7 +1070,7 @@ def cross_plot(
     # Currently, adjust_coord_tasks defines tasks in a panel-based manner, this will be changed to a x/y-based task dict
     for name, elems in zip(
         "topbottom leftright topbottom leftright topbottom leftright".split(),
-        [center_arr.flatten(), center_arr.flatten(), top, right, bottom, left],
+        [center_arr.flatten(), center_arr.flatten(), top_plots, right_plots, bottom_plots, left_plots],
     ):
         # for top/bottom plots, only add col spacers
         # for left/right plots, only add row spacers
@@ -1016,9 +1099,7 @@ def cross_plot(
 
     # default args for cut_dendrogram
     cut_dendrogram_defaults = dict(
-            stop_at_cluster_level=False,
-            min_height=0,
-            min_cluster_size=0,
+        stop_at_cluster_level=False, min_height=0, min_cluster_size=0
     )
 
     # add col dendrogram if col_dendrogram is truthy
@@ -1030,25 +1111,27 @@ def cross_plot(
         col_dendrogram = tz.merge(cut_dendrogram_defaults, col_dendrogram)
         col_dendrogram["orientation"] = "vertical"
         # if no cluster ids are specified, use col_spacing_groups (may be None)
-        if 'cluster_ids_data_order' not in col_dendrogram:
-            col_dendrogram['cluster_ids_data_order'] = col_spacing_group_ids
+        if "cluster_ids_data_order" not in col_dendrogram:
+            col_dendrogram["cluster_ids_data_order"] = col_spacing_group_ids
         # if cluster ids are specified, align them if alignment mode is on
-        elif col_dendrogram['cluster_ids_data_order'] is not None and align_args:
-            col_dendrogram['cluster_ids_data_order'] = col_dendrogram['cluster_ids_data_order'][col_idx] 
-            
+        elif col_dendrogram["cluster_ids_data_order"] is not None and align_args:
+            col_dendrogram["cluster_ids_data_order"] = col_dendrogram[
+                "cluster_ids_data_order"
+            ][col_idx]
+
         assert (
-            col_order.ndim == 2
-        ), "col order not linkage mat, but dendrogram requested"
-        top = [
+            col_linkage.ndim == 2
+        ), "col linkage not linkage mat, but dendrogram requested"
+        top_plots = [
             dict(
                 _func=co.plotting.cut_dendrogram,
-                linkage_mat=col_order,
+                linkage_mat=col_linkage,
                 spacing_groups=col_spacing_group_ids,
                 spacer_size=col_spacer_sizes,
                 **col_dendrogram,
             )
-        ] + (top if top else [])
-        top_sizes = [col_dendrogram_size] + (top_sizes if top_sizes else [])
+        ] + (top_plots if top_plots else [])
+        top_row_sizes = [col_dendrogram_size] + (top_row_sizes if top_row_sizes else [])
 
     # add row dendrogram if row_dendrogram is truthy
     if isinstance(row_dendrogram, dict) or row_dendrogram:
@@ -1058,25 +1141,27 @@ def cross_plot(
             row_dendrogram = deepcopy(row_dendrogram)
         row_dendrogram = tz.merge(cut_dendrogram_defaults, row_dendrogram)
         # if no cluster ids are specified, use row_spacing_groups (may be None)
-        if 'cluster_ids_data_order' not in row_dendrogram:
-            row_dendrogram['cluster_ids_data_order'] = row_spacing_group_ids
+        if "cluster_ids_data_order" not in row_dendrogram:
+            row_dendrogram["cluster_ids_data_order"] = row_spacing_group_ids
         # if cluster ids are specified, align them if alignment mode is on
         elif align_args:
-            row_dendrogram['cluster_ids_data_order'] = row_dendrogram['cluster_ids_data_order'][row_idx] 
+            row_dendrogram["cluster_ids_data_order"] = row_dendrogram[
+                "cluster_ids_data_order"
+            ][row_idx]
         row_dendrogram["orientation"] = "horizontal"
         assert (
-            row_order.ndim == 2
-        ), "row order not linkage mat, but dendrogram requested"
-        left = [
+            row_linkage.ndim == 2
+        ), "row linkage not linkage mat, but dendrogram requested"
+        left_plots = [
             dict(
                 _func=co.plotting.cut_dendrogram,
-                linkage_mat=row_order,
+                linkage_mat=row_linkage,
                 spacing_groups=row_spacing_group_ids,
                 spacer_size=row_spacer_sizes,
                 **row_dendrogram,
             )
-        ] + (left if left else [])
-        left_sizes = [row_dendrogram_size] + (left_sizes if left_sizes else [])
+        ] + (left_plots if left_plots else [])
+        left_col_sizes = [row_dendrogram_size] + (left_col_sizes if left_col_sizes else [])
 
     # get array size, init array
     def len_or_none(x):
@@ -1102,30 +1187,30 @@ def cross_plot(
             )
 
     # Construct plot array
-    n_cols = len_or_none(left) + len_or_none(right) + center_arr.shape[1]
-    n_rows = len_or_none(top) + len_or_none(bottom) + center_arr.shape[0]
+    n_cols = len_or_none(left_plots) + len_or_none(right_plots) + center_arr.shape[1]
+    n_rows = len_or_none(top_plots) + len_or_none(bottom_plots) + center_arr.shape[0]
     # Leave space for sizes
     plot_arr = np.empty((n_rows + 1, n_cols + 1), dtype=object)
 
     # add ArrayElements at each side and in center, add sizes into array
-    first_center_row = len(top)
-    first_center_col = len(left)
+    first_center_row = len(top_plots)
+    first_center_col = len(left_plots)
     # last index plus 1
-    last_center_row_p1 = len(top) + center_arr.shape[0]
-    last_center_col_p1 = len(left) + center_arr.shape[1]
+    last_center_row_p1 = len(top_plots) + center_arr.shape[0]
+    last_center_col_p1 = len(left_plots) + center_arr.shape[1]
 
     # Add plots to array
-    if left is not None:
-        plot_arr[first_center_row:last_center_row_p1, :first_center_col] = left
-    if right is not None:
-        plot_arr[first_center_row:last_center_row_p1, last_center_col_p1:-1] = right
-    if top is not None:
+    if left_plots is not None:
+        plot_arr[first_center_row:last_center_row_p1, :first_center_col] = left_plots
+    if right_plots is not None:
+        plot_arr[first_center_row:last_center_row_p1, last_center_col_p1:-1] = right_plots
+    if top_plots is not None:
         plot_arr[:first_center_row, first_center_col:last_center_col_p1] = np.array(
-            top
+            top_plots
         )[:, np.newaxis]
-    if bottom is not None:
+    if bottom_plots is not None:
         plot_arr[last_center_row_p1:-1, first_center_col:last_center_col_p1] = np.array(
-            bottom
+            bottom_plots
         )[:, np.newaxis]
     # add center plots
     plot_arr[
@@ -1135,12 +1220,12 @@ def cross_plot(
     # add size specs
     height_ratios = list(
         itertools.chain.from_iterable(
-            (x for x in [top_sizes, center_row_sizes, bottom_sizes] if x is not None)
+            (x for x in [top_row_sizes, center_row_sizes, bottom_row_sizes] if x is not None)
         )
     ) + [None]
     width_ratios = list(
         itertools.chain.from_iterable(
-            (x for x in [left_sizes, center_col_sizes, right_sizes] if x is not None)
+            (x for x in [left_col_sizes, center_col_sizes, right_row_sizes] if x is not None)
         )
     ) + [None]
     plot_arr[:, -1] = height_ratios
@@ -1263,8 +1348,9 @@ def cross_plot(
     return res, plot_arr
 
 
-def index_into_list_np_or_pd(o: Union[List, pd.Series, pd.DataFrame, np.ndarray],
-                             idx: Array1DLike):
+def index_into_list_np_or_pd(
+    o: Union[List, pd.Series, pd.DataFrame, np.ndarray], idx: Array1DLike
+):
     """Index into object using idx - for list, array, series, dataframe
 
     Args:
