@@ -317,16 +317,26 @@ def heatmap(
     """General heatmap
 
     Args:
-        df: Colors will be assigned to df values in sorting order.
+        df
+            Colors will be assigned to df values in sorting order.
             Columns must have homogeneous types. NA values are not allowed.
-        ax: heatmap Axes
-        xticklabel_colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
-        yticklabel_colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
-        kwargs: pcolormesh args
+        ax
+            heatmap Axes
+        xticklabel_colors
+            either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+        yticklabel_colors
+            either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+        kwargs
+            pcolormesh args
+        annotate: False, 'stretches'
+            'stretches' currently has a bug
 
     Returns:
         Dict with values required for drawing the legend
     """
+
+    if annotate == 'stretches':
+        raise ValueError('annotate == "stretches" currently not working')
 
     if guide_args is None:
         guide_args_copy = {}
@@ -2186,18 +2196,26 @@ def frame_groups(
         spacer_sizes: if given, coordinates are adjusted for spacers between the groups
         direction: axis along which to place the patches ('x' or 'y')
         origin: origin of first rectangle patch
-        colors: either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+        colors
+            *Note*: it seems that colors currently only works with a dict; other possible values may fail, including None
+            either iterable of color specs of same length as number of ticklabels, or a dict label -> color
         size: extent of rectangle patch along the unused axis (constant for all patches)
         **kwargs: passed to mpatches.FancyBboxPatch. Default args: dict((fill = False, boxstyle = mpatches.BoxStyle("Round", pad=0), edgecolor = 'black'). Edgecolor is ignored if colors is passed.
         add_labels: if True, call label_groups(..., labels, **label_groups_kwargs)
         labels: passed to label_groups
         label_groups_kwargs: passed to label_groups
+        label_colors
+            allows defining label colors independent of frame colors (if not given, frame colors
+            will be used as label colors). Not sure if currently functional for all/any arg type.
         axis_off: if True, remove spines and turn of ticks and ticklabels
     """
     # TODO: the edges in the non-directional axis are only half visible because axis limits are set to (0, 1), but the middle of the lines is placed on 0 or 1 resp.
 
     if axis_off:
         ax.axis('off')
+
+    if not isinstance(colors, dict):
+        raise ValueError('Other types than dict for arg "colors" may currently not work, including None')
 
     bounds, mids, values = co.plotting.find_stretches2(group_ids)
 
@@ -2209,7 +2227,7 @@ def frame_groups(
     # We need colors as an iterable, matching the group stretches - or empty
     # If colors is given, edgecolor specification is ignored
     if isinstance(colors, dict):
-        colors = pd.Series(colors)[values].array
+        colors = pd.Series(colors)[values].to_numpy()
     if colors is not None:
         if isinstance(colors, (tuple, str)):
             # can't use np.repeat or tile with tuple elements
