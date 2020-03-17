@@ -1,3 +1,18 @@
+""" Currently: messy collection of plotting functions
+
+Heatmaps
+--------
+
+- different heatmap functions co-exist in this module
+- only one heatmap function should be used: heatmap
+  - both for categorical and numeric heatmaps
+  - both for dense and spaced heatmaps
+  - heatmap internally calls heatmap2 and spaced_heatmap2. these functions should
+    not be public and should not be used directly.
+
+- this module also houses dendrogram functionality (cut dendrogram, spaced dendrogram)
+
+"""
 from typing import List, Optional, Callable, Union, Sequence, Iterable, Dict, Any, Tuple
 
 from dataclasses import dataclass
@@ -1659,30 +1674,55 @@ def spaced_heatmap2(
     Spacer size can be specified for each spacer individually, or with
     one size for all row spacers and one size for all col spacers.
 
-    To control the colormap, specify pcolormesh_args, (cmap, vmin, vmax, norm)
-    if neither vmin+vmax or norm is specified, vmin and vmax are the 0.02 and 0.98 quantiles of the data.
-    to avoid vmin/vmax determination, you can also set vmin=None, vmax=None (eg for a categorical heatmap)
+    Notes
+    -----
+    This functions plots all subheatmaps with individual calls to ax.pcolormesh
+    To guarantee that all subheatmaps have the same color mapping, vmin is set to df.min().min()
+    and vmax is set to df.max().max() if the user does not pass norm, vmin, vmax through
+    pcolormesh_args.
 
-    Args:
-        ax: Axes to plot on
-        df: pd.DataFrame, index and columns will be used for labeling
-        row_clusters: one id per row, specifies which columns to group together. Each group must consist of a single, consecutive stretch of rows. Any dtype is allowed.
-        col_clusters: same as row_clusters
-        row_spacer_size: if float, specifies the size for a single spacer, which will be used for each individual spacer.  If List[float] specifies size for each spacer in order.
-            Size is given as fraction of the Axes width.
-        col_spacer_size: Same as row_spacer_size, size is given as fraction of the Axis height
-        pcolormesh_args: if the colormapping is not specified via either vmin+vmax or norm, the 0.02 and 0.98 percentiles of df will be used as vmin and vmax.
-        frame_spaced_elements: if True, draw a rectangle around each individual
-            heatmap. This is only implemented for row-clusters only at the moment (experimental!) and is ignored in other cases
-        frame_kwargs: passed to patches.Rectangle
 
-    Returns:
-        quadmesh, for use in colorbar plotting etc.
+    Parameters
+    ----------
+    df
+        pd.DataFrame, index and columns will be used for labeling
+    ax
+        Axes to plot on
+    row_clusters
+        one id per row, specifies which columns to group together. Each group must consist of a single, consecutive stretch of rows. Any dtype is allowed.
+    col_clusters
+        same as row_clusters
+    row_spacer_size
+        if float, specifies the size for a single spacer, which will be used for each individual spacer.  If List[float] specifies size for each spacer in order.
+        Size is given as fraction of the Axes width.
+    col_spacer_size
+        Same as row_spacer_size, size is given as fraction of the Axis height
+    pcolormesh_args
+        dict passed to ax.pcolormesh
+    frame_spaced_elements
+        if True, draw a rectangle around each individual
+        heatmap. This is only implemented for row-clusters only at the moment (experimental!) and is ignored in other cases
+    frame_kwargs
+        passed to patches.Rectangle
+
+    Returns
+    -------
+    quadmesh
+        for use in colorbar plotting etc.
     """
+
+    # Troubleshooting
+    # ---------------
+    # - for dataframes with multiple columns and different presence of categories
+    #   (e.g. partitionings with different ranks), larger partitionings can all receive
+    #   the same color if there is a problem with vmin and vmax. For categorical data,
+    #   vmin/vmax should be the minimum and maximum category (the default if vmin/vmax
+    #   are not passed through pcolormesh_args).
 
     if pcolormesh_args is None:
         pcolormesh_args = {}
 
+    # TODO-refactor: these checks should be moved to the mean heatmap function
     # Argument checking and pre-processing
     if row_clusters is None and col_clusters is None:
         raise TypeError("You must specify at least one of {row_cluster, col_cluster}")
@@ -1698,6 +1738,8 @@ def spaced_heatmap2(
         raise TypeError(
             "Cluster ids must be given as array or series, not e.g. DataFrame"
         )
+    if not df.dtypes.unique().shape[0] == 1:
+        raise ValueError("All columns must have the same dtype")
 
     # currently ticklabels must be stored as flat dataframe indices
     # if df has a multiindex, flatten it to get labels usable for plotting
@@ -1818,14 +1860,11 @@ def spaced_heatmap2(
     ax.set_xlim(0, 1)
 
     # Prepare colormapping - all pcolormesh blocks must use the same colormapping
-    # The user can guarantee this by specifying norm or vmin AND vmax in the pcolormesh_args
-    # Otherwise, we determine vmin and vmax as:
-    if not (
-        "norm" in pcolormesh_args
-        or ("vmin" in pcolormesh_args and "vmax" in pcolormesh_args)
-    ):
-        pcolormesh_args["vmin"] = np.quantile(df, 0.02)
-        pcolormesh_args["vmax"] = np.quantile(df, 1 - 0.02)
+    if not "norm" in pcolormesh_args:
+        if not 'vmin' in pcolormesh_args:
+            pcolormesh_args['vmin'] = df.min().min()
+        if not 'vmax' in pcolormesh_args:
+            pcolormesh_args['vmax'] = df.max().max()
 
     # Plot all colormesh blocks, and do some defensive assertions
     col_widths = []  # for asserting equal column width
