@@ -630,12 +630,12 @@ def cross_plot(
     row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
     row_linkage: Union[bool, Dict, np.ndarray] = False,
     row_partitioning: Union[bool, Dict] = False,
-    row_dendrogram: Optional[Dict] = None,
+    row_dendrogram: Optional[bool, Dict] = None,
     row_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
     col_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
     col_linkage: Union[bool, Dict, np.ndarray] = False,
     col_partitioning: Union[bool, Dict] = False,
-    col_dendrogram: Optional[Dict] = None,
+    col_dendrogram: Optional[bool, Dict] = None,
     col_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
     # spacing
     row_spacing_group_ids: Optional[Array1DLike] = None,
@@ -664,7 +664,7 @@ def cross_plot(
     figsize: Tuple[float, float] = (5, 5),
     constrained_layout: bool = True,
     layout_pads: Optional[Dict] = None,
-    pads_around_center: Optional[List[Tuple[float]]] = None,
+    pads_around_center: Optional[List[Tuple[float, str]]] = None,
     # default plotting function
     default_plotting_func: Callable = co.plotting.heatmap,
     default_plotting_func_kwargs: Optional[Dict] = None,
@@ -830,11 +830,10 @@ def cross_plot(
     # Implementation notes
     # --------------------
     # All plots are specified as dicts
-    # Copies of these dicts (TODO!) are modified in place in several
-    # stages of the function
+    # Copies of these dicts are modified in place in several stages of the function.
     # For this purpose, plot elements from all plotting areas are iterated
-    # over in arbitrary flattened order and the modified as needed
-    # The returned plotting array contains the modified plot specs
+    # over in arbitrary flattened order and the modified as needed.
+    # The returned plotting array contains the modified plot specs.
 
     # Check and process args
 
@@ -846,9 +845,11 @@ def cross_plot(
     if default_plotting_func_kwargs is None:
         default_plotting_func_kwargs = {}
 
+    # copy plotting spec dicts
     # replace plotting area=None with empty lists, to allow for iteration
     top_plots, right_plots, bottom_plots, left_plots = [
-        x if x is not None else [] for x in [top_plots, right_plots, bottom_plots, left_plots]
+        deepcopy(x) if x is not None else []
+        for x in [top_plots, right_plots, bottom_plots, left_plots]
     ]
 
     # TODO: breaking change: pads_around_center is now always list
@@ -956,7 +957,15 @@ def cross_plot(
     # add default func and default func kwargs
     # to all plotting spec (from all plotting areas)
     for elem in itertools.chain.from_iterable(
-            it for it in [left_plots, top_plots, bottom_plots, right_plots, np.ravel(center_arr)] if it is not None
+        it
+        for it in [
+            left_plots,
+            top_plots,
+            bottom_plots,
+            right_plots,
+            np.ravel(center_arr),
+        ]
+        if it is not None
     ):
         # supply default_func if _func kwarg is not defined
         if elem.get("_func") is None:
@@ -1021,7 +1030,9 @@ def cross_plot(
                     df_1d_slice = arr_1d_slice = None
                 else:
                     # this shouldn't happen, because align_args is set to False in the absence of alignment information
-                    raise RuntimeError('Alignment information is not available, but it should be')
+                    raise RuntimeError(
+                        "Alignment information is not available, but it should be"
+                    )
 
             # For top/bottom or left/right plots only align columns or rows respectively
             # Accept either 2D or 1D arrays / Series
@@ -1070,7 +1081,14 @@ def cross_plot(
     # Currently, adjust_coord_tasks defines tasks in a panel-based manner, this will be changed to a x/y-based task dict
     for name, elems in zip(
         "topbottom leftright topbottom leftright topbottom leftright".split(),
-        [center_arr.flatten(), center_arr.flatten(), top_plots, right_plots, bottom_plots, left_plots],
+        [
+            center_arr.flatten(),
+            center_arr.flatten(),
+            top_plots,
+            right_plots,
+            bottom_plots,
+            left_plots,
+        ],
     ):
         # for top/bottom plots, only add col spacers
         # for left/right plots, only add row spacers
@@ -1161,7 +1179,9 @@ def cross_plot(
                 **row_dendrogram,
             )
         ] + (left_plots if left_plots else [])
-        left_col_sizes = [row_dendrogram_size] + (left_col_sizes if left_col_sizes else [])
+        left_col_sizes = [row_dendrogram_size] + (
+            left_col_sizes if left_col_sizes else []
+        )
 
     # get array size, init array
     def len_or_none(x):
@@ -1203,7 +1223,9 @@ def cross_plot(
     if left_plots is not None:
         plot_arr[first_center_row:last_center_row_p1, :first_center_col] = left_plots
     if right_plots is not None:
-        plot_arr[first_center_row:last_center_row_p1, last_center_col_p1:-1] = right_plots
+        plot_arr[
+            first_center_row:last_center_row_p1, last_center_col_p1:-1
+        ] = right_plots
     if top_plots is not None:
         plot_arr[:first_center_row, first_center_col:last_center_col_p1] = np.array(
             top_plots
@@ -1220,12 +1242,20 @@ def cross_plot(
     # add size specs
     height_ratios = list(
         itertools.chain.from_iterable(
-            (x for x in [top_row_sizes, center_row_sizes, bottom_row_sizes] if x is not None)
+            (
+                x
+                for x in [top_row_sizes, center_row_sizes, bottom_row_sizes]
+                if x is not None
+            )
         )
     ) + [None]
     width_ratios = list(
         itertools.chain.from_iterable(
-            (x for x in [left_col_sizes, center_col_sizes, right_row_sizes] if x is not None)
+            (
+                x
+                for x in [left_col_sizes, center_col_sizes, right_row_sizes]
+                if x is not None
+            )
         )
     ) + [None]
     plot_arr[:, -1] = height_ratios

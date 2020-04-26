@@ -338,9 +338,9 @@ def heatmap(
         ax
             heatmap Axes
         xticklabel_colors
-            either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+            either iterable of color specs of same length as number of ticklabels, or a dict label -> color. Currenlty does not work with series, just dict.
         yticklabel_colors
-            either iterable of color specs of same length as number of ticklabels, or a dict label -> color
+            either iterable of color specs of same length as number of ticklabels, or a dict label -> color. Currenlty does not work with series, just dict.
         kwargs
             pcolormesh args
         annotate: False, 'stretches'
@@ -348,6 +348,14 @@ def heatmap(
 
     Returns:
         Dict with values required for drawing the legend
+    """
+
+    """
+    Implementation notes
+    - I had to comment out figure.canvas.draw() in color_ticklabels, because this
+      line caused the legend not to be drawn in cross_plot. Haven't understood/investigated
+      yet. If ticklabels are not colored in the future, this would be the first place
+      to troubleshoot.
     """
 
     if annotate == 'stretches':
@@ -379,6 +387,9 @@ def heatmap(
         )
         pcolormesh_args["cmap"] = categorical_colors_listmap
         df = codes_df
+
+    if isinstance(xticklabel_colors, pd.Series) or isinstance(yticklabel_colors, pd.Series):
+        raise ValueError('Ticklabel colors currently only work with dicts')
 
     shared_args = dict(
         df=df,
@@ -505,14 +516,18 @@ def color_ticklabels(axis: str, colors: Union[Iterable, Dict], ax: Axes) -> None
         ax: single Axes
     """
 
+    # Implementation NOTE:
+    # ax.figure.canvas.draw() caused problems when using heatmap with cross_plot
+    # (the legend Axes was not shown - not sure what happened exactly)
+    # I comment this part out for now - why was it necessary?
     axis = [ax.xaxis, ax.yaxis][axis == "y"]
     if isinstance(colors, dict):
-        ax.figure.canvas.draw()
+        # ax.figure.canvas.draw()
         for tick in axis.get_ticklabels():
             tick.set_color(colors[tick.get_text()])
     elif colors is not None:
         # we expect an iterable, with one color per ticklabel
-        ax.figure.canvas.draw()
+        # ax.figure.canvas.draw()
         for tick, tick_color in zip(axis.get_ticklabels(), colors):
             tick.set_color(tick_color)
 
@@ -2069,7 +2084,7 @@ def adjust_coords(
     else:
         numeric_coords = coords
 
-    thresholds, *_ = co.plotting.find_stretches2(spacing_group_ids)
+    thresholds, *_ = find_stretches2(spacing_group_ids)
     thresholds = thresholds[:-1]
 
     side = "right" if right_open else "left"
