@@ -24,6 +24,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 import matplotlib.patches as patches
 import matplotlib.transforms as mtransforms
+from matplotlib.colorbar import Colorbar
 from itertools import product, zip_longest
 import numpy as np
 import pandas as pd
@@ -2385,3 +2386,60 @@ def frame_groups(
             colors=colors if label_colors is None else label_colors,
             **label_groups_kwargs,
         )
+
+
+def style_cbar(
+        cbar: Colorbar,
+        tick_params_kwargs: Optional[Dict]=None,
+        remove_ticks_at_ends=True,
+        ax_margins=(0.5, 0.5),
+        outline_is_visible=False,
+):
+    """
+
+    Make sure that correct ticks are available
+    ( may require fig.canvas.draw() )
+    """
+
+    # use tick params to get white, inward facing ticks (default)
+    tick_params_kwargs_ = dict(
+            color="white",
+            direction="in",
+            which="both",
+            axis="both",
+            left=True, right=True,
+            width=1,
+            length=2
+    )
+    if tick_params_kwargs is not None:
+        tick_params_kwargs_.update(tick_params_kwargs)
+    cbar.ax.tick_params(**tick_params_kwargs_)
+
+    cbar.ax.margins(*ax_margins)
+    cbar.outline.set_visible(outline_is_visible)
+
+    # Remove the first and last tick to avoid "sticky ends" of the colorbar due to
+    # ticks at the very end of the colorbar
+    if remove_ticks_at_ends and not cbar.extend == 'both':
+        if cbar.orientation == 'vertical':
+            ticks = cbar.ax.yaxis.majorTicks
+        else:
+            ticks = cbar.ax.xaxis.majorTicks
+        # ticks[-1].set_visible(False)
+        ticks[0].tick1line.set_visible(False)
+        ticks[0].tick2line.set_visible(False)
+        ticks[-1].tick1line.set_visible(False)
+        ticks[-1].tick2line.set_visible(False)
+
+"""
+def test_cbar_style():
+
+    fig, ax = plt.subplots(1, 1, dpi=180, figsize=(6/2.54, 6/2.54))
+    qm = ax.pcolormesh([[1, 2, 3], [1, 2, 6]], vmin=2, vmax=5)
+    cbar = plt.colorbar(qm, extend='both', shrink=0.5, aspect=5)
+    fig.canvas.draw()
+    style_cbar(cbar)
+"""
+
+
+
