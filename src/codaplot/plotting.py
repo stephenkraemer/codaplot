@@ -487,12 +487,20 @@ def heatmap(
         for c in categorical_colors_listmap.colors
     ]
     if show_guide:
+        # TODO: improve logic
+        guide_args_copy.pop('mappable')
         if guide_ax is not None:
             # noinspection PyUnboundLocalVariable
-            guide_ax.legend(patches, levels, **guide_args_copy)
+            guide_ax.legend(patches, levels, **guide_args_copy,
+                            loc='upper left',
+                            bbox_to_anchor=(1.05, 1),
+                            )
         else:
             # noinspection PyUnboundLocalVariable
-            ax.legend(patches, levels, **guide_args_copy)
+            ax.legend(patches, levels, **guide_args_copy,
+                      loc='upper left',
+                      bbox_to_anchor=(1.05, 1),
+                      )
 
     # Label stretches
     if annotate == "stretches":
