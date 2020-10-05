@@ -1232,8 +1232,23 @@ class CutDendrogram:
             xcoord_axis = "x" if self.orientation == "vertical" else "y"
             self.ax.set(**{f"{xcoord_axis}lim": [0, data_axis_right_lim]})
 
+        # margins
+        # data axis margin should be zero for correct alignment with heatmap
+        # distance axis margin should be sufficient to not cut the top dendrogram link,
+        # so needs to be > 0, because the top dendrogram link is plotted directly
+        # on the axis limit value, and the line is centered at the coordinate
+        # (ie half of the line lies beyond the coordinate)
+
+        # leave distance_axis margin as is for now, it appears to be set correctly automatically
+        if self.orientation == 'horizontal':
+            data_axis = 'y'
+            # distance_axis = 'x'
+        else:
+            data_axis = 'x'
+            # distance_axis = 'y'
+        self.ax.margins(**{data_axis: 0})
+
         if self.pretty:
-            self.ax.margins(0)
             self.ax.set(xticks=[], yticks=[], xticklabels=[], yticklabels=[])
             sns.despine(ax=self.ax, left=True, bottom=True)
 
