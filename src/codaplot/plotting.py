@@ -10,34 +10,35 @@ Heatmaps
   - heatmap internally calls heatmap2 and spaced_heatmap2. these functions should
     not be public and should not be used directly.
 
-- this module also houses dendrogram functionality (cut dendrogram, spaced dendrogram)
+- this module also houses dendrogram functionality
 
 """
-from typing import List, Optional, Callable, Union, Sequence, Iterable, Dict, Any, Tuple
-
-from dataclasses import dataclass
 from copy import deepcopy
-import matplotlib as mpl
-from matplotlib import pyplot as plt, patches as mpatches
-from matplotlib.axes import Axes
-from matplotlib.collections import LineCollection
-from matplotlib.figure import Figure
-import matplotlib.patches as patches
-import matplotlib.transforms as mtransforms
-from matplotlib.colorbar import Colorbar
+from dataclasses import dataclass
 from itertools import product, zip_longest
-import numpy as np
-import pandas as pd
-from pandas.core.dtypes.common import is_numeric_dtype
-from pandas.core.groupby import GroupBy
-import seaborn as sns
-from scipy.cluster.hierarchy import dendrogram, leaves_list
-
-import toolz as tz
+from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
+                    Tuple, Union)
 
 import codaplot as co
+import matplotlib as mpl
+import matplotlib.patches as patches
+import matplotlib.transforms as mtransforms
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import toolz as tz
 from codaplot.cluster_ids import ClusterIDs
 from codaplot.linkage_mat import Linkage
+from matplotlib import patches as mpatches
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
+from matplotlib.colorbar import Colorbar
+from matplotlib.figure import Figure
+from pandas.core.dtypes.common import is_numeric_dtype
+from pandas.core.groupby import GroupBy
+from scipy.cluster.hierarchy import dendrogram, leaves_list
+from typing_extensions import Literal
 
 CMAP_DICT = dict(
     divergent_meth_heatmap=plt.get_cmap("RdBu_r"),
@@ -215,7 +216,7 @@ def categorical_heatmap2(
         legend_args: passed to ax.legend
         heatmap_args: if not None, heatmap will be drawn with co.heatmap
         spaced_heatmap_args: if not None, heatmap will be drawn with co.spaced_heatmap
-    
+
     Returns:
         Dict with values required for drawing the legend
     """
@@ -302,6 +303,124 @@ def categorical_heatmap2(
     return {"handles": patches, "labels": levels, **legend_args}
 
 
+def cbar_change_style_to_inward_white_ticks(
+    cbar: Colorbar,
+    tick_width: int = 1,
+    tick_length: int = 2,
+    tick_params_kwargs: Optional[Dict] = None,
+    remove_ticks_at_ends: Literal["always", "if_on_edge", "never"] = "if_on_edge",
+    outline_is_visible=False,
+):
+    """Change to nicer colorbar aesthetics with good defaults
+
+    Troubleshooting
+    ---------------
+    - Ticks are missing from colorbar
+      - Make sure that correct ticks are available prior to calling this function (may require fig.canvas.draw()).
+
+    Implementation note
+    -------------------
+    - i have not added a call to fig.canvas.draw within this function yet;
+      would there be any reason to avoid this? Doing this within the function
+      may avoid some problems, see Troubleshooting section.
+      - I have had problems with calling fig.canvas.draw at the wrong place before,
+        eg the crossplot legend was missing when I called fig.canvas.draw in color_ticklabels
+
+    Parameters
+    ----------
+    cbar
+        Colorbar, eg returned by plt.colorbar
+    tick_params_kwargs
+        passed to cbar.ax.tick_params
+        overwrites the defaults
+        do not pass width and length, these are controlled by dedicated args
+        tick_width, tick_length
+    tick_width
+        cbar tick width, controlled via ax.tick_params
+    tick_length
+        cbar tick length, controlled via ax.tick_params
+    remove_ticks_at_ends
+        the outmost ticks lead to a 'sticky end' if they are inward facing and lie on the edges of the axis. This cannot really be avoided when using inward facing ticks, and is for example also present in r-ggplot2 colorbars. If 'always', the highest and lowest tick are not plotted to avoid creating sticky ends. If 'if_on_edge' the ticks are only invisible if the ticks lie on the axis edges, ie on the lower and upper axis limit. Ticks are never removed if the colorbar has "extend triangles" at the ends.
+    outline_is_visible
+        whether to draw spines
+
+    """
+
+    assert remove_ticks_at_ends in ["always", "if_on_edge", "never"]
+
+    # use tick params to get white, inward facing ticks (default)
+    tick_params_kwargs_ = dict(
+        color="white",
+        direction="in",
+        which="both",
+        axis="both",
+        left=True,
+        right=True,
+    )
+    if tick_params_kwargs is not None:
+        tick_params_kwargs_.update(tick_params_kwargs)
+        if "length" in tick_params_kwargs or "width" in tick_params_kwargs:
+            print(
+                "WARNING: kwarg length and/or width has been passed through tick_params_kwargs, but these args are ignored."
+            )
+    tick_params_kwargs_["length"] = tick_length
+    tick_params_kwargs_["width"] = tick_width
+    cbar.ax.tick_params(**tick_params_kwargs_)
+
+    cbar.outline.set_visible(outline_is_visible)
+
+    # Remove the first and last tick to avoid "sticky ends" of the colorbar due to
+    # ticks at the very end of the colorbar
+
+    if cbar.orientation == "vertical":
+        ticks_objects = cbar.ax.yaxis.majorTicks
+    else:
+        ticks_objects = cbar.ax.xaxis.majorTicks
+
+    # TODO: this does not handle extension to one side correctly
+    if cbar.extend != "both":
+        if remove_ticks_at_ends == "if_on_edge":
+            ticks_arr = (
+                cbar.ax.get_yticks()
+                if cbar.orientation == "vertical"
+                else cbar.ax.get_xticks()
+            )
+            ticks_axis_limits = (
+                cbar.ax.get_ylim()
+                if cbar.orientation == "vertical"
+                else cbar.ax.get_xlim()
+            )
+            lowest_tick_is_on_axis_limit = np.isclose(
+                ticks_arr[0], ticks_axis_limits[0]
+            )
+            highest_tick_is_on_axis_limit = np.isclose(
+                ticks_arr[-1], ticks_axis_limits[-1]
+            )
+            if lowest_tick_is_on_axis_limit:
+                ticks_objects[0].tick1line.set_visible(False)
+                ticks_objects[0].tick2line.set_visible(False)
+            if highest_tick_is_on_axis_limit:
+                ticks_objects[-1].tick1line.set_visible(False)
+                ticks_objects[-1].tick2line.set_visible(False)
+        elif remove_ticks_at_ends == "always":
+            ticks_objects[0].tick1line.set_visible(False)
+            ticks_objects[0].tick2line.set_visible(False)
+            ticks_objects[-1].tick1line.set_visible(False)
+            ticks_objects[-1].tick2line.set_visible(False)
+
+
+"""
+def test_cbar_style():
+
+    fig, ax = plt.subplots(1, 1, dpi=180, figsize=(6/2.54, 6/2.54))
+    qm = ax.pcolormesh([[1, 2, 3], [1, 2, 6]], vmin=2, vmax=5)
+    cbar = plt.colorbar(qm, shrink=0.5, aspect=5, ticks=[3, 4])
+    fig.canvas.draw()
+    cbar_change_style_to_inward_white_ticks(cbar, remove_ticks_at_ends = 'if_on_edge')
+    
+"""
+
+
 def heatmap(
     df: pd.DataFrame,
     ax: Axes,
@@ -328,6 +447,8 @@ def heatmap(
     col_spacer_sizes: Union[float, Iterable[float]] = 0.01,
     frame_spaced_elements=False,
     frame_kwargs=None,
+    cbar_styling_func=cbar_change_style_to_inward_white_ticks,
+    cbar_styling_func_kwargs: Optional[Dict] = None,
     **kwargs,
 ) -> Dict:
     """General heatmap
@@ -349,17 +470,16 @@ def heatmap(
 
     Returns:
         Dict with values required for drawing the legend
-    """
 
-    """
-    Implementation notes
+    Implementation notes:
     - I had to comment out figure.canvas.draw() in color_ticklabels, because this
       line caused the legend not to be drawn in cross_plot. Haven't understood/investigated
       yet. If ticklabels are not colored in the future, this would be the first place
       to troubleshoot.
+    - I have no added a fig.canvas.draw prior to the cbar styling func call; this may cause new trouble with missing legends in cross_plot down the road, let's see what happens
     """
 
-    if annotate == 'stretches':
+    if annotate == "stretches":
         raise ValueError('annotate == "stretches" currently not working')
 
     if guide_args is None:
@@ -371,6 +491,9 @@ def heatmap(
         pcolormesh_args = {}
     else:
         pcolormesh_args = deepcopy(kwargs)
+
+    if cbar_styling_func_kwargs is None:
+        cbar_styling_func_kwargs = {}
 
     if not df.dtypes.unique().shape[0] == 1:
         raise ValueError("All columns must have the same dtype")
@@ -389,8 +512,10 @@ def heatmap(
         pcolormesh_args["cmap"] = categorical_colors_listmap
         df = codes_df
 
-    if isinstance(xticklabel_colors, pd.Series) or isinstance(yticklabel_colors, pd.Series):
-        raise ValueError('Ticklabel colors currently only work with dicts')
+    if isinstance(xticklabel_colors, pd.Series) or isinstance(
+        yticklabel_colors, pd.Series
+    ):
+        raise ValueError("Ticklabel colors currently only work with dicts")
 
     shared_args = dict(
         df=df,
@@ -464,16 +589,18 @@ def heatmap(
     # add colorbar for continuous data (if requested)
     if not is_categorical and show_guide:
         cb = ax.figure.colorbar(ax=ax, **guide_args_copy)
-        cb.outline.set_linewidth(0)
-        cb.ax.tick_params(length=0, which="both", axis="both")
+        # cb.outline.set_linewidth(0)
+        # cb.ax.tick_params(length=0, which="both", axis="both")
+        ax.figure.canvas.draw()
+        cbar_styling_func(cb, **cbar_styling_func_kwargs)
         if guide_title is not None:
             cb.set_label(guide_title)
-
 
     # Done with continous data, return the result
     if not is_categorical:
         # return guide_args_copy, it will be used as legend spec, therefore add title
         guide_args_copy["title"] = guide_title
+        guide_args_copy["styling_func_kwargs"] = cbar_styling_func_kwargs
         return guide_args_copy
 
     # This is a cateogrical heatmap, take care of the legend
@@ -488,19 +615,25 @@ def heatmap(
     ]
     if show_guide:
         # TODO: improve logic
-        guide_args_copy.pop('mappable')
+        guide_args_copy.pop("mappable")
         if guide_ax is not None:
             # noinspection PyUnboundLocalVariable
-            guide_ax.legend(patches, levels, **guide_args_copy,
-                            loc='upper left',
-                            bbox_to_anchor=(1.05, 1),
-                            )
+            guide_ax.legend(
+                patches,
+                levels,
+                **guide_args_copy,
+                loc="upper left",
+                bbox_to_anchor=(1.05, 1),
+            )
         else:
             # noinspection PyUnboundLocalVariable
-            ax.legend(patches, levels, **guide_args_copy,
-                      loc='upper left',
-                      bbox_to_anchor=(1.05, 1),
-                      )
+            ax.legend(
+                patches,
+                levels,
+                **guide_args_copy,
+                loc="upper left",
+                bbox_to_anchor=(1.05, 1),
+            )
 
     # Label stretches
     if annotate == "stretches":
@@ -517,7 +650,7 @@ def heatmap(
 
 
 def color_ticklabels(axis: str, colors: Union[Iterable, Dict], ax: Axes) -> None:
-    """ Mark tick labels with different colors
+    """Mark tick labels with different colors
 
     Args:
         axis: 'x' or 'y'
@@ -1009,7 +1142,7 @@ class CutDendrogram:
     def __post_init__(self):
         self._args_processed = False
 
-    def plot_links_until_clusters(self, color='black'):
+    def plot_links_until_clusters(self, color="black"):
 
         if not self._args_processed:
             self._process_args()
@@ -1180,7 +1313,7 @@ class CutDendrogram:
 
         self._plot_post_processing()
 
-    def plot_all_links(self, color='black'):
+    def plot_all_links(self, color="black"):
         if not self._args_processed:
             self._process_args()
         for i in range(self.Z.shape[0]):
@@ -1195,7 +1328,9 @@ class CutDendrogram:
     def _process_args(self):
         self.n_leaves = self.Z.shape[0] + 1
         if self.cluster_ids_data_order is not None:
-            cluster_ids = ClusterIDs(self.cluster_ids_data_order.to_frame("clustering1"))
+            cluster_ids = ClusterIDs(
+                self.cluster_ids_data_order.to_frame("clustering1")
+            )
         else:
             cluster_ids = None
         linkage_mat = Linkage(self.Z, cluster_ids=cluster_ids)
@@ -1240,11 +1375,11 @@ class CutDendrogram:
         # (ie half of the line lies beyond the coordinate)
 
         # leave distance_axis margin as is for now, it appears to be set correctly automatically
-        if self.orientation == 'horizontal':
-            data_axis = 'y'
+        if self.orientation == "horizontal":
+            data_axis = "y"
             # distance_axis = 'x'
         else:
-            data_axis = 'x'
+            data_axis = "x"
             # distance_axis = 'y'
         self.ax.margins(**{data_axis: 0})
 
@@ -1441,9 +1576,11 @@ def spaced_heatmap(
         df.columns = [" | ".join(str(s) for s in t) for t in df.columns]
 
     if row_clusters is not None:
-        row_cluster_ids, row_cluster_unique_idx, row_cluster_nelem_per_cluster = np.unique(
-            row_clusters, return_counts=True, return_index=True
-        )
+        (
+            row_cluster_ids,
+            row_cluster_unique_idx,
+            row_cluster_nelem_per_cluster,
+        ) = np.unique(row_clusters, return_counts=True, return_index=True)
         row_cluster_id_order = np.argsort(row_cluster_unique_idx)
         row_cluster_nelem_per_cluster = row_cluster_nelem_per_cluster[
             row_cluster_id_order
@@ -1495,9 +1632,11 @@ def spaced_heatmap(
 
     # see analogous row_spacer code block for comments
     if col_clusters is not None:
-        col_cluster_ids, col_cluster_unique_idx, col_cluster_nelem_per_cluster = np.unique(
-            col_clusters, return_counts=True, return_index=True
-        )
+        (
+            col_cluster_ids,
+            col_cluster_unique_idx,
+            col_cluster_nelem_per_cluster,
+        ) = np.unique(col_clusters, return_counts=True, return_index=True)
         col_cluster_id_order = np.argsort(col_cluster_unique_idx)
         col_cluster_nelem_per_cluster = col_cluster_nelem_per_cluster[
             col_cluster_id_order
@@ -1800,9 +1939,11 @@ def spaced_heatmap2(
         ax.tick_params(labelleft=False)
 
     if row_clusters is not None:
-        row_cluster_ids, row_cluster_unique_idx, row_cluster_nelem_per_cluster = np.unique(
-            row_clusters, return_counts=True, return_index=True
-        )
+        (
+            row_cluster_ids,
+            row_cluster_unique_idx,
+            row_cluster_nelem_per_cluster,
+        ) = np.unique(row_clusters, return_counts=True, return_index=True)
         row_cluster_id_order = np.argsort(row_cluster_unique_idx)
         row_cluster_nelem_per_cluster = row_cluster_nelem_per_cluster[
             row_cluster_id_order
@@ -1854,9 +1995,11 @@ def spaced_heatmap2(
 
     # see analogous row_spacer code block for comments
     if col_clusters is not None:
-        col_cluster_ids, col_cluster_unique_idx, col_cluster_nelem_per_cluster = np.unique(
-            col_clusters, return_counts=True, return_index=True
-        )
+        (
+            col_cluster_ids,
+            col_cluster_unique_idx,
+            col_cluster_nelem_per_cluster,
+        ) = np.unique(col_clusters, return_counts=True, return_index=True)
         col_cluster_id_order = np.argsort(col_cluster_unique_idx)
         col_cluster_nelem_per_cluster = col_cluster_nelem_per_cluster[
             col_cluster_id_order
@@ -1902,10 +2045,10 @@ def spaced_heatmap2(
 
     # Prepare colormapping - all pcolormesh blocks must use the same colormapping
     if not "norm" in pcolormesh_args:
-        if not 'vmin' in pcolormesh_args:
-            pcolormesh_args['vmin'] = df.min().min()
-        if not 'vmax' in pcolormesh_args:
-            pcolormesh_args['vmax'] = df.max().max()
+        if not "vmin" in pcolormesh_args:
+            pcolormesh_args["vmin"] = df.min().min()
+        if not "vmax" in pcolormesh_args:
+            pcolormesh_args["vmax"] = df.max().max()
 
     # Plot all colormesh blocks, and do some defensive assertions
     col_widths = []  # for asserting equal column width
@@ -2292,10 +2435,12 @@ def frame_groups(
     # TODO: the edges in the non-directional axis are only half visible because axis limits are set to (0, 1), but the middle of the lines is placed on 0 or 1 resp.
 
     if axis_off:
-        ax.axis('off')
+        ax.axis("off")
 
     if not isinstance(colors, dict):
-        raise ValueError('Other types than dict for arg "colors" may currently not work, including None')
+        raise ValueError(
+            'Other types than dict for arg "colors" may currently not work, including None'
+        )
 
     bounds, mids, values = co.plotting.find_stretches2(group_ids)
 
@@ -2411,60 +2556,3 @@ def frame_groups(
             colors=colors if label_colors is None else label_colors,
             **label_groups_kwargs,
         )
-
-
-def style_cbar(
-        cbar: Colorbar,
-        tick_params_kwargs: Optional[Dict]=None,
-        remove_ticks_at_ends=True,
-        ax_margins=(0.5, 0.5),
-        outline_is_visible=False,
-):
-    """
-
-    Make sure that correct ticks are available
-    ( may require fig.canvas.draw() )
-    """
-
-    # use tick params to get white, inward facing ticks (default)
-    tick_params_kwargs_ = dict(
-            color="white",
-            direction="in",
-            which="both",
-            axis="both",
-            left=True, right=True,
-            width=1,
-            length=2
-    )
-    if tick_params_kwargs is not None:
-        tick_params_kwargs_.update(tick_params_kwargs)
-    cbar.ax.tick_params(**tick_params_kwargs_)
-
-    cbar.ax.margins(*ax_margins)
-    cbar.outline.set_visible(outline_is_visible)
-
-    # Remove the first and last tick to avoid "sticky ends" of the colorbar due to
-    # ticks at the very end of the colorbar
-    if remove_ticks_at_ends and not cbar.extend == 'both':
-        if cbar.orientation == 'vertical':
-            ticks = cbar.ax.yaxis.majorTicks
-        else:
-            ticks = cbar.ax.xaxis.majorTicks
-        # ticks[-1].set_visible(False)
-        ticks[0].tick1line.set_visible(False)
-        ticks[0].tick2line.set_visible(False)
-        ticks[-1].tick1line.set_visible(False)
-        ticks[-1].tick2line.set_visible(False)
-
-"""
-def test_cbar_style():
-
-    fig, ax = plt.subplots(1, 1, dpi=180, figsize=(6/2.54, 6/2.54))
-    qm = ax.pcolormesh([[1, 2, 3], [1, 2, 6]], vmin=2, vmax=5)
-    cbar = plt.colorbar(qm, extend='both', shrink=0.5, aspect=5)
-    fig.canvas.draw()
-    style_cbar(cbar)
-"""
-
-
-

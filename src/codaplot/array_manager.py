@@ -6,8 +6,9 @@ import itertools
 from copy import deepcopy
 from functools import wraps
 from inspect import signature
-from typing import Tuple, Dict, Optional, List, Iterable, Union, Callable
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
+import codaplot as co
 import matplotlib as mpl
 import matplotlib.colors as colors
 import matplotlib.gridspec as gridspec
@@ -17,12 +18,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import toolz as tz
+from codaplot.plotting import (adjust_coords,
+                               cbar_change_style_to_inward_white_ticks)
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.cluster.hierarchy import leaves_list, linkage
-
-import codaplot as co
-from codaplot.plotting import adjust_coords
 
 
 class MidpointNormalize(colors.Normalize):
@@ -295,7 +295,14 @@ def compute_gridspec_ratios(sizes: np.ndarray, total_size_in: float) -> np.ndarr
     return heights
 
 
-def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1) -> None:
+def add_guides(
+    guide_spec_l,
+    ax,
+    cbar_styling_func: Callable,
+    guide_titles=None,
+    xpad_in=0.1,
+    ypad_in=0.1,
+) -> None:
     """Pack Legends and colorbars into ax
 
     Parameters
@@ -310,6 +317,7 @@ def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1) ->
                - mappable (ScalarMappable, eg. returned by pcolormesh, scatter)
                - optional: other colorbar args
                - optional: title
+               - optional: cbar_styling_func_kwargs
     guide_titles:
         if given, only guides with these titles are considered, in the given order. Multiple guides with the same title will all be printed, in indefinite order.
     ax: Axes onto which to draw the guides.
@@ -317,6 +325,8 @@ def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1) ->
     xpad_in: padding between guides in inch
         (final size may differ if a layout optimization such as constrained_layout is applied)
     ypad_in: padding between guides in inch (size may vary, see xpad_in)
+    cbar_styling_func
+        called on colorbars to modify their aesthetics
     """
     ax.axis("off")
     if guide_titles:
@@ -330,7 +340,11 @@ def add_guides(guide_spec_l, ax, guide_titles=None, xpad_in=0.1, ypad_in=0.1) ->
 
     guide_placement_params_df = get_guide_placement_params(selected_guide_specs_l, ax)
     place_guides(
-        ax=ax, placement_df=guide_placement_params_df, xpad_in=xpad_in, ypad_in=ypad_in
+        ax=ax,
+        placement_df=guide_placement_params_df,
+        xpad_in=xpad_in,
+        ypad_in=ypad_in,
+        cbar_styling_func=cbar_styling_func,
     )
 
 
@@ -345,12 +359,14 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
 
     Returns
     -------
-     pd.DataFrame with columns: title, height, width, contents
-         contents is a reference to the guide specification dictionary from guide_spec_l
+     pd.DataFrame with columns: title, height, width, contents, styling_func_kwargs
+         contents is a reference to the guide specification dictionary from guide_spec_l, styling_func_kwargs is a reference to the corresponding dict from guide_spec_l, or an empty dict. currently, styling_func_kwargs is only handled for colobars.
          (because its convenient to have these things together in the same frame)
     """
     # Note that 'title' is not a colorbar arg. It is removed before passing on the cbar_args
-    placement_df = pd.DataFrame(columns=["title", "height", "width", "contents"])
+    placement_df = pd.DataFrame(
+        columns=["title", "height", "width", "contents", "styling_func_kwargs"]
+    )
     for guide_d in guide_spec_l:
         # Empty slots are allowed and should be skipped
         if guide_d is None:
@@ -374,6 +390,7 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
                     # remove title, it is not a cbar arg, so that the guide specification
                     # from now on only contains cbar args
                     title=guide_d.pop("title", None),
+                    styling_func_kwargs=guide_d.pop("styling_func_kwargs", {}),
                     height=height,
                     width=width,
                     contents=guide_d,
@@ -390,6 +407,8 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
             placement_df = placement_df.append(
                 dict(
                     title=guide_d.get("title", None),
+                    # not yet considered for legends
+                    styling_func_kwargs=None,
                     height=bbox.height,
                     width=bbox.width,
                     contents=guide_d,
@@ -403,7 +422,11 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
 
 
 def place_guides(
-    ax: Axes, placement_df: pd.DataFrame, xpad_in=0.2, ypad_in=0.2 / 2.54
+    ax: Axes,
+    placement_df: pd.DataFrame,
+    cbar_styling_func: Callable,
+    xpad_in=0.2,
+    ypad_in=0.2 / 2.54,
 ) -> None:
     """Pack guides into Axes
 
@@ -418,6 +441,8 @@ def place_guides(
     placement_df: columns title, height, width, contents
         contents is a guide spec dictionary, see get_guide_placement_params
         for details
+    cbar_styling_func
+        function to change cbar aesthetics; currently the function is passed i) cbar and ii) **placement_df['styling_func_kwargs'] (if not None). Currently there is no equivalent for legend styling.
     xpad_in: padding between guides along x axis, in inch
     ypad_in: padding between guides along y axis, in inch
     """
@@ -450,7 +475,7 @@ def place_guides(
             # we need to add additional padding to the predefined padding to
             # account for title and tick(labels)
             add_xpad_ax_coord, add_ypad_ax_coord = _add_cbar_inset_axes(
-                row_ser, ax, curr_x, curr_y
+                row_ser, ax, curr_x, curr_y, cbar_styling_func
             )
             curr_xpad = min_xpad_ax_coord + add_xpad_ax_coord
             curr_ypad = min_ypad_ax_coord + add_ypad_ax_coord
@@ -479,7 +504,7 @@ def _add_legend(ax, curr_x, curr_y, row_ser):
     ax.add_artist(l)
 
 
-def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
+def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
     """Add cbar to ax (as inset axes)
 
     Helper method for place_guides
@@ -523,7 +548,11 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y):
             row_ser.height,
         ]
     )
-    fig.colorbar(**row_ser.contents, cax=cbar_ax)
+    cbar = fig.colorbar(**row_ser.contents, cax=cbar_ax)
+    # make sure that cbar ticks are available for the cbar styling func
+    fig.canvas.draw()
+    cbar_styling_func(cbar, **row_ser["styling_func_kwargs"])
+
     if row_ser["title"]:
         ax.text(curr_x, curr_y, row_ser["title"], fontdict=fontdict)
 
@@ -630,12 +659,12 @@ def cross_plot(
     row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
     row_linkage: Union[bool, Dict, np.ndarray] = False,
     row_partitioning: Union[bool, Dict] = False,
-    row_dendrogram: Optional[bool, Dict] = None,
+    row_dendrogram: Optional[Union[bool, Dict]] = None,
     row_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
     col_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
     col_linkage: Union[bool, Dict, np.ndarray] = False,
     col_partitioning: Union[bool, Dict] = False,
-    col_dendrogram: Optional[bool, Dict] = None,
+    col_dendrogram: Optional[Union[bool, Dict]] = None,
     col_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
     # spacing
     row_spacing_group_ids: Optional[Array1DLike] = None,
@@ -672,160 +701,163 @@ def cross_plot(
     supply_tasks: Optional[Dict] = cross_plot_supply_tasks_d,
     adjust_coords_tasks: Optional[Dict] = cross_plot_adjust_coord_tasks_d,
     align_args: Optional[Tuple[str, ...]] = cross_plot_align_tasks,
+    cbar_styling_func=cbar_change_style_to_inward_white_ticks,
 ):
     # noinspection PyUnresolvedReferences
     """
-    
-        Parameters
-        ----------
-        center_plots: Union[List, np.ndarray]
-            1d or 2d array of center plots, eg. heatmaps or scatterplots drawn
-            in a grid
-        center_row_sizes: optionally, one or more size spec tuples
-            if one size spec tuple and several rows, all rows have the same size
-            defaults to (1, 'rel')
-        center_col_sizes: optionally, one or more size spec tuples
-            if one size spec tuple and several rows, all rows have the same size
-            defaults to (1, 'rel')
-        center_row_pad: size spec tuple
-            padding between center plot rows
-        center_col_pad: size spec tuple
-            padding between center plot cols
-        center_margin_ticklabels
-            if True, set xticklabel and yticklabel to True at the bottom and left edges of the center plots, and to False elsewhere
-        xticklabels: array like of ticklabels (str) or bool
-            passed on to center plot arg xticklabels
-        yticklabels: array like of ticklabels (str) or bool
-            passed on to center plot arg xticklabels
-        legend_side: one of "right", (not yet implemented)
-            side where legend Axes is created
-        legend_extent: Tuple[str, ...], select from 'top, 'bottom', 'center'
-            legend Axes is created at legend_side, and takes up the space of the given center plot areas, e.g. ('center', 'bottom') will create a legend axes next to the center and bottom plotting areas, while leaving the top plotting area empty
-        legend_args:
-        legend_axes_selectors: list of axes identifiers (name or gridspec coordinate tuple)
-            if not None, guides are only shown for the selected Axes
-        legend_size: size spec tuple
-            legend width
-        legend_pad: size spec tuple
-            padding between legend and center plots
-        pads_around_center: list with one or four size spec tuples
-            If not None, paddings are added around the center plots.
-            If a single pad is given, all paddings are same size.
-            Alternatively, specify for paddings [top, right, bottom, left]
-        figsize
-            required to be able to estimate gridspec width and height ratios,
-            if absolute sizes are requested. Due to the current implementation, figsize also needs to
-            be given if only relative sizes are requested.
-        constrained_layout
-            whether to apply constrained_layout
-            Note that applying constrained layout distorts the Axes placed with
-            absolute height or width, so that the absolute size is no longer guaranteed
-        layout_pads: Optional[Dict] = None
-            passed to fig.set_constrained_layout_pads or to Gridspec otherwise
-        top_plots: Optional[Iterable[Dict]] = None
-            top annotation plot specs
-        top_sizes=None
-            size spec tuples for top annotations, if top contains plot specs, top_sizes must be defined
-        left_plots: Optional[Iterable[Dict]] = None
-        left_sizes=None
-        bottom_plots: Optional[Iterable[Dict]] = None
-        bottom_sizes=None
-        right_plots: Optional[Iterable[Dict]] = None
-        right_sizes=None
-        row_dendrogram: Optional[Union[Dict, bool]] = None
-            if truthy, draw a row dendrogram. If non-empty dict, use dict
-            as kwargs for co.plotting.cut_dendrogram.
-        row_dendrogram_size=(1 / 2.54, "abs")
-        col_dendrogram: Optional[Dict] = None
-            if truthy, draw a col dendrogram. If non-empty dict, use dict
-            as kwargs for the dendrogram function.
-        col_dendrogram_size=(1 / 2.54, "abs")
-        row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None
-            integer index specifying row order for center plots and aligned annotations
-            if all center rows have the same row order, pass one array-like
-            alternatively, specify one row order array(-like) per center row and pass as list of arrays
-        col_order: see row_order
-        default_func=co.plotting.heatmap3
-            if the plot spec dict does not contain a '_func' keyword, use the default_func to draw the plot
-        default_plotting_func_kwargs: Optional[Dict] = None
-            if the plot is drawn with the default func (user specified or by falling back on the default_func),
-            use these kwargs as defaults arguments (which may be overriden by the plot spec)
-        row_spacing_group_ids: Optional[Union[Array1DLike, List[Array1DLike]]] = None
-            if all center rows have the same row order and spacing spec:
-            integer array-like specifying group membership for plot spacing.
-            spacers are added between rows belonging to the same group.
-            Each ID is expected to be present in a single, consecutive stretch, ie a group id may not
-            occur in multiple places separated by other group ids.
-            if each center row has its own order and grouping, pass list of array-likes (not implemented yet)
-        row_spacer_sizes: Union[float, List[float]] = 0.02
-            float if same spacer size is used between all groups, else List[float] indicating
-            size of spacer between each group. Size is given as fraction of axes width.
-        col_spacing_group_ids=None
-            see row_spacing_group_ids
-        col_spacer_sizes=0.02
-            see row_spacer_sizes
-        row_linkage: True or dict to trigger clustering, or pass linkage matrix
-            if not a linkage matrix, but truthy and row_order is None, perform hierarchical clustering with scipy.cluster.hierarchy.linkage.
-            Use a dict to pass kwargs to the linkage function.
-        row_partitioning: bool or dict
-            if truthy and row_linkage is available, perform partitioning with dynamicCutTree.cutreeHybrid.
-            Use dict to pass arguments to the partitioning function
-        col_linkage: see row_linkage
-        col_partitioning: see row_partitioning
-        supply_tasks=cross_plot_supply_tasks
-        adjust_coords_tasks=cross_plot_adjust_coord_tasks
-        align_args=cross_plot_align_tasks
-    
-    
-        Spacers between row or column groups
-        ------------------------------------
-    
-        **Spacers in coordinate-based plots**
-        - spacers can be automatically introduced into coordinate-based plots, such as  scatter, line or bar plots
-        - this can be used to introduce spacers in coordinate-based center plots (e.g. categorical scatterplots) or to align plots in the annotation panels with their targets (heatmap rows, scatterplot rows for categorical scatterplots) in the presence of spacers
-        - variable names holding x or y coordinate names to be adjusted can be specified globally in adjust_coords_tasks (defaults to cross_plot_adjust_coord_tasks_d) or per plotting spec via the _adjust argument (the latter not yet implemented)
-        - depending on the panel where a given plot is placed, only x or y or both coordinates are adjusted for spacers
-        - spacer are introduced using adjust_coords, with additional args given by adjust_coord_args
-        - Note: currently, adjust_coord_tasks defines tasks in a panel-based manner, this will be changed to a x/y-based task dict
-    
-    
-        Automatic alignment
-        -------------------
-        - alignment is active if align_args is not None (default: cross_plot_align_tasks, ie alignment is active by default)
-        - if alignment is active, row_spacing_group_ids and col_spacing_group_ids are  automatically aligned using row_order and col_order resp.
-        - alignment is done based on the integer indices in row_order and col_order
-        - Note that row_order and col_order either specify a global order for all center rows and columns, or one order per row or column respectively.
-        - align_args is a list specifying arg names to be always aligned: If a plotting spec contains one of these argument names, its value will be aligned as detailed below.
-        - additionally, function arguments whose value should be aligned can be specified on a per-plot basis using the _align keyword in the plot spec (not yet implemented)
-        - the performed alignment depends on where the plot is drawn
-            - center plots: rows and cols are aligned. Align_args are expected to point to DFs or 2D arrays, otherwise a ValueError is raised.
-            - left/right annotations: rows are aligned. Align_arg values may be 2D array or DataFrame (columns will be left as is) or 1D arrays or Series
-            - top/bottom annotations: columns are aligned. Allowed values: see left/right annotations.
-    
-        Passing on cross_plot args to plotting funcs
-        --------------------------------------------
-        cross_plot args can be passed on to plotting funcs according to
-        rules specified in a dict. For an example, see the default rules dict defined in  array_manager.cross_plot_supply_tasks_d
-        This dict specifies rules for the center, left+right and top+bottom plotting areas, indicating which cross_plot arguments should be passed on to plotting functions in these areas, and which arguments in the plotting functions can accept these data.
-        For each area, a dict mapping crossplot args -> one or more plotting function arg names is specified.
-        A crossplot arg is passed on to a plotting function, if this function
-        accepts one of the specified arg names. It is an error if the function accepts several of the possible arg names.
-        The crossplot arg is not passed on, if it is None or if the plotting spec
-        defines a value for the corresponding arg name (i.e. plotting specs
-        have precedence over crossplot arg passing)
-    
-        Guides
-        ------
-        - all guides are collected into one legend axes at *legend_side*
-        - the size of the legend panel is controlled by *legend_extent*, *legend_size* and *legend_pad*
-        - guides can be
-          - colorbars for ScalarMappables (e.g. for heatmaps, scatterplots with continuous color dimension)
-          - legends for any plot with legend handles and labels
-        - the guides axes is drawn with *add_guides*, and legend_args are passed as kwargs if given
-        - if legend_axes_selectors is given
-           - only show guides for the specified axes
-           - legend_axes selectors may contain names, each name indicating one more plotting axes (several axes may have the same name) or coordinates (as tuple) of axes in the final figure array. If a name points to multiple axes, each axes will still receive a separate legend.
-        """
+
+    Parameters
+    ----------
+    center_plots: Union[List, np.ndarray]
+        1d or 2d array of center plots, eg. heatmaps or scatterplots drawn
+        in a grid
+    center_row_sizes: optionally, one or more size spec tuples
+        if one size spec tuple and several rows, all rows have the same size
+        defaults to (1, 'rel')
+    center_col_sizes: optionally, one or more size spec tuples
+        if one size spec tuple and several rows, all rows have the same size
+        defaults to (1, 'rel')
+    center_row_pad: size spec tuple
+        padding between center plot rows
+    center_col_pad: size spec tuple
+        padding between center plot cols
+    center_margin_ticklabels
+        if True, set xticklabel and yticklabel to True at the bottom and left edges of the center plots, and to False elsewhere
+    xticklabels: array like of ticklabels (str) or bool
+        passed on to center plot arg xticklabels
+    yticklabels: array like of ticklabels (str) or bool
+        passed on to center plot arg xticklabels
+    legend_side: one of "right", (not yet implemented)
+        side where legend Axes is created
+    legend_extent: Tuple[str, ...], select from 'top, 'bottom', 'center'
+        legend Axes is created at legend_side, and takes up the space of the given center plot areas, e.g. ('center', 'bottom') will create a legend axes next to the center and bottom plotting areas, while leaving the top plotting area empty
+    legend_args:
+    legend_axes_selectors: list of axes identifiers (name or gridspec coordinate tuple)
+        if not None, guides are only shown for the selected Axes
+    legend_size: size spec tuple
+        legend width
+    legend_pad: size spec tuple
+        padding between legend and center plots
+    pads_around_center: list with one or four size spec tuples
+        If not None, paddings are added around the center plots.
+        If a single pad is given, all paddings are same size.
+        Alternatively, specify for paddings [top, right, bottom, left]
+    figsize
+        required to be able to estimate gridspec width and height ratios,
+        if absolute sizes are requested. Due to the current implementation, figsize also needs to
+        be given if only relative sizes are requested.
+    constrained_layout
+        whether to apply constrained_layout
+        Note that applying constrained layout distorts the Axes placed with
+        absolute height or width, so that the absolute size is no longer guaranteed
+    layout_pads: Optional[Dict] = None
+        passed to fig.set_constrained_layout_pads or to Gridspec otherwise
+    top_plots: Optional[Iterable[Dict]] = None
+        top annotation plot specs
+    top_sizes=None
+        size spec tuples for top annotations, if top contains plot specs, top_sizes must be defined
+    left_plots: Optional[Iterable[Dict]] = None
+    left_sizes=None
+    bottom_plots: Optional[Iterable[Dict]] = None
+    bottom_sizes=None
+    right_plots: Optional[Iterable[Dict]] = None
+    right_sizes=None
+    row_dendrogram: Optional[Union[Dict, bool]] = None
+        if truthy, draw a row dendrogram. If non-empty dict, use dict
+        as kwargs for co.plotting.cut_dendrogram.
+    row_dendrogram_size=(1 / 2.54, "abs")
+    col_dendrogram: Optional[Dict] = None
+        if truthy, draw a col dendrogram. If non-empty dict, use dict
+        as kwargs for the dendrogram function.
+    col_dendrogram_size=(1 / 2.54, "abs")
+    row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None
+        integer index specifying row order for center plots and aligned annotations
+        if all center rows have the same row order, pass one array-like
+        alternatively, specify one row order array(-like) per center row and pass as list of arrays
+    col_order: see row_order
+    default_func=co.plotting.heatmap3
+        if the plot spec dict does not contain a '_func' keyword, use the default_func to draw the plot
+    default_plotting_func_kwargs: Optional[Dict] = None
+        if the plot is drawn with the default func (user specified or by falling back on the default_func),
+        use these kwargs as defaults arguments (which may be overriden by the plot spec)
+    row_spacing_group_ids: Optional[Union[Array1DLike, List[Array1DLike]]] = None
+        if all center rows have the same row order and spacing spec:
+        integer array-like specifying group membership for plot spacing.
+        spacers are added between rows belonging to the same group.
+        Each ID is expected to be present in a single, consecutive stretch, ie a group id may not
+        occur in multiple places separated by other group ids.
+        if each center row has its own order and grouping, pass list of array-likes (not implemented yet)
+    row_spacer_sizes: Union[float, List[float]] = 0.02
+        float if same spacer size is used between all groups, else List[float] indicating
+        size of spacer between each group. Size is given as fraction of axes width.
+    col_spacing_group_ids=None
+        see row_spacing_group_ids
+    col_spacer_sizes=0.02
+        see row_spacer_sizes
+    row_linkage: True or dict to trigger clustering, or pass linkage matrix
+        if not a linkage matrix, but truthy and row_order is None, perform hierarchical clustering with scipy.cluster.hierarchy.linkage.
+        Use a dict to pass kwargs to the linkage function.
+    row_partitioning: bool or dict
+        if truthy and row_linkage is available, perform partitioning with dynamicCutTree.cutreeHybrid.
+        Use dict to pass arguments to the partitioning function
+    col_linkage: see row_linkage
+    col_partitioning: see row_partitioning
+    supply_tasks=cross_plot_supply_tasks
+    adjust_coords_tasks=cross_plot_adjust_coord_tasks
+    align_args=cross_plot_align_tasks
+    cbar_styling_func
+        called on colorbars to modify their aesthetics
+
+
+    Spacers between row or column groups
+    ------------------------------------
+
+    **Spacers in coordinate-based plots**
+    - spacers can be automatically introduced into coordinate-based plots, such as  scatter, line or bar plots
+    - this can be used to introduce spacers in coordinate-based center plots (e.g. categorical scatterplots) or to align plots in the annotation panels with their targets (heatmap rows, scatterplot rows for categorical scatterplots) in the presence of spacers
+    - variable names holding x or y coordinate names to be adjusted can be specified globally in adjust_coords_tasks (defaults to cross_plot_adjust_coord_tasks_d) or per plotting spec via the _adjust argument (the latter not yet implemented)
+    - depending on the panel where a given plot is placed, only x or y or both coordinates are adjusted for spacers
+    - spacer are introduced using adjust_coords, with additional args given by adjust_coord_args
+    - Note: currently, adjust_coord_tasks defines tasks in a panel-based manner, this will be changed to a x/y-based task dict
+
+
+    Automatic alignment
+    -------------------
+    - alignment is active if align_args is not None (default: cross_plot_align_tasks, ie alignment is active by default)
+    - if alignment is active, row_spacing_group_ids and col_spacing_group_ids are  automatically aligned using row_order and col_order resp.
+    - alignment is done based on the integer indices in row_order and col_order
+    - Note that row_order and col_order either specify a global order for all center rows and columns, or one order per row or column respectively.
+    - align_args is a list specifying arg names to be always aligned: If a plotting spec contains one of these argument names, its value will be aligned as detailed below.
+    - additionally, function arguments whose value should be aligned can be specified on a per-plot basis using the _align keyword in the plot spec (not yet implemented)
+    - the performed alignment depends on where the plot is drawn
+        - center plots: rows and cols are aligned. Align_args are expected to point to DFs or 2D arrays, otherwise a ValueError is raised.
+        - left/right annotations: rows are aligned. Align_arg values may be 2D array or DataFrame (columns will be left as is) or 1D arrays or Series
+        - top/bottom annotations: columns are aligned. Allowed values: see left/right annotations.
+
+    Passing on cross_plot args to plotting funcs
+    --------------------------------------------
+    cross_plot args can be passed on to plotting funcs according to
+    rules specified in a dict. For an example, see the default rules dict defined in  array_manager.cross_plot_supply_tasks_d
+    This dict specifies rules for the center, left+right and top+bottom plotting areas, indicating which cross_plot arguments should be passed on to plotting functions in these areas, and which arguments in the plotting functions can accept these data.
+    For each area, a dict mapping crossplot args -> one or more plotting function arg names is specified.
+    A crossplot arg is passed on to a plotting function, if this function
+    accepts one of the specified arg names. It is an error if the function accepts several of the possible arg names.
+    The crossplot arg is not passed on, if it is None or if the plotting spec
+    defines a value for the corresponding arg name (i.e. plotting specs
+    have precedence over crossplot arg passing)
+
+    Guides
+    ------
+    - all guides are collected into one legend axes at *legend_side*
+    - the size of the legend panel is controlled by *legend_extent*, *legend_size* and *legend_pad*
+    - guides can be
+      - colorbars for ScalarMappables (e.g. for heatmaps, scatterplots with continuous color dimension)
+      - legends for any plot with legend handles and labels
+    - the guides axes is drawn with *add_guides*, and legend_args are passed as kwargs if given
+    - if legend_axes_selectors is given
+       - only show guides for the specified axes
+       - legend_axes selectors may contain names, each name indicating one more plotting axes (several axes may have the same name) or coordinates (as tuple) of axes in the final figure array. If a name points to multiple axes, each axes will still receive a separate legend.
+    """
 
     # Implementation notes
     # --------------------
@@ -1373,6 +1405,7 @@ def cross_plot(
             ax=res["axes_d"]["legend_ax"],
             # guide titles, padding...
             **legend_args,
+            cbar_styling_func=cbar_styling_func,
         )
 
     return res, plot_arr
