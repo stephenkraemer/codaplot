@@ -1226,9 +1226,11 @@ class CutDendrogram:
             else:
                 self.ax.set_xlim(0, 1)
         else:
-            max_xcoord = self.xcoords.max().max()
+            # Final xcoord is in middle of last column, need to add 5 to get end of the column
+            # (because xcoord is in 'column integer coordinates' * 10, its returned like that by the scipy dendrogram function
+            data_axis_right_lim = self.xcoords.max().max() + 5
             xcoord_axis = "x" if self.orientation == "vertical" else "y"
-            self.ax.set(**{f"{xcoord_axis}lim": [0, max_xcoord]})
+            self.ax.set(**{f"{xcoord_axis}lim": [0, data_axis_right_lim]})
 
         if self.pretty:
             self.ax.margins(0)
