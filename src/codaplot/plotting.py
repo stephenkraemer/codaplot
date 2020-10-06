@@ -1195,7 +1195,7 @@ class CutDendrogram:
             point_params:
             min_cluster_size:
             min_height:
-            colors: either name of cmap, list of color specs or dict cluster_id -> color spec; should not contain cluster id -1 (no membership), this is handled by no_member_color
+            colors: either name of cmap, list of color specs or dict cluster_id -> color spec; should not contain cluster id -1 (no membership), this is handled by no_member_color; list of color specs must have one entry per cluster id
             no_member_color: color for links which connect clusters (which are not a member in a single cluster)
 
         Returns:
@@ -1225,7 +1225,7 @@ class CutDendrogram:
                 zip(sorted_unique_cluster_ids, sns.color_palette(colors, n_clusters))
             )
         elif isinstance(colors, list):
-            assert len(list) == n_clusters
+            assert len(colors) == n_clusters
             clusterid_color_d = dict(zip(sorted_unique_cluster_ids, colors))
         else:
             raise TypeError("colors has inappropriate type")
