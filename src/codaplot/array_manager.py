@@ -1190,15 +1190,15 @@ def cross_plot(
         else:
             row_dendrogram = deepcopy(row_dendrogram)
         row_dendrogram = tz.merge(cut_dendrogram_defaults, row_dendrogram)
+        row_dendrogram["orientation"] = "horizontal"
         # if no cluster ids are specified, use row_spacing_groups (may be None)
         if "cluster_ids_data_order" not in row_dendrogram:
             row_dendrogram["cluster_ids_data_order"] = row_spacing_group_ids
         # if cluster ids are specified, align them if alignment mode is on
-        elif align_args:
+        elif row_dendrogram["cluster_ids_data_order"] is not None and align_args:
             row_dendrogram["cluster_ids_data_order"] = row_dendrogram[
                 "cluster_ids_data_order"
             ][row_idx]
-        row_dendrogram["orientation"] = "horizontal"
         assert (
             row_linkage.ndim == 2
         ), "row linkage not linkage mat, but dendrogram requested"
