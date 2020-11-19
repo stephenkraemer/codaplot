@@ -1,0 +1,319 @@
+* No dedicated function for annotated heatmaps, instead cross_plot is used
+
+The API for a simple annotated heatmap must largely share the cross_plot API. Here is an annotated heatmap created with cross_plot
+
+#+BEGIN_SRC python
+plot_and_annos_d = cross_plot(
+        center=[
+            dict(df=df, cmap="magma", guide_title="% Meth.", edgecolor="white")
+        ],
+        center_margin_ticklabels=True,
+        pads_around_center=[(0.2 / 2.54, "abs")],
+        figsize=(15 / 2.54, 10 / 2.54),
+        constrained_layout=False,
+        layout_pads=dict(wspace=0.05, hspace=0.05),
+        top=[
+            dict(
+                    df=pd.DataFrame({"col clusters": col_clusters}).T,
+                    cmap="Set1",
+                    guide_title="Col cluster",
+                    is_categorical=True,
+                    edgecolor="white",
+            )
+        ],
+        top_sizes=[(0.5 / 2.54, "abs")],
+        left=[
+            dict(
+                    df=pd.DataFrame({"row clusters": row_clusters}),
+                    cmap="Set2",
+                    guide_title="Row cluster",
+                    is_categorical=True,
+                    edgecolor="white",
+            )
+        ],
+        left_sizes=[(0.5 / 2.54, "abs")],
+        row_order=row_linkage,
+        col_order=col_linkage,
+        row_spacing_group_ids=row_clusters,
+        col_spacing_group_ids=col_clusters,
+        row_spacer_sizes=0.05,
+        col_spacer_sizes=0.05,
+        col_dendrogram=dict(cluster_ids_data_order=None, base_color="darkgray"),
+        row_dendrogram=dict(
+                colors="Set2", min_cluster_size=4, base_color=(0.2, 0.2, 0.2)
+        ),
+        default_func_kwargs=dict(guide_args=dict(shrink=0.3, aspect=8)),
+)
+#+END_SRC 
+
+Almost no changes to simplify this API for an annotated_heatmap function come to mind, essentially I can think of
+
+- changing the function name
+- changing the main_plots argument name to heatmap and making it accept a single dict (or a list of dicts etc. if we want to allow several heatmaps in rows and cols)
+- change the default_func_kwargs name to default_kwargs
+- removing the margin_ticklabels argument completely, assuming the user regulates this via the heatmap plot specs (which would be more cumbersome if multiple heatmaps are managed in one plot)
+
+I think for the user, these changes do not add much more clarity to the API, while they increase API complexity (now there are two very similar concepts, the cross plot and the annotated heatmap - what is the difference? ...)
+
+#+BEGIN_SRC python
+plot_and_annos_d = ann_heatmap(
+        heatmap=dict(df=df, cmap="magma", guide_title="% Meth.", edgecolor="white"),
+        pads_around_heatmap=[(0.2 / 2.54, "abs")],
+        figsize=(15 / 2.54, 10 / 2.54),
+        constrained_layout=False,
+        layout_pads=dict(wspace=0.05, hspace=0.05),
+        top=[
+            dict(
+                    df=pd.DataFrame({"col clusters": col_clusters}).T,
+                    cmap="Set1",
+                    guide_title="Col cluster",
+                    is_categorical=True,
+                    edgecolor="white",
+            )
+        ],
+        top_sizes=[(0.5 / 2.54, "abs")],
+        left=[
+            dict(
+                    df=pd.DataFrame({"row clusters": row_clusters}),
+                    cmap="Set2",
+                    guide_title="Row cluster",
+                    is_categorical=True,
+                    edgecolor="white",
+            )
+        ],
+        left_sizes=[(0.5 / 2.54, "abs")],
+        row_order=row_linkage,
+        col_order=col_linkage,
+        row_spacing_group_ids=row_clusters,
+        col_spacing_group_ids=col_clusters,
+        row_spacer_sizes=0.05,
+        col_spacer_sizes=0.05,
+        col_dendrogram=dict(cluster_ids_data_order=None, base_color="darkgray"),
+        row_dendrogram=dict(
+                colors="Set2", min_cluster_size=4, base_color=(0.2, 0.2, 0.2)
+        ),
+        default_kwargs=dict(guide_args=dict(shrink=0.3, aspect=8)),
+)
+#+END_SRC 
+* No method-based construction of cross plots
+** function-based interface (the current choice)
+
+Disadvantages
+- the logical grouping of the arguments is not immediately clear
+
+Advantages
+- shortest possible definition of the cross plot
+- lowest possible amount of visual clutter
+*** simple annotated heatmap example with function api
+
+#+BEGIN_SRC python
+array_to_figure_res = cross_plot(
+    main_plots=[dict(df=df, cmap="magma", guide_title="% Meth.", edgecolor="white")],
+    margin_ticklabels=True,
+    pads_around_main=[(0.2 / 2.54, "abs")],
+    row_order=row_linkage,
+    col_order=col_linkage,
+    row_spacing_group_ids=row_clusters,
+    col_spacing_group_ids=col_clusters,
+    row_spacer_sizes=0.05,
+    col_spacer_sizes=0.05,
+    figsize=(15 / 2.54, 10 / 2.54),
+    constrained_layout=False,
+    layout_pads=dict(wspace=0.05, hspace=0.05),
+    top=[
+        dict(
+            df=pd.DataFrame({"col clusters": col_clusters}).T,
+            cmap="Set1",
+            guide_title="Col cluster",
+            is_categorical=True,
+            edgecolor="white",
+        )
+    ],
+    top_sizes=[(0.5 / 2.54, "abs")],
+    left=[
+        dict(
+            df=pd.DataFrame({"row clusters": row_clusters}),
+            cmap="Set2",
+            guide_title="Row cluster",
+            is_categorical=True,
+            edgecolor="white",
+        )
+    ],
+    left_sizes=[(0.5 / 2.54, "abs")],
+    col_dendrogram=dict(cluster_ids_data_order=None, base_color="darkgray"),
+    row_dendrogram=dict(colors="Set2", min_cluster_size=4, base_color=(0.2, 0.2, 0.2)),
+    default_func_kwargs=dict(guide_args=dict(shrink=0.3, aspect=8)),
+)
+#+END_SRC 
+
+** CrossPlot class and methods based construction
+*** Toy class API example
+
+- this is not working code
+- in obvious cases, the API is not fully written out (e.g. there would have to be add_left|right|bottom|down_plots methods and as well as add_row|col_dendrogram methods
+
+#+BEGIN_SRC python
+  from typing import Union, List, Tuple, Optional, Dict
+  import numpy as np
+  import pandas as pd
+
+  class CrossPlot:
+      def __init__(
+              default_func: Callable = co.plotting.heatmap3,
+              default_func_kwargs: Optional[Dict] = None,
+              supply_tasks: Optional[Dict] = cross_plot_supply_tasks_d,
+              adjust_coords_tasks: Optional[Dict] = cross_plot_adjust_coord_tasks_d,
+              align_args: Optional[Tuple[str, ...]] = cross_plot_align_tasks,
+      ):
+          pass
+
+      def add_center_plots(self,
+                           center: Union[List, np.ndarray],
+                           row_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
+          col_order: Optional[Union[Array1DLike, List[Array1DLike]]] = None,
+          center_row_sizes: Optional[List[Tuple[float, str]]] = None,
+          center_col_sizes: Optional[List[Tuple[float, str]]] = None,
+          center_row_pad: Tuple[float, str] = (0.05, "rel"),
+          center_col_pad: Tuple[float, str] = (0.05, "rel"),
+          center_margin_ticklabels: bool = False,
+          xticklabels: Optional[Union[List[str], bool]] = None,
+          yticklabels: Optional[Union[List[str], bool]] = None,
+                           ):
+          return self
+
+      def plot(self,
+                                figsize: Tuple[float, float] = (5, 5),
+                                constrained_layout: bool = True,
+                                layout_pads: Optional[Dict] = None,
+                                ):
+          pass
+          return self
+
+
+      def add_spacing(self,
+                      row_spacing_group_ids: Array1DLike = None,
+                      row_spacer_sizes: Union[float, Array1DLike] = 0.02,
+                      col_spacing_group_ids: Array1DLike = None,
+                      col_spacer_sizes: Union[float, Array1DLike] = 0.02,
+                      ):
+          pass
+          return self
+
+      def add_guide_axes(
+              self,
+              legend_side: str = "right",
+              legend_extent: Tuple[str, ...] = ("center",),  # select from 'top, 'bottom', 'center'
+              legend_args: Optional[Dict] = None,
+              legend_axes_selectors: Optional[List[Union[str, Tuple[int, int]]]] = None,
+              legend_size: Tuple[float, str] = (1, "rel"),
+              legend_pad: Tuple[float, str] = (0.2, "abs"),
+      ):
+          pass
+          return self
+
+      def add_left_annos(
+             self,
+              left: Optional[Iterable[Dict]] = None,
+              left_sizes: Optional[List[Tuple[float, str]]] = None,
+              pad,
+      ):
+          pass
+          return self
+
+      def add_row_dendrogram(self,
+                             row_dendrogram: Optional[Dict] = None,
+                             row_dendrogram_size: Tuple[float, str] = (1 / 2.54, "abs"),
+                             ):
+          pass
+          return self
+
+# additional args not explicitely used here
+"""
+pad is specified in add_panel methods
+pads_around_center: Optional[List[Tuple[float]]] = None,
+
+top: Optional[Iterable[Dict]] = None,
+top_sizes: Optional[List[Tuple[float, str]]] = None,
+bottom: Optional[Iterable[Dict]] = None,
+bottom_sizes: Optional[List[Tuple[float, str]]] = None,
+right: Optional[Iterable[Dict]] = None,
+right_sizes: Optional[List[Tuple[float, str]]] = None,
+
+col_dendrogram: Optional[Dict] = None,
+col_dendrogram_size: Tuple[float, str] =(1 / 2.54, "abs"),
+
+#
+# aligned_arg_names: Optional[Tuple[str]] = ('df', 'data'),
+# cluster_data = None,
+# col_cluster: Union[bool, int] = False,
+# col_cluster_metric = 'euclidean',
+# col_cluster_method = 'average',
+# row_cluster: Union[bool, int] = False,
+# row_cluster_metric = 'euclidean',
+# row_cluster_method = 'average',
+):
+"""
+#+END_SRC 
+
+*** simple annotated heatmap example with class api
+
+#+BEGIN_SRC python
+array_to_figure_res = (
+    CrossPlot(default_func_kwargs=dict(guide_args=dict(shrink=0.3, aspect=8)))
+    .add_main_plots(
+        plot_specs=dict(df=df, cmap="magma", guide_title="% Meth.", edgecolor="white"),
+        row_order=row_linkage,
+        col_order=col_linkage,
+        margin_ticklabels=True,
+    )
+    .add_left_annos(
+        plots=[
+            dict(
+                df=pd.DataFrame({"row clusters": row_clusters}),
+                cmap="Set2",
+                guide_title="Row cluster",
+                is_categorical=True,
+                edgecolor="white",
+            )
+        ],
+        sizes=[(0.5 / 2.54, "abs")],
+        pad=(cm(0.2), "abs"),
+    )
+    .add_top_annos(
+        plot_specs=[
+            dict(
+                df=pd.DataFrame({"col clusters": col_clusters}).T,
+                cmap="Set1",
+                guide_title="Col cluster",
+                is_categorical=True,
+                edgecolor="white",
+            )
+        ],
+        sizes=[(0.5 / 2.54, "abs")],
+        pad=(cm(0.2), "abs"),
+    )
+    .add_spacing(
+        row_spacing_group_ids=row_clusters,
+        col_spacing_group_ids=col_clusters,
+        row_spacer_sizes=0.05,
+        col_spacer_sizes=0.05,
+    )
+    .add_top_dendrogram(kwargs=dict(cluster_ids_data_order=None, base_color="darkgray"))
+    .add_left_dendrogram(
+        kwargs=dict(colors="Set2", min_cluster_size=4, base_color=(0.2, 0.2, 0.2))
+    )
+    .plot(
+        figsize=(15 / 2.54, 10 / 2.54),
+        constrained_layout=False,
+        layout_pads=dict(wspace=0.05, hspace=0.05),
+    )
+)
+#+END_SRC 
+
+** Method-based construction leads to longer function calls, with visual clutter through parentheses and indentation
+** Method-based construction could easily be added later
+
+- if we would use a CrossPlot class only to collect arguments for a cross_plot(**kwargs) function call, providing a method-based interface to cross plot construction would be trivial and can be added any time
+- while this package is in early development, it may anyway better to decouple the implemenation as much as possible from the interface
+** Possible advantages of method based plot construction
+*** a given base plot could be re-used with different 'variations' by calling different methods on the base plot to create different plots

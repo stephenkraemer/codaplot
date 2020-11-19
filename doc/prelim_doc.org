@@ -1,0 +1,28 @@
+* Dendrogram plotting
+** current top level functions / classes
+*** cut_dendrogram
+- this is a thin wrapper around class CutDendrogram
+- this function is used in cross_plot
+- it can plot
+  - standard dendrograms
+  - cut dendrograms (cut above 'cluster level')
+  - dendrograms with colored links (colors starting at 'cluster level')
+- links can be colored for spaced and standard dendrograms, if cluster_ids_data_order is not None
+
+* Heatmaps
+
+- different heatmap functions co-exist in this module
+- only one heatmap function should be used: heatmap
+  - both for categorical and numeric heatmaps
+  - both for dense and spaced heatmaps
+  - heatmap internally calls heatmap2 and spaced_heatmap2. these functions should
+    not be public and should not be used directly.
+
+* Cross plot
+** Dendrogram handling
+
+- default dendrogram function: cut_dendrogram
+- the dendrogram has colored links if cluster_ids_data_order is not None
+  - this can be controlled explicitely by passing a dict to {row,col}_dendrogram setting this arg
+  - it is controlled implicitely by cross_plot as follows
+    - if we plot a spaced heatmap: cluster_ids_data_order =spacer_ids (?), else =None
