@@ -62,6 +62,7 @@ def array_to_figure(
     Parameters
     ----------
     plot_array: array of dicts detailing plotting instructions
+        reserved kwargs: _func, _name, _args
     merge_by_name: bool or List of names to be considered for merging
 
     Returns
@@ -1040,66 +1041,79 @@ def cross_plot(
     # Alignment is aware of the location of the plot (left/right, top/bottom, center) and only
     # aligns appropriate dimensions
     # See docstring for details and cross_plot_align_tasks for the default alignment targets
-    if align_args:
-        for name, elems in zip(
-            "center  topbottom leftright topbottom leftright".split(),
-            [center_arr.flatten(), top_plots, right_plots, bottom_plots, left_plots],
-        ):
-            # For center plot, always align both rows and columns
-            # If the value for a center plot align arg is not 2D, it is an error
-            if name == "center":
-                if row_idx is not None and col_idx is not None:
-                    df_2d_slice = row_idx, col_idx
-                    arr_2d_slice = np.ix_(row_idx, col_idx)
-                    df_1d_slice = arr_1d_slice = None
-                elif row_idx is None:
-                    df_2d_slice = slice(None), col_idx
-                    arr_2d_slice = slice(None), col_idx
-                    df_1d_slice = arr_1d_slice = None
-                elif col_idx is None:
-                    df_2d_slice = row_idx, slice(None)
-                    arr_2d_slice = row_idx, slice(None)
-                    df_1d_slice = arr_1d_slice = None
+    for name, elems in zip(
+        "center  topbottom leftright topbottom leftright".split(),
+        [center_arr.flatten(), top_plots, right_plots, bottom_plots, left_plots],
+    ):
+        # For center plot, always align both rows and columns
+        # If the value for a center plot align arg is not 2D, it is an error
+        if name == "center":
+            if row_idx is not None and col_idx is not None:
+                df_2d_slice = row_idx, col_idx
+                arr_2d_slice = np.ix_(row_idx, col_idx)
+                df_1d_slice = arr_1d_slice = None
+            elif row_idx is None:
+                df_2d_slice = slice(None), col_idx
+                arr_2d_slice = slice(None), col_idx
+                df_1d_slice = arr_1d_slice = None
+            elif col_idx is None:
+                df_2d_slice = row_idx, slice(None)
+                arr_2d_slice = row_idx, slice(None)
+                df_1d_slice = arr_1d_slice = None
+            else:
+                # this shouldn't happen, because align_args is set to False in the absence of alignment information
+                raise RuntimeError(
+                    "Alignment information is not available, but it should be"
+                )
+
+        # For top/bottom or left/right plots only align columns or rows respectively
+        # Accept either 2D or 1D arrays / Series
+        elif name == "topbottom":
+            # we cannot align anything in top/bottom without col_idx
+            if col_idx is None:
+                continue
+            df_2d_slice = arr_2d_slice = slice(None), col_idx
+            df_1d_slice = arr_1d_slice = col_idx
+        else:  # name == 'leftright':
+            # we cannot align anything in left/right without row_idx
+            if row_idx is None:
+                continue
+            df_2d_slice = arr_2d_slice = row_idx, slice(None)
+            df_1d_slice = arr_1d_slice = row_idx
+
+        for elem in elems:
+            # go through all argument names to be aligned
+            if '_align_args' in elem:
+                if elem['_align_args'] is not None:
+                    curr_align_args = elem['_align_args']
+                    # need to remove _align_args before passing to array_to_figure
+                    del elem['_align_args']
                 else:
-                    # this shouldn't happen, because align_args is set to False in the absence of alignment information
-                    raise RuntimeError(
-                        "Alignment information is not available, but it should be"
-                    )
-
-            # For top/bottom or left/right plots only align columns or rows respectively
-            # Accept either 2D or 1D arrays / Series
-            elif name == "topbottom":
-                # we cannot align anything in top/bottom without col_idx
-                if col_idx is None:
+                    # need to remove _align_args before passing to array_to_figure
+                    del elem['_align_args']
                     continue
-                df_2d_slice = arr_2d_slice = slice(None), col_idx
-                df_1d_slice = arr_1d_slice = col_idx
-            else:  # name == 'leftright':
-                # we cannot align anything in left/right without row_idx
-                if row_idx is None:
+            else:
+                if align_args:
+                    curr_align_args = align_args
+                else:
                     continue
-                df_2d_slice = arr_2d_slice = row_idx, slice(None)
-                df_1d_slice = arr_1d_slice = row_idx
-
-            for elem in elems:
-                # go through all argument names to be aligned
-                for align_target in align_args:
-                    # If an argument name is found, align according to position if possible
-                    # otherwise, raise ValueError
-                    if align_target in elem:
-                        val = elem[align_target]
-                        if isinstance(val, pd.DataFrame):
-                            elem[align_target] = val.iloc[df_2d_slice]
-                        elif isinstance(val, np.ndarray) and val.ndim == 2:
-                            elem[align_target] = val[arr_2d_slice]
-                        elif name == "center":
-                            raise ValueError("Dont know how to align")
-                        elif isinstance(val, pd.Series):
-                            elem[align_target] = val.iloc[df_1d_slice]
-                        elif isinstance(val, np.ndarray) and val.ndim == 1:
-                            elem[align_target] = val[arr_1d_slice]
-                        else:
-                            raise ValueError("Dont know how to align")
+            for align_target in curr_align_args:
+                # If an argument name is found, align according to position if possible
+                # otherwise, raise ValueError
+                if align_target in elem:
+                    val = elem[align_target]
+                    if isinstance(val, pd.DataFrame):
+                        elem[align_target] = val.iloc[df_2d_slice]
+                    elif isinstance(val, np.ndarray) and val.ndim == 2:
+                        elem[align_target] = val[arr_2d_slice]
+                    elif name == "center":
+                        raise ValueError("Dont know how to align")
+                    elif isinstance(val, pd.Series):
+                        elem[align_target] = val.iloc[df_1d_slice]
+                    elif isinstance(val, np.ndarray) and val.ndim == 1:
+                        elem[align_target] = val[arr_1d_slice]
+                    else:
+                        raise ValueError("Dont know how to align")
 
     # add spacers
     # spacers can be introduced into coordinate plots in a manner equivalent to the
