@@ -2376,8 +2376,8 @@ def get_list_of_stretch_annos(
     """
 
     if isinstance(annos, dict):
-        annos_ser = pd.Series(stretch_ids).replace(annos)
-        assert not annos_ser.isnull().any()
+        annos_ser = pd.Series(stretch_ids).map(annos)
+        assert annos_ser.notnull().all()
         return annos_ser.array
 
     if annos is not None:
