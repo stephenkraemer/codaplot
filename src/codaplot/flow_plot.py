@@ -110,7 +110,7 @@ def flow_plot(
     # loop over all combinations of (left_category, right_category) and get the number
     # of elements belonging to each combination
     for (left_cat, right_cat), combi_size in (
-        filtered_df.groupby(["left_category", "right_category"]).size().iteritems()
+        filtered_df.groupby(["left_category", "right_category"], observed=True).size().iteritems()
     ):
         # note that right start may be > or < left_start
         # note that for normalized cluster sizes (not yet implemented),

@@ -10,6 +10,7 @@ Development version
         fixed by adding dummy Text artist with same extent as legend title
    - remove borders from rectangle patches in categorical heatmap legend
    - circular co.plotting import
+  - add observed=True to flow_plot groupby logic to deal with categorical cluster ids
 
 - new features
     - allow using legend_kwargs in cross_plot
