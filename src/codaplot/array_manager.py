@@ -447,6 +447,10 @@ def place_guides(
     xpad_in: padding between guides along x axis, in inch
     ypad_in: padding between guides along y axis, in inch
     """
+
+    if legend_kwargs is None:
+        legend_kwargs = {}
+
     ax_width_in, ax_height_in = get_axes_dim_in(ax)
     min_xpad_ax_coord = xpad_in / ax_width_in
     min_ypad_ax_coord = ypad_in / ax_width_in
@@ -468,7 +472,7 @@ def place_guides(
 
         # Place the guide, even if its height is larger than the Axes height
         if "handles" in row_ser.contents:
-            _add_legend(ax, curr_x, curr_y, row_ser)
+            _add_legend(ax, curr_x, curr_y, row_ser, **legend_kwargs)
             curr_xpad = min_xpad_ax_coord
             curr_ypad = min_ypad_ax_coord
         else:
@@ -486,9 +490,13 @@ def place_guides(
         next_x = max(next_x, curr_x + row_ser.width + curr_xpad)
 
 
-def _add_legend(ax, curr_x, curr_y, row_ser):
+def _add_legend(ax, curr_x, curr_y, row_ser, **kwargs):
     """Add legend to axis
     Helper method for place_guides
+
+    Parameters:
+        kwargs:
+            passed to mlegend.Legend
     """
     l = mlegend.Legend(
         ax,
@@ -499,6 +507,7 @@ def _add_legend(ax, curr_x, curr_y, row_ser):
         borderaxespad=0,
         loc="upper left",
         bbox_to_anchor=(curr_x, curr_y),
+        **kwargs
     )
 
     # https://github.com/matplotlib/matplotlib/issues/12388
