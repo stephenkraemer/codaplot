@@ -16,8 +16,7 @@ Heatmaps
 from copy import deepcopy
 from dataclasses import dataclass
 from itertools import product, zip_longest
-from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
-                    Tuple, Union)
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import codaplot as co
 import matplotlib as mpl
@@ -449,6 +448,7 @@ def heatmap(
     frame_kwargs=None,
     cbar_styling_func=cbar_change_style_to_inward_white_ticks,
     cbar_styling_func_kwargs: Optional[Dict] = None,
+    categorical_legend_patch_kwargs=None,
     **kwargs,
 ) -> Dict:
     """General heatmap
@@ -467,6 +467,9 @@ def heatmap(
             pcolormesh args
         annotate: False, 'stretches'
             'stretches' currently has a bug
+        categorical_legend_patch_kwargs
+            passed to Patches created as legend keys for categorical heatmaps
+            if None, defaults to dict(linewidth=0)
 
     Returns:
         Dict with values required for drawing the legend
@@ -494,6 +497,9 @@ def heatmap(
 
     if cbar_styling_func_kwargs is None:
         cbar_styling_func_kwargs = {}
+
+    if categorical_legend_patch_kwargs is None:
+        categorical_legend_patch_kwargs = dict(linewidth=0)
 
     if not df.dtypes.unique().shape[0] == 1:
         raise ValueError("All columns must have the same dtype")
@@ -609,10 +615,7 @@ def heatmap(
 
     # Legend with proxy artists
     # noinspection PyUnboundLocalVariable
-    patches = [
-        mpatches.Patch(facecolor=c, edgecolor="black")
-        for c in categorical_colors_listmap.colors
-    ]
+    patches = [mpatches.Patch(facecolor=c) for c in categorical_colors_listmap.colors]
     if show_guide:
         # TODO: improve logic
         guide_args_copy.pop("mappable")
