@@ -490,7 +490,6 @@ def _add_legend(ax, curr_x, curr_y, row_ser):
     """Add legend to axis
     Helper method for place_guides
     """
-    # This is a Legend
     l = mlegend.Legend(
         ax,
         handles=row_ser.contents["handles"],
@@ -501,8 +500,18 @@ def _add_legend(ax, curr_x, curr_y, row_ser):
         loc="upper left",
         bbox_to_anchor=(curr_x, curr_y),
     )
+
+    # https://github.com/matplotlib/matplotlib/issues/12388
     l._legend_box.align = "left"
+
     ax.add_artist(l)
+
+    # it appears that the title of the legend artist is not considered by CL at the moment
+    # add a dummy object
+    # TODO: replace quickfix for legend artist title in CL
+    title = row_ser.contents.get('title', None)
+    if title:
+        ax.text(curr_x, curr_y, title, zorder=0, color='white')
 
 
 def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
