@@ -2341,7 +2341,7 @@ def label_groups(
     # in this case, the axis limits of the direction axis must be set to 0, 1
     # otherwise, they are set to (0, len(group_ids))
     if spacer_size:
-        coords = co.plotting.adjust_coords(mids, group_ids, spacer_sizes=spacer_size)
+        coords = co.adjust_coords(mids, group_ids, spacer_sizes=spacer_size)
         if x:
             ax.set_ylim(0, 1)
         else:
@@ -2442,7 +2442,7 @@ def frame_groups(
             'Other types than dict for arg "colors" may currently not work, including None'
         )
 
-    bounds, mids, values = co.plotting.find_stretches2(group_ids)
+    bounds, mids, values = find_stretches2(group_ids)
 
     defaults = dict(
         fill=False, boxstyle=mpatches.BoxStyle("Round", pad=0), edgecolor="black"
