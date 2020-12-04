@@ -18,8 +18,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import toolz as tz
-from codaplot.plotting import (adjust_coords,
-                               cbar_change_style_to_inward_white_ticks)
+from codaplot.plotting import adjust_coords, cbar_change_style_to_inward_white_ticks
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.cluster.hierarchy import leaves_list, linkage
@@ -303,7 +302,8 @@ def add_guides(
     guide_titles=None,
     xpad_in=0.1,
     ypad_in=0.1,
-) -> None:
+    cbar_title_as_label=False,
+legend_kwargs=None) -> None:
     """Pack Legends and colorbars into ax
 
     Parameters
@@ -328,6 +328,11 @@ def add_guides(
     ypad_in: padding between guides in inch (size may vary, see xpad_in)
     cbar_styling_func
         called on colorbars to modify their aesthetics
+    cbar_title_as_label
+        if true, draw cbar title as vertical or horizontal axis label (depending on cbar orientation), if false,
+        draw cbar title as a title on top of the cbar Axes
+    legend_kwargs
+        passed to place_guides, will eventually be used in mlegend.Legend
     """
     ax.axis("off")
     if guide_titles:
@@ -346,6 +351,8 @@ def add_guides(
         xpad_in=xpad_in,
         ypad_in=ypad_in,
         cbar_styling_func=cbar_styling_func,
+        cbar_title_as_label=cbar_title_as_label,
+        legend_kwargs=legend_kwargs,
     )
 
 
@@ -428,7 +435,8 @@ def place_guides(
     cbar_styling_func: Callable,
     xpad_in=0.2,
     ypad_in=0.2 / 2.54,
-) -> None:
+    cbar_title_as_label=False,
+legend_kwargs=None) -> None:
     """Pack guides into Axes
 
     If constrained_layout is enabled, the Axes may be shrunk. This happens after
@@ -446,6 +454,11 @@ def place_guides(
         function to change cbar aesthetics; currently the function is passed i) cbar and ii) **placement_df['styling_func_kwargs'] (if not None). Currently there is no equivalent for legend styling.
     xpad_in: padding between guides along x axis, in inch
     ypad_in: padding between guides along y axis, in inch
+    cbar_title_as_label
+        if true, draw cbar title as vertical or horizontal axis label (depending on cbar orientation), if false,
+        draw cbar title as a title on top of the cbar Axes
+    legend_kwargs
+        passed to mlegend.Legend via _add_legend
     """
 
     if legend_kwargs is None:
@@ -480,7 +493,7 @@ def place_guides(
             # we need to add additional padding to the predefined padding to
             # account for title and tick(labels)
             add_xpad_ax_coord, add_ypad_ax_coord = _add_cbar_inset_axes(
-                row_ser, ax, curr_x, curr_y, cbar_styling_func
+                row_ser, ax, curr_x, curr_y, cbar_styling_func, cbar_title_as_label
             )
             curr_xpad = min_xpad_ax_coord + add_xpad_ax_coord
             curr_ypad = min_ypad_ax_coord + add_ypad_ax_coord
@@ -523,10 +536,17 @@ def _add_legend(ax, curr_x, curr_y, row_ser, **kwargs):
         ax.text(curr_x, curr_y, title, zorder=0, color='white')
 
 
-def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
+def _add_cbar_inset_axes(
+    row_ser, ax, curr_x, curr_y, cbar_styling_func, cbar_title_as_label
+):
     """Add cbar to ax (as inset axes)
 
     Helper method for place_guides
+
+    Parameters:
+        cbar_title_as_label
+            if true, draw cbar title as vertical or horizontal axis label (depending on cbar orientation), if false,
+            draw cbar title as a title on top of the cbar Axes
     """
     fig: Figure = ax.figure
     cbar_ax: Axes
@@ -535,8 +555,10 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
         "fontsize": mpl.rcParams["legend.title_fontsize"],
         "verticalalignment": "top",
     }
+    orientation = row_ser.contents.get("orientation", "vertical")
 
     if row_ser["title"]:
+        # get dimensions, but don't place title yet (removed at the end)
         # What would be more idiomatic code? This seems suboptimal
         # Just using fontsize and padding sizes is not ideal for estimating width...
         # Could not get size of Text without adding to Axes
@@ -546,23 +568,47 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
         title_axes_bbox = title_text.get_window_extent(r).transformed(
             ax.transAxes.inverted()
         )
-        title_width_axes_coord = title_axes_bbox.width
-        title_height_axes_coord = title_axes_bbox.height + (
-            mpl.rcParams["legend.labelspacing"]
-            * mpl.rcParams["legend.fontsize"]
-            / 72
-            / ax_height_in
-        )
+        if cbar_title_as_label and orientation == "vertical":
+            # assumes that title is smaller than cbar!
+            title_height_axes_coord = 0
+            title_width_axes_coord = 0
+
+            if orientation == "vertical":
+                cbar_label_fontsize = mpl.rcParams["ytick.labelsize"]
+            else:
+                cbar_label_fontsize = mpl.rcParams["xtick.labelsize"]
+            additional_width_due_to_cbar_label = title_axes_bbox.height + (
+                mpl.rcParams["axes.titlepad"] * cbar_label_fontsize / 72 / ax_height_in
+            )
+
+        else:
+            # cbar title as Axes title or horizontal orientation (where the label acts like a title,
+            # just add the bottom
+            title_width_axes_coord = title_axes_bbox.width
+            title_height_axes_coord = title_axes_bbox.height + (
+                mpl.rcParams["legend.labelspacing"]
+                * mpl.rcParams["legend.fontsize"]
+                / 72
+                / ax_height_in
+            )
+            additional_width_due_to_cbar_label = 0
         title_text.remove()
+
+        if cbar_title_as_label:
+            inset_y = curr_y - row_ser.height
+        else:  # cbar title as Axes title
+            inset_y = curr_y - row_ser.height - title_height_axes_coord
     else:
         title_width_axes_coord = 0
         title_height_axes_coord = 0
+        additional_width_due_to_cbar_label = 0
+        inset_y = curr_y - row_ser.height
 
     # make room for title and same padding as with legends
     cbar_ax = ax.inset_axes(
         [
             curr_x,
-            curr_y - row_ser.height - title_height_axes_coord,
+            inset_y,
             row_ser.width,
             row_ser.height,
         ]
@@ -573,7 +619,13 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
     cbar_styling_func(cbar, **row_ser["styling_func_kwargs"])
 
     if row_ser["title"]:
-        ax.text(curr_x, curr_y, row_ser["title"], fontdict=fontdict)
+        if cbar_title_as_label:
+            if orientation == "vertical":
+                cbar_ax.set_ylabel(row_ser["title"])
+            else:
+                cbar_ax.set_xlabel(row_ser["title"])
+        else:  # cbar title as "Axes title"
+            ax.text(curr_x, curr_y, row_ser["title"], fontdict=fontdict)
 
     # To get the dimensions of this guide, we must take into account
     # ticklabels and the colorbar title (which is placed as axes title)
@@ -587,7 +639,6 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
     fig.canvas.draw()
     # assumption: all labels have same length
     # ticks are on x or y axis depending on orientation of cbar
-    orientation = row_ser.contents.get("orientation", "vertical")
     if orientation == "vertical":
         first_ticklabel = cbar_ax.get_yticklabels()[0]
     else:
@@ -605,7 +656,11 @@ def _add_cbar_inset_axes(row_ser, ax, curr_x, curr_y, cbar_styling_func):
         # the outmost boundary
         xpad_ax_coord = max(
             title_width_axes_coord - row_ser["width"],
-            (first_ticklabel_axes_bbox.width + ytick_size_axes_coord),
+            (
+                first_ticklabel_axes_bbox.width
+                + ytick_size_axes_coord
+                + additional_width_due_to_cbar_label
+            ),
         )
     else:
         # no additional x padding required
@@ -751,6 +806,7 @@ def cross_plot(
     legend_extent: Tuple[str, ...], select from 'top, 'bottom', 'center'
         legend Axes is created at legend_side, and takes up the space of the given center plot areas, e.g. ('center', 'bottom') will create a legend axes next to the center and bottom plotting areas, while leaving the top plotting area empty
     legend_args:
+        kwargs passed to add_guides
     legend_axes_selectors: list of axes identifiers (name or gridspec coordinate tuple)
         if not None, guides are only shown for the selected Axes
     legend_size: size spec tuple
@@ -1101,14 +1157,14 @@ def cross_plot(
 
         for elem in elems:
             # go through all argument names to be aligned
-            if '_align_args' in elem:
-                if elem['_align_args'] is not None:
-                    curr_align_args = elem['_align_args']
+            if "_align_args" in elem:
+                if elem["_align_args"] is not None:
+                    curr_align_args = elem["_align_args"]
                     # need to remove _align_args before passing to array_to_figure
-                    del elem['_align_args']
+                    del elem["_align_args"]
                 else:
                     # need to remove _align_args before passing to array_to_figure
-                    del elem['_align_args']
+                    del elem["_align_args"]
                     continue
             else:
                 if align_args:
