@@ -1,4 +1,4 @@
-from .array_manager import cross_plot, adjust_coords, anno_axes, spacer
+from .array_manager import cross_plot, adjust_coords, anno_axes, spacer, array_to_figure
 from .clustered_data_grid import ClusteredDataGrid
 from .plotting import categorical_heatmap, find_stretches, spaced_heatmap, heatmap_depr, heatmap, frame_groups, label_groups
 from .flow_plot import flow_plot
