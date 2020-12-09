@@ -666,8 +666,8 @@ def _add_cbar_inset_axes(
         )
     else:
         # no additional x padding required
-        if title_width_axes_coord > row_ser.contents["width"]:
-            xpad_ax_coord = title_width_axes_coord - row_ser.contents["width"]
+        if title_width_axes_coord > row_ser["width"]:
+            xpad_ax_coord = title_width_axes_coord - row_ser["width"]
         else:
             xpad_ax_coord = 0
         # we have to add additional y padding for horizontal bar due to title *and*

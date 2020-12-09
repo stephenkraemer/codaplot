@@ -1,5 +1,12 @@
 Development version
 
+2020-12-09
+
+- add dpi arg to array_to_figure
+- tentative fix for horizontal colorbars via place_guides:
+  - in _add_cbar_inset_axes, replace failing retrieval of row_ser.content['width']
+    with row_ser['width']
+
 2020-12-04
 
 - fixes:
