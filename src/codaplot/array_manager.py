@@ -39,6 +39,7 @@ class MidpointNormalize(colors.Normalize):
 def array_to_figure(
     plot_array: np.ndarray,
     figsize: Tuple[float],
+    dpi: int,
     merge_by_name: Union[bool, List[str]] = True,
     layout_pads: Optional[Dict] = None,
     constrained_layout=True,
@@ -63,6 +64,7 @@ def array_to_figure(
     plot_array: array of dicts detailing plotting instructions
         reserved kwargs: _func, _name, _args
     merge_by_name: bool or List of names to be considered for merging
+    dpi
 
     Returns
     --------
@@ -96,7 +98,7 @@ def array_to_figure(
     #     == 1
     # ).all()
     #
-    fig = plt.figure(constrained_layout=constrained_layout, dpi=180, figsize=figsize)
+    fig = plt.figure(constrained_layout=constrained_layout, figsize=figsize, dpi=dpi)
     # constrained layout pads need to be set directly,
     # setting hspace and wspace in GridSpec is not sufficient
     fig.set_constrained_layout_pads(**layout_pads)
