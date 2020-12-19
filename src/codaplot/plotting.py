@@ -13,10 +13,22 @@ Heatmaps
 - this module also houses dendrogram functionality
 
 """
+import warnings
 from copy import deepcopy
 from dataclasses import dataclass
 from itertools import product, zip_longest
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import codaplot as co
 import matplotlib as mpl
@@ -129,6 +141,7 @@ def categorical_heatmap(
     else:
         # tile colors to get n_levels color list
         color_list = (np.ceil(n_levels / len(colors)).astype(int) * colors)[:n_levels]
+    # noinspection PyUnresolvedReferences
     cmap = mpl.colors.ListedColormap(color_list)
 
     # Get integer codes matrix for pcolormesh, ie levels are represented by
@@ -252,6 +265,7 @@ def categorical_heatmap2(
         color_list = sns.color_palette(cmap, n_levels)
     else:  # List of colors
         color_list = (np.ceil(n_levels / len(cmap)).astype(int) * cmap)[:n_levels]
+    # noinspection PyUnresolvedReferences
     cmap_listmap = mpl.colors.ListedColormap(color_list)
 
     # Get integer codes matrix for pcolormesh, ie levels are represented by
@@ -697,6 +711,7 @@ def _get_categorical_codes_colors(categorical_colors, df):
         color_list = (
             np.ceil(n_levels / len(categorical_colors)).astype(int) * categorical_colors
         )[:n_levels]
+    # noinspection PyUnresolvedReferences
     categorical_colors_listmap = mpl.colors.ListedColormap(color_list)
     # Get integer codes matrix for pcolormesh, ie levels are represented by
     # increasing integers according to the level ordering
@@ -797,6 +812,7 @@ class MidpointNormalize(mpl.colors.Normalize):
 # - document
 #   - cbar is added to ax
 #   - if labels are not given, take them from the dataframe
+# noinspection PyIncorrectDocstring
 def heatmap_depr(
     df: pd.DataFrame,
     ax: Axes,
@@ -2398,15 +2414,21 @@ def frame_groups(
     group_ids: np.ndarray,
     ax: Axes,
     direction: str,
-    colors: Optional[Union[Iterable, Dict, str, Tuple[float]]] = None,
+    # only dict functional at the moment
+    # colors: Optional[Union[Iterable, Dict, str, Tuple[float]]] = None,
+    colors: Optional[Dict] = None,
     spacer_sizes: Optional[Union[float, List[float]]] = None,
+    edge_alignment: Literal["outside", "inside", "centered"] = "inside",
     origin=(0, 0),
-    size=1,
     add_labels: bool = False,
     labels: Optional[Union[Dict, Iterable]] = None,
     label_groups_kwargs: Optional[Dict] = None,
     label_colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
     axis_off: bool = True,
+    fancy_box_kwargs: Optional[Dict] = None,
+    direction_sides_padding_axes_coord: float = 0,
+    non_direction_sides_padding_axes_coord: float = 0,
+    size: Optional[int] = None,
     **kwargs,
 ) -> None:
     """Frame groups of elements
@@ -2421,12 +2443,19 @@ def frame_groups(
         group_ids: array of group ids
         spacer_sizes: if given, coordinates are adjusted for spacers between the groups
         direction: axis along which to place the patches ('x' or 'y')
+        edge_alignment:
+            wether to draw edges outside of the rectangle patch covering the
+            group elements, or fully inside this rectangle patch. Note: both choices avoid
+            the default mpl behavior of placing the edge centered on the rectangle patch.
         origin: origin of first rectangle patch
         colors
             *Note*: it seems that colors currently only works with a dict; other possible values may fail, including None
             either iterable of color specs of same length as number of ticklabels, or a dict label -> color
-        size: extent of rectangle patch along the unused axis (constant for all patches)
-        **kwargs: passed to mpatches.FancyBboxPatch. Default args: dict((fill = False, boxstyle = mpatches.BoxStyle("Round", pad=0), edgecolor = 'black'). Edgecolor is ignored if colors is passed.
+        size:
+            DEPRECATED extent of rectangle patch along the unused axis (constant for all patches)
+        **kwargs:
+            DEPRECATED
+            passed to mpatches.FancyBboxPatch. Default args: dict((fill = False, boxstyle = mpatches.BoxStyle("Round", pad=0), edgecolor = 'black'). Edgecolor is ignored if colors is passed.
         add_labels: if True, call label_groups(..., labels, **label_groups_kwargs)
         labels: passed to label_groups
         label_groups_kwargs: passed to label_groups
@@ -2434,23 +2463,41 @@ def frame_groups(
             allows defining label colors independent of frame colors (if not given, frame colors
             will be used as label colors). Not sure if currently functional for all/any arg type.
         axis_off: if True, remove spines and turn of ticks and ticklabels
+        fancy_box_kwargs
+            passed to mpatches.FancyBboxPatch. Default args: dict((fill = False, boxstyle = mpatches.BoxStyle("Round", pad=0), edgecolor = 'black'). Edgecolor is ignored if colors is passed.
+        direction_sides_padding_axes_coord
+            different params for direction and non direction sides: these are axes coords,
+            and the axes size in inch may be quite different for x,y, making two different parameters
+            easiest quick and dirty implementation. axes coords are also the unit for the spacers,
+            which may need to be considered when settings this parameter
+        non_direction_sides_padding_axes_coord
     """
-    # TODO: the edges in the non-directional axis are only half visible because axis limits are set to (0, 1), but the middle of the lines is placed on 0 or 1 resp.
 
-    if axis_off:
-        ax.axis("off")
+    if size is not None:
+        warnings.warn("size arg deprecated", DeprecationWarning)
+    # constant, assumes that axes limits can be controlled by this function and set to approx. (0,1)
+    # - exact limits will depend on the padding
+    non_direction_patch_size = 1
 
     if not isinstance(colors, dict):
         raise ValueError(
             'Other types than dict for arg "colors" may currently not work, including None'
         )
+    assert edge_alignment in ["inside", "outside", "centered"]
+    if kwargs:
+        warnings.warn("passing **kwargs is deprecated", category=DeprecationWarning)
 
-    bounds, mids, values = find_stretches2(group_ids)
-
+    if fancy_box_kwargs is None:
+        fancy_box_kwargs = {}
     defaults = dict(
         fill=False, boxstyle=mpatches.BoxStyle("Round", pad=0), edgecolor="black"
     )
-    kwargs = tz.merge(defaults, kwargs)
+    fancy_box_kwargs = tz.merge(defaults, fancy_box_kwargs)
+
+    if axis_off:
+        ax.axis("off")
+
+    bounds, mids, values = find_stretches2(group_ids)
 
     # We need colors as an iterable, matching the group stretches - or empty
     # If colors is given, edgecolor specification is ignored
@@ -2460,7 +2507,7 @@ def frame_groups(
         if isinstance(colors, (tuple, str)):
             # can't use np.repeat or tile with tuple elements
             colors = np.array([colors] * len(values))
-        kwargs.pop("edgecolor")
+        fancy_box_kwargs.pop("edgecolor")
     else:
         colors = np.array([])
 
@@ -2479,7 +2526,6 @@ def frame_groups(
         starts = np.insert(adjust_bounds, 0, 0)
     else:
         starts = np.insert(bounds[:-1], 0, 0)
-
     if spacer_sizes:
         ends = adjust_coords(
             coords=bounds,
@@ -2491,58 +2537,175 @@ def frame_groups(
         ends = bounds
 
     # Add patches
+    # ------------
     # Patches are specified as (x, y), width, height; x, y is the origin
-    # The edges of the patch are centered on x, x + height, y, y + width, ie half of the line is to the left and right of the coordinate
-    # For directly consecutive patches (in heatmaps without spacers), this means that edges will overlap
-    # To avoid this, and also to get perfect alignment with elements in spaced heatmaps, we shift the coordinates by half a linewidth towards the inside of the patch
-    # because the linewidth is given in points, we need to do some transformation magics
+    # The edges of patches in matplotlib are always centered on x, x + height, y, y + width, ie
+    # half of the line is to the left and right of the coordinate
+    # to manipulate this, we use some transformation magic to adjust
+    # the patch size such that the edgelines have the desired alignment (inside, outside or centered)
 
-    # Get transformations:
+    # Transformations
     # 1. bring coordinates to display coords
     # 2. Add offset in inch
     # 3. bring back to axes coord
 
+    # we prepare transformations to shift points left, right, up and down by half a line width
+    # line width in inch is retrieved as follows:
     # Get line width in inch, for use with dpi_scale_trans
-    linewidth_in = (kwargs.get("linewidth") or mpl.rcParams["patch.linewidth"]) * 1 / 72
+    linewidth_in = (
+        (fancy_box_kwargs.get("linewidth") or mpl.rcParams["patch.linewidth"]) * 1 / 72
+    )
 
-    # Get transformations for start (shift to right/up) and end (shift to left/down)
+    # Get transformations
+    y_up_shift = (
+        ax.transData
+        + mtransforms.ScaledTranslation(
+            *(0, linewidth_in / 2), ax.figure.dpi_scale_trans
+        )
+        + ax.transData.inverted()
+    )
+    y_down_shift = (
+        ax.transData
+        + mtransforms.ScaledTranslation(
+            *(0, -linewidth_in / 2), ax.figure.dpi_scale_trans
+        )
+        + ax.transData.inverted()
+    )
+    x_left_shift = (
+        ax.transData
+        + mtransforms.ScaledTranslation(
+            *(-linewidth_in / 2, 0), ax.figure.dpi_scale_trans
+        )
+        + ax.transData.inverted()
+    )
+    x_right_shift = (
+        ax.transData
+        + mtransforms.ScaledTranslation(
+            *(linewidth_in / 2, 0), ax.figure.dpi_scale_trans
+        )
+        + ax.transData.inverted()
+    )
+
+    # Add patches iteratively
+    # use transforms according to edge_alignment and direction
+    # finally, add padding if desired
+    if edge_alignment == "outside" and direction == "y":
+        direction_dim_start_shift = y_down_shift
+        direction_dim_end_shift = y_up_shift
+        other_dim_start_shift = x_left_shift
+        other_dim_end_shift = x_right_shift
+    elif edge_alignment == "outside" and direction == "x":
+        direction_dim_start_shift = x_left_shift
+        direction_dim_end_shift = x_right_shift
+        other_dim_start_shift = y_down_shift
+        other_dim_end_shift = y_up_shift
+    elif edge_alignment == "inside" and direction == "y":
+        direction_dim_start_shift = y_up_shift
+        direction_dim_end_shift = y_down_shift
+        other_dim_start_shift = x_right_shift
+        other_dim_end_shift = x_left_shift
+    elif edge_alignment == "inside" and direction == "x":
+        direction_dim_start_shift = x_right_shift
+        direction_dim_end_shift = x_left_shift
+        other_dim_start_shift = y_up_shift
+        other_dim_end_shift = y_down_shift
+
     slice_direction = 1 if direction == "x" else -1
-
-    start_shift = (
-        ax.transData
-        + mtransforms.ScaledTranslation(
-            *(linewidth_in / 2, 0)[::slice_direction], ax.figure.dpi_scale_trans
-        )
-        + ax.transData.inverted()
-    )
-
-    end_shift = (
-        ax.transData
-        + mtransforms.ScaledTranslation(
-            *(-linewidth_in / 2, 0)[::slice_direction], ax.figure.dpi_scale_trans
-        )
-        + ax.transData.inverted()
-    )
-
-    # Add patches iteratively, using the transforms to manipulate the origin point and calculate the appropriate size to add
-    # either height or width is fixed, and the other marks patch position along the directional axis
-    # so we only need to change height (y direction) or width (x direction)
     for color, start, end in zip_longest(colors, starts, ends):
-        # if colors is empty, color will always be none
-        if direction == "x":
-            curr_origin = start_shift.transform((start, origin[1]))
-            end = end_shift.transform((end, 0))[0]
-            patch_size_in_direction = end - curr_origin[0]
-        else:
-            curr_origin = start_shift.transform((origin[0], start))
-            end = end_shift.transform((0, end))[1]
+        start: float
+        end: float
+        if edge_alignment != "centered":
+            # if colors is empty, color will always be none
+            if direction == "x":
+                # noinspection PyUnboundLocalVariable
+                curr_origin = other_dim_start_shift.transform(
+                    direction_dim_start_shift.transform((start, origin[1]))
+                )
+                curr_origin = (
+                    curr_origin[0] - direction_sides_padding_axes_coord,
+                    curr_origin[1]
+                    # - direction_sides_padding_axes_coord
+                    - non_direction_sides_padding_axes_coord,
+                )
+                # noinspection PyUnboundLocalVariable
+                end = direction_dim_end_shift.transform((end, 0))[0]
+                end = end + direction_sides_padding_axes_coord
+                patch_size_in_direction = end - curr_origin[0]
+                # noinspection PyUnboundLocalVariable
+                patch_size_other_dim = (
+                    other_dim_end_shift.transform((non_direction_patch_size, 0))[0]
+                    - curr_origin[1]
+                )
+                patch_size_other_dim = (
+                        patch_size_other_dim
+                        # + direction_sides_padding_axes_coord
+                        + non_direction_sides_padding_axes_coord
+                )
+            else:
+                curr_origin = other_dim_start_shift.transform(
+                    direction_dim_start_shift.transform((origin[0], start))
+                )
+                curr_origin = (
+                    curr_origin[0]
+                    # - direction_sides_padding_axes_coord
+                    - non_direction_sides_padding_axes_coord,
+                    curr_origin[1] - direction_sides_padding_axes_coord,
+                )
+                end = direction_dim_end_shift.transform((0, end))[1]
+                end = end + direction_sides_padding_axes_coord
+                patch_size_in_direction = end - curr_origin[1]
+                patch_size_other_dim = (
+                    other_dim_end_shift.transform((non_direction_patch_size, 0))[0]
+                    - curr_origin[0]
+                )
+                patch_size_other_dim = (
+                        patch_size_other_dim
+                        # + direction_sides_padding_axes_coord
+                        + non_direction_sides_padding_axes_coord
+                )
+        elif edge_alignment == "centered" and direction == "y":
+            curr_origin = (origin[0], start)
+            curr_origin = (
+                curr_origin[0]
+                # - direction_sides_padding_axes_coord
+                - non_direction_sides_padding_axes_coord,
+                curr_origin[1] - direction_sides_padding_axes_coord,
+            )
+            end = end + direction_sides_padding_axes_coord
             patch_size_in_direction = end - curr_origin[1]
+            patch_size_other_dim = non_direction_patch_size
+            patch_size_other_dim = (
+                    patch_size_other_dim
+                    # + 2 * direction_sides_padding_axes_coord
+                    + 2 * non_direction_sides_padding_axes_coord
+            )
+        elif edge_alignment == "centered" and direction == "x":
+            curr_origin = (start, origin[0])
+            curr_origin = (
+                curr_origin[0] - direction_sides_padding_axes_coord,
+                curr_origin[1]
+                # - direction_sides_padding_axes_coord
+                - non_direction_sides_padding_axes_coord,
+            )
+            end = end + direction_sides_padding_axes_coord
+            patch_size_in_direction = end - curr_origin[0]
+            patch_size_other_dim = non_direction_patch_size
+            patch_size_other_dim = (
+                    patch_size_other_dim
+                    # + 2 * direction_sides_padding_axes_coord
+                    + 2 * non_direction_sides_padding_axes_coord
+            )
+        else:
+            raise ValueError()
+
+        # noinspection PyTypeChecker
         patch = mpatches.FancyBboxPatch(
-            curr_origin,
-            *(patch_size_in_direction, size)[::slice_direction],
+            cast(Tuple[float, float], curr_origin),
+            *(patch_size_in_direction, patch_size_other_dim)[::slice_direction],
             # use color as edgecolor if defined; otherwise, kwargs will contain an edgecolor kwarg
             **dict(edgecolor=color) if color else {},
             **kwargs,
+            **fancy_box_kwargs,
         )
         ax.add_artist(patch)
 
@@ -2559,3 +2722,12 @@ def frame_groups(
             colors=colors if label_colors is None else label_colors,
             **label_groups_kwargs,
         )
+
+    other_dim = "x" if direction == "y" else "x"
+    # increase axis limits to include the patch+edge. quick+dirty code which only
+    # works with the standard frame-around-labels situation, and only *kinda*, since
+    # half of the edge lines will be outside the axis
+    # patch_size_other_dim is taken from the last loop iteration, it should anyway always be the same
+    # also quite q+d
+    # noinspection PyUnboundLocalVariable
+    ax.set(**{f"{other_dim}lim": (0, patch_size_other_dim)})
