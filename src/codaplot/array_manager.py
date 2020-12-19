@@ -39,7 +39,7 @@ class MidpointNormalize(colors.Normalize):
 def array_to_figure(
     plot_array: np.ndarray,
     figsize: Tuple[float],
-    dpi: int,
+    dpi: int = 180,
     merge_by_name: Union[bool, List[str]] = True,
     layout_pads: Optional[Dict] = None,
     constrained_layout=True,
