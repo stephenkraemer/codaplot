@@ -29,8 +29,7 @@ setup(
             'matplotlib>=3.0.0',
             'pandas>=0.23',
             'seaborn>=0.9.0',
-            # currently needs private fixed version, still need to submit PR
-            'dynamicTreeCut',
+            'dynamicTreeCut @ git+https://github.com/kylessmith/dynamicTreeCut',
             # only for python 3.6, improve this
             # 'dataclasses',
             'numpy',
@@ -39,7 +38,7 @@ setup(
             'toolz',
             'more_itertools',
         ],
-        python_requires='>=3.6',
+        python_requires='>=3.8',
         extras_require={
             'dev': [
                 'pytest',

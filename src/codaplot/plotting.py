@@ -28,6 +28,7 @@ from typing import (
     Tuple,
     Union,
     cast,
+    Literal,
 )
 
 import codaplot as co
@@ -49,7 +50,6 @@ from matplotlib.figure import Figure
 from pandas.core.dtypes.common import is_numeric_dtype
 from pandas.core.groupby import GroupBy
 from scipy.cluster.hierarchy import dendrogram, leaves_list
-from typing_extensions import Literal
 
 CMAP_DICT = dict(
     divergent_meth_heatmap=plt.get_cmap("RdBu_r"),
