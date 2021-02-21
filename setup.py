@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
         name='codaplot',
-        version='0.1.0',
+        version='0.2.0',
         description='description',
         long_description=__doc__,
         url='http://...',
@@ -30,8 +30,6 @@ setup(
             'pandas>=0.23',
             'seaborn>=0.9.0',
             'dynamicTreeCut @ git+https://github.com/kylessmith/dynamicTreeCut',
-            # only for python 3.6, improve this
-            # 'dataclasses',
             'numpy',
             'numba',
             'scipy',
