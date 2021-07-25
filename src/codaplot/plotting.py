@@ -369,6 +369,8 @@ def cbar_change_style_to_inward_white_ticks(
         axis="both",
         left=True,
         right=True,
+        bottom=True,
+        top=True,
     )
     if tick_params_kwargs is not None:
         tick_params_kwargs_.update(tick_params_kwargs)
