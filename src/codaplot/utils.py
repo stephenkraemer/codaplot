@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Literal
 import re
 import numpy as np
 import pandas as pd
@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.ticker as mticker
 import matplotlib.colors as mcolors
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 
 
 def warn(s):
@@ -71,42 +73,50 @@ class FacetGridAxes:
         )
 
     def _add_axeslabels_to_facet_grid_with_hidden_full_figure_axes(self, axis, label):
-
-        self.fig.draw(self.fig.canvas.get_renderer())
-
-        method_name = f"get_{axis}ticklabels"
-
-        # quickfix:
-        # would be more correct to check text width instead of label length
-        max_ticklabel_length = 0
-        max_ticklabel = ""
-        for ax in self.axes_flat:
-            for ticklabel in getattr(ax, method_name)():
-                s = ticklabel.get_text()
-                if len(s) > max_ticklabel_length:
-                    max_ticklabel_length = len(s)
-                    max_ticklabel = s
-        if not max_ticklabel:
-            raise ValueError("No ticklabels found")
-
-        max_ticklabel_width_pt = (
-            get_text_width_inch(
-                s=max_ticklabel,
-                size=mpl.rcParams[f"{axis}tick.labelsize"],
-                ax=self.axes_flat[-1],
-                draw_figure=False,
-            )
-            * 72
+        add_margin_label_via_encompassing_big_ax(
+            fig=self.fig, axes=self.axes, big_ax=self.big_ax, axis=axis, label=label
         )
 
-        labelpad = (
-            max_ticklabel_width_pt
-            + mpl.rcParams[f"{axis}tick.major.size"]
-            + mpl.rcParams[f"{axis}tick.major.pad"]
-            + mpl.rcParams["axes.labelpad"]
-        )
 
-        self.big_ax.set_ylabel(label, labelpad=labelpad)
+def add_margin_label_via_encompassing_big_ax(
+    fig: Figure, axes: np.ndarray, big_ax: Axes, axis: Literal["x", "y"], label: str
+):
+    axes_flat = axes.flatten()
+    fig.draw(fig.canvas.get_renderer())
+
+    method_name = f"get_{axis}ticklabels"
+
+    # quickfix:
+    # would be more correct to check text width instead of label length
+    max_ticklabel_length = 0
+    max_ticklabel = ""
+    for ax in axes_flat:
+        for ticklabel in getattr(ax, method_name)():
+            s = ticklabel.get_text()
+            if len(s) > max_ticklabel_length:
+                max_ticklabel_length = len(s)
+                max_ticklabel = s
+    if not max_ticklabel:
+        raise ValueError("No ticklabels found")
+
+    max_ticklabel_width_pt = (
+        get_text_width_inch(
+            s=max_ticklabel,
+            size=mpl.rcParams[f"{axis}tick.labelsize"],
+            ax=axes_flat[-1],
+            draw_figure=False,
+        )
+        * 72
+    )
+
+    labelpad = (
+        max_ticklabel_width_pt
+        + mpl.rcParams[f"{axis}tick.major.size"]
+        + mpl.rcParams[f"{axis}tick.major.pad"]
+        + mpl.rcParams["axes.labelpad"]
+    )
+
+    big_ax.set_ylabel(label, labelpad=labelpad)
 
 
 def get_text_width_inch(s, size, ax, fontfamily=None, draw_figure=True):
@@ -139,3 +149,33 @@ class ScalarFormatterQuickfixed(mticker.ScalarFormatter):
         s = super().get_offset()
         res = re.sub(r"0+e", "e", s.rstrip("0"))
         return res
+
+
+def find_offset(ax=None, xlim=None):
+    """Find offset for usage with ScalarFormatter
+
+    Works by comparing xlim[0] and xlim[1] until a differing position is found.
+    Everything starting from this position is set to 0 to give the offset
+
+
+    Parameters
+    ----------
+    specify either ax OR xlim. if ax is specified, ax.get_xlim() is used
+
+    """
+    if xlim != None:
+        xmin, xmax = xlim
+    else:
+        xmin, xmax = ax.get_xlim()
+    for i, (s1, s2) in enumerate(zip(str(xmin), str(xmax))):
+        print(s1, s2)
+        if s1 != s2:
+            res = str(xmin)[:i]
+            a1, *a2 = str(xmin)[i:].split(".")
+            res += "0" * len(a1)
+            if a2:
+                res += "." + "0" * len(a2)
+            break
+    else:
+        raise ValueError("No offset found")
+    return float(res)
