@@ -1,4 +1,5 @@
 from typing import Dict, Tuple
+import re
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
@@ -126,3 +127,15 @@ def get_text_width_inch(s, size, ax, fontfamily=None, draw_figure=True):
     artist.remove()
     # data_coord_bbox.height
     return data_coord_bbox.width
+
+
+# either there is a bug in ScalarFormatter, or I have an issue locally, perhaps with the locale?
+# anyhoo, I get trailing zeros in the offset label, and here is a quick fix for that:
+class ScalarFormatterQuickfixed(mticker.ScalarFormatter):
+    def get_offset(self):
+        """
+        Return scientific notation, plus offset.
+        """
+        s = super().get_offset()
+        res = re.sub(r"0+e", "e", s.rstrip("0"))
+        return res
