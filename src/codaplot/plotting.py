@@ -34,6 +34,7 @@ from typing import (
 import codaplot as co
 import matplotlib as mpl
 import matplotlib.patches as patches
+import itertools
 import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
@@ -2249,10 +2250,16 @@ def adjust_coords(
 
     This function is meant for plots containing or annotating elements of unit size (in data coordinates), e.g. heatmap rows or columns. The spacing_group_ids indicate where spacers should be introduced between groups of elements. For consistent handling of such spaced plots, the original unit size coordinates are transformed to the interval [0, 1]
 
-    Args:
-        coords: x or y coordinates, for a plot with unit size elements. May be numerical or categorical. Categorical coordinates are translated to unit size coordinates.
-        spacing_group_ids: spacing group indicators, one per element, eg [1, 1, 1, 2, 2, 2]
-        spacer_sizes: in percentage of Axes
+    Parameters
+    ----------
+    coords
+        x or y coordinates, for a plot with unit size elements. May be numerical or categorical. Categorical coordinates are translated to unit size coordinates.
+    spacing_group_ids
+        spacing group indicators, one per element, eg [1, 1, 1, 2, 2, 2], given in plotting order (e.g. in order after the clustering which was applied to a heatmap, not in the order before clustering).
+    spacer_sizes
+        as used by cross_plot
+    right_open
+        how to treat coordinates equal to a spacing point. Say you have a heatmap with 9 rows and three clusters, with spacing_group_ids = cluster_ids = [1, 1, 1, 2, 2, 2, 3, 3, 3]. The function will calculate that spacers occur at coordinates 3 and 6 (on axis with limits [0, n_rows], ie prior to normalization of all coordiantes to the [0, 1] interval. If right open = True, the spacers are introduced such that data points [0, 3[, [3, 6[, [6, 9] are separated by spacers. If coords contains a value == 3, this value is moved directly *after* the first spacer. Conversely, if right_open == False, the value would be considered to be directly *before* the first spacer.
 
     Returns:
         Adjusted coordinates \in [0, 1]
@@ -2639,9 +2646,9 @@ def frame_groups(
                     - curr_origin[1]
                 )
                 patch_size_other_dim = (
-                        patch_size_other_dim
-                        # + direction_sides_padding_axes_coord
-                        + non_direction_sides_padding_axes_coord
+                    patch_size_other_dim
+                    # + direction_sides_padding_axes_coord
+                    + non_direction_sides_padding_axes_coord
                 )
             else:
                 curr_origin = other_dim_start_shift.transform(
@@ -2661,9 +2668,9 @@ def frame_groups(
                     - curr_origin[0]
                 )
                 patch_size_other_dim = (
-                        patch_size_other_dim
-                        # + direction_sides_padding_axes_coord
-                        + non_direction_sides_padding_axes_coord
+                    patch_size_other_dim
+                    # + direction_sides_padding_axes_coord
+                    + non_direction_sides_padding_axes_coord
                 )
         elif edge_alignment == "centered" and direction == "y":
             curr_origin = (origin[0], start)
@@ -2677,9 +2684,9 @@ def frame_groups(
             patch_size_in_direction = end - curr_origin[1]
             patch_size_other_dim = non_direction_patch_size
             patch_size_other_dim = (
-                    patch_size_other_dim
-                    # + 2 * direction_sides_padding_axes_coord
-                    + 2 * non_direction_sides_padding_axes_coord
+                patch_size_other_dim
+                # + 2 * direction_sides_padding_axes_coord
+                + 2 * non_direction_sides_padding_axes_coord
             )
         elif edge_alignment == "centered" and direction == "x":
             curr_origin = (start, origin[0])
@@ -2693,9 +2700,9 @@ def frame_groups(
             patch_size_in_direction = end - curr_origin[0]
             patch_size_other_dim = non_direction_patch_size
             patch_size_other_dim = (
-                    patch_size_other_dim
-                    # + 2 * direction_sides_padding_axes_coord
-                    + 2 * non_direction_sides_padding_axes_coord
+                patch_size_other_dim
+                # + 2 * direction_sides_padding_axes_coord
+                + 2 * non_direction_sides_padding_axes_coord
             )
         else:
             raise ValueError()
@@ -2733,3 +2740,197 @@ def frame_groups(
     # also quite q+d
     # noinspection PyUnboundLocalVariable
     ax.set(**{f"{other_dim}lim": (0, patch_size_other_dim)})
+
+
+def add_cluster_anno_bubbles(
+    cluster_ids_ser,
+    cluster_colors_d: Union[Dict, pd.Series],
+    cluster_to_anno_lines_dol,
+    anno_side: Literal['top', 'bottom', 'left', 'right'],
+    ax,
+    n_tiers=2,
+    fontsize=None,
+    connector_lw=1,
+    spacer_between_subsequent_bubbles=0.1,
+    spacer_between_bubble_tiers=0.1,
+    boxstyle="Round,pad=0,rounding_size=0.015",
+    spacing_group_ids=None,
+    spacer_sizes=None,
+    cluster_order=None,
+) -> None:
+    """Annotate heatmap with 'bubbles' aligned with clusters (considering spacers)
+
+    Usage notes
+    -----------
+    - How to make boxes fit around the text
+      - adjust the axes size outside of the plotting function
+      - control the size of the boxes by adjusting the spacer_between_subsequent_bubbles and the spacer_between_bubble_tiers
+
+    Implementation notes
+    --------------------
+    - currently assumes that all clusters have the same size
+
+    Parameters
+    ----------
+    cluster_ids_ser
+        cluster_ids of rows in plotting order
+    cluster_to_anno_lines_l
+        dict mapping cluster id -> List[Str, ...], e.g. {1: ['gene1', 'gene2']}
+    annotated_axis
+        whether bubbles should be plotted along the x or along the y axis of the heatmap
+    fontsize
+        defaults to {annotated_axis}tick.labelsize
+    spacer_size
+        if None, no spacing, set {annotated_axis}_lim to (0, n_clusters)
+        else, apply specing, set {annotated_axis}_lim to (0, 1)
+    spacer_between_subsequent_bubbles
+        spacer between two subsequent bubbles in one row/col in kind-of"percent". Bubbles are centered on the cluster they annotate and have width cluster_width * n_cols * (1 - spacer_between_subsequent_bubbles) when annotating an x axis, and analogously when annotating a y axis
+    spacer_between_bubble_tiers
+        spacer between rows/cols of bubbles in kind of percent. For x axis annotation, bubbles are centered at y=0.5, 1.5, and have width (1 - spacer_between_bubble_tiers)
+    spacing_group_ids
+        in plotting order, used for co.plotting.adjust_coords
+    cluster_order
+        optional, not necessary when cluster_ids_ser is categorical. always pass in ascending order, if annotated_axis='y', this will be flipped automatically atm
+    n_tiers
+        number of rows/cols of bubbles. within each row, the bubble size along the annotated axis is cluster_size * n_tiers * spacer_between_subsequent_bubbles
+
+
+    """
+
+    if anno_side in ['top', 'bottom']:
+        annotated_axis = 'x'
+    else:
+        annotated_axis = 'y'
+
+    if fontsize is None:
+        fontsize = mpl.rcParams[f"{annotated_axis}tick.labelsize"]
+
+    if cluster_order is None:
+        try:
+            cluster_order = cluster_ids_ser.cat.categories
+        except AttributeError:
+            raise ValueError()
+    cluster_sizes = cluster_ids_ser.value_counts()
+    common_cluster_size = cluster_sizes[0]
+    assert cluster_sizes.eq(common_cluster_size).all()
+
+    # calculate limits for annotated axis == 'x'
+    # NOTE: cannot add margin to avoid clipping bubble edgelines, because this would break alignment with the heatmap annotated by this plot. this is better solved eg with a spacer in a cross_plot
+    ylim = (0, n_tiers)
+    if spacing_group_ids is not None:
+        assert spacer_sizes is not None
+        xlim = (0, 1)
+    else:
+        xlim = (0, cluster_ids_ser.shape[0])
+    if annotated_axis == "y":
+        ylim, xlim = xlim, ylim
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    bubble_centers = (
+        np.arange(len(cluster_sizes)) * common_cluster_size + common_cluster_size * 0.5
+    )
+    bubble_centers_adjusted = adjust_coords(
+        coords=bubble_centers,
+        spacing_group_ids=spacing_group_ids,
+        spacer_sizes=spacer_sizes,
+    )
+
+    common_cluster_sizes_after_spacer_transformation = np.ediff1d(
+        adjust_coords(
+            coords=np.array([0, 749.999, 750, 1499.999]),
+            spacing_group_ids=spacing_group_ids,
+            spacer_sizes=spacer_sizes,
+            right_open=True,
+        )
+    )
+    common_cluster_size_transformed = common_cluster_sizes_after_spacer_transformation[
+        0
+    ]
+    assert np.isclose(
+        common_cluster_size_transformed,
+        common_cluster_sizes_after_spacer_transformation[-1],
+    )
+
+    width_in_anno_dir = (
+        common_cluster_size_transformed
+        * n_tiers
+        * (1 - spacer_between_subsequent_bubbles)
+    )
+    height_in_anno_dir = 1 - spacer_between_bubble_tiers
+
+    # bubbler_spacer_size_data_coords_x = (
+    # patch_width * bubbler_spacer_size_perc_x
+    # )
+
+    for cluster_id, bubble_center, col_idx in zip(
+        cluster_order, bubble_centers_adjusted, itertools.cycle(np.arange(n_tiers))
+    ):
+
+        # calculate limits for annotated axis == 'x'
+        x = bubble_center
+        y = 0.5 + col_idx
+        xy = (
+            bubble_center - width_in_anno_dir / 2,
+            # - common_cluster_size_transformed / 2
+            # + bubbler_spacer_size_data_coords_x / 2,
+            y - height_in_anno_dir / 2,
+        )
+        patch_width = width_in_anno_dir
+        patch_height = height_in_anno_dir
+        # width = common_cluster_size_transformed - bubbler_spacer_size_data_coords_x
+        if annotated_axis == "y":
+            y, x = x, y
+            xy = xy[::-1]
+            patch_width, patch_height = patch_height, patch_width
+        # print(pd.Series(dict(cluster_id=cluster_id, x=x, y=y, patch_width=patch_width, patch_height=patch_height, xy=xy)))
+
+        # where to aligned anno line text on the non-annotated axis
+        text = "\n".join(cluster_to_anno_lines_dol[cluster_id])
+        ax.text(x=x, y=y, s=text, va="center", ha="center", zorder=3, fontsize=fontsize)
+        ax.add_patch(
+            mpatches.FancyBboxPatch(
+                xy=xy,
+                width=patch_width,
+                height=patch_height,
+                # color=cluster_colors_d[cluster_id],
+                # alpha=alpha,
+                # color=None,
+                # color overwrite both
+                # color='white',
+                facecolor="white",
+                zorder=2,
+                clip_on=False,
+                # boxstyle=mpatches.BoxStyle.Round(pad=0.1),
+                boxstyle=boxstyle,
+                # edgecolor=None,
+                edgecolor=cluster_colors_d[cluster_id],
+                linewidth=1.5,
+            )
+        )
+
+        k = 1
+        line_endpoint = {
+            "top": -k,
+            "bottom": n_tiers + k,
+            "left": n_tiers + k,
+            "right": -k,
+        }[anno_side]
+        if anno_side in ['top', 'bottom']:
+            args = (
+            [x, x],
+            [y, line_endpoint])
+        else:
+            args = ([x, line_endpoint], [y, y])
+        ax.plot(
+            *args,
+            c=cluster_colors_d[cluster_id],
+            linewidth=connector_lw,
+            # linewidth=0.5,
+            # linestyle="--",
+            zorder=1,
+        )
+
+        ax.axis("off")
+    if annotated_axis == "y":
+        ax.invert_yaxis()

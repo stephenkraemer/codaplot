@@ -168,7 +168,6 @@ def find_offset(ax=None, xlim=None):
     else:
         xmin, xmax = ax.get_xlim()
     for i, (s1, s2) in enumerate(zip(str(xmin), str(xmax))):
-        print(s1, s2)
         if s1 != s2:
             res = str(xmin)[:i]
             a1, *a2 = str(xmin)[i:].split(".")
@@ -179,3 +178,18 @@ def find_offset(ax=None, xlim=None):
     else:
         raise ValueError("No offset found")
     return float(res)
+
+
+def strip_all_axis(ax):
+    ax.tick_params(
+            axis="both",
+            which="both",
+            bottom=False,
+            left=False,
+            labelbottom=False,
+            labelleft=False,
+            labelsize=0,
+            length=0,
+    )
+    for spine in ax.spines.values():
+        spine.set_visible(False)
