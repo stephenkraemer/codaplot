@@ -1,3 +1,4 @@
+import matplotlib.patches as patches
 from typing import Dict, Tuple, Literal
 import re
 import numpy as np
@@ -120,6 +121,7 @@ def add_margin_label_via_encompassing_big_ax(
 
 
 def get_text_width_inch(s, size, ax, fontfamily=None, draw_figure=True):
+    print('DEPRECATED, use get_text_width_height_in_x instead')
     r = ax.figure.canvas.get_renderer()
     if draw_figure:
         ax.figure.draw(r)
@@ -137,6 +139,35 @@ def get_text_width_inch(s, size, ax, fontfamily=None, draw_figure=True):
     artist.remove()
     # data_coord_bbox.height
     return data_coord_bbox.width
+
+def get_text_width_height_in_x(
+    s,
+    size,
+    ax,
+    x: Literal["inch", "data_coordinates"] = "inch",
+    fontfamily=None,
+    draw_figure=True,
+):
+    r = ax.figure.canvas.get_renderer()
+    if draw_figure:
+        ax.figure.draw(r)
+    if not s:
+        raise ValueError(
+            "s is an emtpy string - did you draw the figure prior to calling this function?"
+        )
+    # get window extent in display coordinates
+    text_kwargs = dict(fontsize=size)
+    if fontfamily:
+        text_kwargs |= dict(fontfamily=fontfamily)
+    artist = ax.text(0, 0, s, **text_kwargs)
+    bbox = artist.get_window_extent(renderer=r)
+    transform = {
+        "inch": ax.figure.dpi_scale_trans.inverted(),
+        "data_coordinates": ax.transData.inverted(),
+    }[x]
+    transformed_bbox = bbox.transformed(transform)
+    artist.remove()
+    return transformed_bbox.width, transformed_bbox.height
 
 
 # either there is a bug in ScalarFormatter, or I have an issue locally, perhaps with the locale?
@@ -181,6 +212,7 @@ def find_offset(ax=None, xlim=None):
 
 
 def strip_all_axis(ax):
+    print('DEPRECTACED, just use ax.axis("off")')
     ax.tick_params(
             axis="both",
             which="both",
@@ -193,3 +225,33 @@ def strip_all_axis(ax):
     )
     for spine in ax.spines.values():
         spine.set_visible(False)
+
+def strip_all_axis2(ax):
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+def convert_inch_to_data_coords(size, ax) -> Tuple[float, float]:
+    """
+
+    only correct for the current fig sizes and axis limits
+    """
+
+    # add a rectangle with width and height  = size
+    # get data coords from bbox
+    # then remove rect agaig
+    rect = ax.add_patch(
+        patches.Rectangle(
+            xy=(0, 0),  # anchor point
+            width=size,
+            height=size,
+            transform=ax.figure.dpi_scale_trans,
+        )
+    )
+    r = ax.figure.canvas.get_renderer()
+    bbox = rect.get_window_extent(renderer=r)
+    transformed_bbox = bbox.transformed(ax.transData.inverted())
+    # snippet blended transforms: https://matplotlib.org/stable/tutorials/advanced/transforms_tutorial.html
+    rect.remove()
+    return transformed_bbox.width, transformed_bbox.height

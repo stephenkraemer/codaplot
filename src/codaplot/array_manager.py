@@ -44,19 +44,43 @@ def array_to_figure(
     layout_pads: Optional[Dict] = None,
     constrained_layout=True,
 ) -> Dict:
-    """Convert array of plotting instructions into figure, provide access to Axes
+    """Convert array of plotting instruction dicts into figure, provide access to Axes
 
-    plot array format
-    - Array of ArrayElements
-    - all ArrayElements must have names
-    - ArrayElement names must be unique, they will e.g. be used as identifiers
-      in the returned Axes dict, but the unique names are also relied upon by
-      internal code.
+    This is the function currently used by cross_plot
+
+    inner array elements are None (for spacers)  or dict, the following fields have special meaning
+    _func : plotting function for the axes to be created
+    _name : name of the axes to be created. can the name be left out?
+    _args : tuple of positional arguments passed to _func
+    _supply : todo
+
+    all other fields are passed as kwargs to _func
+
+    details
+    _func
+        may be empty, in this case, an Axes is created, but no plotting action is taken
+    _name
+        if adjacent array elements have the same _name, and merge_by_name == True, the adjacent elements are merged. this is always done in a rectangle (ie by taking a rectangular slice across the x and y axis of the plotting array), and it is ascerted that all elements in that rectangle have the name, or are None (=spacers)
+
+    outer array elements specify the sizes
+
+    example
 
 
-    [[ArrayElement, ArrayElement, (1, 'rel')],
-     [ArrayElement, ArrayElement, (1, 'abs')],
-     [  (1, 'abs'),   (1, 'rel'),       None][,
+    [[{'_func': plot_stuff, '_name': 'plot1'}, none, (1, 'rel')],
+     [{'_name': 'plot1}, {'_func': plot_2, '_name': 'plot2', '_args' = (2, 3), another_arg='abc}, (1, 'abs')],
+     [  (1, 'abs'),   (1, 'rel'),       None]],
+
+    this function
+    - creates axes for each indicated subplot, merging adjacent names if requested
+    - runs the specified plotting func if it is available
+    - provides acces to the created axes via an array matched to the input plotting array
+    - provides access to named plot elements via a dict with keys given by named plot elements
+    - provides acces to return values of the created axes under the plot name key, which is useful to generate legends etc. by recording returns of pcolormesh etc.
+
+    by comparison, subplot_mosaic and co
+    - creates axes for each indicated subplot, merging adjacent names if requested
+    - provides access to named plot elements via a dict with keys given by named plot elements
 
 
     Parameters

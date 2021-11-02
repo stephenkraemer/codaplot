@@ -13,10 +13,10 @@ import pyranges as pr
 from ncls import NCLS
 from sorted_nearest import annotate_clusters
 
-print('reloaded dodge.py')
+print("reloaded dodge.py")
 
 
-def dodge_intervals_horizontally(starts, ends, round_to=7, slack=None):
+def dodge_intervals_horizontally(starts, ends, round_to=7, slack=0):
     """
 
     1-based intervals, cluster half width 10.5, cluster center at 30
@@ -51,6 +51,10 @@ def dodge_intervals_horizontally(starts, ends, round_to=7, slack=None):
             length=end_ints - start_ints,
         )
     )
+
+    # sorting is required for annotated clusters (I think)
+    pd.testing.assert_frame_equal(intervals, intervals.sort_values(["starts", "ends"]))
+
     reduced_intervals = intervals.assign(starts_min=start_ints, ends_max=end_ints)
 
     while True:
@@ -98,20 +102,23 @@ def _agg_clusters(group_df, slack):
         center = start + (end - start) / 2
         width = (group_df["length"] + slack).sum() - slack  # no slack for last interval
         half_width = width / 2
-        return pd.DataFrame(dict(
-            starts = np.round([center - half_width], 0).astype("i4"),
-            ends = np.round([center + half_width], 0).astype("i4"),
-            length = width,
-            starts_min = start,
-            ends_max = end,
-            ))
+        return pd.DataFrame(
+            dict(
+                starts=np.round([center - half_width], 0).astype("i4"),
+                ends=np.round([center + half_width], 0).astype("i4"),
+                length=width,
+                starts_min=start,
+                ends_max=end,
+            )
+        )
     return group_df
 
 
 def _spread_intervals(group_df, reduced_intervals, slack):
     if group_df.shape[0] > 1:
-        cluster_start, cluster_end = reduced_intervals.iloc[
-            group_df.name][['starts', 'ends']]
+        cluster_start, cluster_end = reduced_intervals.iloc[group_df.name][
+            ["starts", "ends"]
+        ]
         l = np.concatenate([[0], (group_df["length"] + slack).cumsum()[:-1]])
         group_df["starts"] = cluster_start + l
         group_df["ends"] = group_df["starts"] + group_df["length"]
