@@ -16,7 +16,7 @@ from sorted_nearest import annotate_clusters
 print("reloaded dodge.py")
 
 
-def dodge_intervals_horizontally(starts, ends, round_to=7, slack=0):
+def dodge_intervals_horizontally(starts, ends, max_precision=9, slack=0):
     """
 
     1-based intervals, cluster half width 10.5, cluster center at 30
@@ -26,36 +26,77 @@ def dodge_intervals_horizontally(starts, ends, round_to=7, slack=0):
     for half width 10.3 we would round to start = 20, end = 40 and get cluster center 30
     """
 
+    # jj snippets
+    # it appears that annotate_clusters (which we'll used later on) implicitely casts to int32,
+    # which can lead to wrong results if an int overflow occurs
+    # make sure that starts and ends are small enough even after scaling floats to int (which again is required for annotate_clusters)
+
+    max_int32_value = np.iinfo('i4').max
+    max_int32_precision = np.floor(np.log10(np.iinfo("i4").max))
+    assert max_precision <= max_int32_precision
+    # get maximum precision of integer part
+    max_int_prec = np.int32(np.floor(np.log10(starts)).max())
+    scale = max_precision - max_int_prec
+
     # %%
     assert isinstance(starts, np.ndarray)
     assert isinstance(ends, np.ndarray)
     assert ends.dtype == starts.dtype
-    if starts.dtype in [np.int32, np.int64]:
-        round_to = 0
-
     # annotate_clusters requires int input
-    if round_to > 0:
-        start_ints = (starts.round(round_to) * 10 ** round_to).astype("i8")
-        end_ints = (ends.round(round_to) * 10 ** round_to).astype("i8")
-        slack_int = np.int64(slack * 10 ** round_to)
+    orig_dtype = starts.dtype
+    assert ends.dtype == orig_dtype
+
+    if starts.dtype == ends.dtype == np.int32:
+        starts_i4 = starts
+        ends_i4 = ends
+        if np.can_cast(slack, "i4"):
+            slack_i4 = np.int32(slack)
+        else:
+            raise ValueError
+    elif starts.dtype == np.int64:
+        assert (
+            np.can_cast(starts, np.int32)
+            and np.can_cast(ends, np.int32)
+            and np.can_cast(slack, np.int32)
+        )
+        starts_i4 = starts.astype("i4")
+        ends_i4 = ends.astype("i4")
+        slack_i4 = np.int32(slack)
+    elif starts.dtype in [np.float32, np.float64]:
+        # float32 and float64 overflow warnings work,
+        # so we should pick up overflows here
+        start_floats = starts.round(scale) * 10 ** scale
+        end_floats = ends.round(scale) * 10 ** scale
+        slack_float = slack.round(scale) * 10 ** scale
+        # int32 and int64 overflow warnings fail in multiple use cases
+        # and i dont understand when
+        # so test explicitly
+        if (
+            (start_floats < max_int32_value).all()
+            and (end_floats < max_int32_value).all()
+            and (slack_float < max_int32_value)
+        ):
+            starts_i4 = start_floats.astype("i4")
+            ends_i4 = end_floats.astype("i4")
+            slack_i4 = slack_float.astype("i4")
+        else:
+            raise ValueError
     else:
-        start_ints = starts
-        end_ints = ends
-        slack_int = slack
+        raise TypeError
 
     # %%
     intervals = pd.DataFrame(
         dict(
-            starts=start_ints,
-            ends=end_ints,
-            length=end_ints - start_ints,
+            starts=starts_i4,
+            ends=ends_i4,
+            length=ends_i4 - starts_i4,
         )
     )
 
     # sorting is required for annotated clusters (I think)
     pd.testing.assert_frame_equal(intervals, intervals.sort_values(["starts", "ends"]))
 
-    reduced_intervals = intervals.assign(starts_min=start_ints, ends_max=end_ints)
+    reduced_intervals = intervals.assign(starts_min=starts_i4, ends_max=ends_i4)
 
     while True:
 
@@ -70,13 +111,13 @@ def dodge_intervals_horizontally(starts, ends, round_to=7, slack=0):
 
         reduced_intervals = (
             reduced_intervals.groupby(cluster_ids, group_keys=False)
-            .apply(_agg_clusters, slack=slack_int)
+            .apply(_agg_clusters, slack=slack_i4)
             .reset_index(drop=True)
         )
     # %%
 
     intervals_ncls = NCLS(
-        starts=start_ints, ends=end_ints, ids=np.arange(start_ints.shape[0])
+        starts=starts_i4, ends=ends_i4, ids=np.arange(starts_i4.shape[0])
     )
     rh_idx, lh_idx = intervals_ncls.all_overlaps_both(
         reduced_intervals["starts"].to_numpy(),
@@ -85,13 +126,31 @@ def dodge_intervals_horizontally(starts, ends, round_to=7, slack=0):
     )
 
     shifted_intervals = intervals.groupby(rh_idx, group_keys=False).apply(
-        _spread_intervals, reduced_intervals=reduced_intervals, slack=slack_int
+        _spread_intervals, reduced_intervals=reduced_intervals, slack=slack_i4
     )
 
-    return (
-        shifted_intervals["starts"].to_numpy() / 10 ** round_to,
-        shifted_intervals["ends"].to_numpy() / 10 ** round_to,
-    )
+    # during _agg_clusters, starts and ends are cast to int64 by pandas groupby.apply
+    if orig_dtype == np.int32:
+
+        assert shifted_intervals["starts"].lt(max_int32_value).all()
+        assert shifted_intervals["ends"].lt(max_int32_value).all()
+        return (
+            shifted_intervals["starts"].to_numpy().astype('i4'),
+            shifted_intervals["ends"].to_numpy().astype('i4'),
+        )
+    elif orig_dtype == np.int64:
+        assert shifted_intervals[["starts", "ends"]].dtypes.eq(np.int64).all()
+        return (
+            shifted_intervals["starts"].to_numpy(),
+            shifted_intervals["ends"].to_numpy(),
+        )
+    else:  # float
+        # int64 can always be cast back to float
+        return (
+            (shifted_intervals["starts"].to_numpy() / 10 ** scale)
+            .astype(orig_dtype)(shifted_intervals["ends"].to_numpy() / 10 ** scale)
+            .astype(orig_dtype),
+        )
 
 
 def _agg_clusters(group_df, slack):
