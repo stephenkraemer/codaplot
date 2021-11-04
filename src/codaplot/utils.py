@@ -142,7 +142,7 @@ def get_text_width_inch(s, size, ax, fontfamily=None, draw_figure=True):
 
 def get_text_width_height_in_x(
     s,
-    size,
+    fontsize,
     ax,
     x: Literal["inch", "data_coordinates"] = "inch",
     fontfamily=None,
@@ -156,7 +156,7 @@ def get_text_width_height_in_x(
             "s is an emtpy string - did you draw the figure prior to calling this function?"
         )
     # get window extent in display coordinates
-    text_kwargs = dict(fontsize=size)
+    text_kwargs = dict(fontsize=fontsize)
     if fontfamily:
         text_kwargs |= dict(fontfamily=fontfamily)
     artist = ax.text(0, 0, s, **text_kwargs)
