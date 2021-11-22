@@ -1,3 +1,4 @@
+import matplotlib.legend as mlegend
 import matplotlib.patches as patches
 from typing import Dict, Tuple, Literal
 import re
@@ -10,6 +11,13 @@ import matplotlib.ticker as mticker
 import matplotlib.colors as mcolors
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from matplotlib import _api
+from matplotlib.offsetbox import (
+    HPacker, VPacker,
+    DrawingArea, TextArea,
+)
+
+
 
 
 def warn(s):
@@ -255,3 +263,12 @@ def convert_inch_to_data_coords(size, ax) -> Tuple[float, float]:
     # snippet blended transforms: https://matplotlib.org/stable/tutorials/advanced/transforms_tutorial.html
     rect.remove()
     return transformed_bbox.width, transformed_bbox.height
+
+
+def get_artist_size_inch(art, fig):
+    r = fig.canvas.get_renderer()
+    bbox = art.get_window_extent(renderer=r)
+    transformed_bbox = bbox.transformed(fig.dpi_scale_trans.inverted())
+    return transformed_bbox.width, transformed_bbox.height
+
+

@@ -9,6 +9,7 @@ from inspect import signature
 from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import codaplot as co
+import codaplot.utils as coutils
 import matplotlib as mpl
 import matplotlib.colors as colors
 import matplotlib.gridspec as gridspec
@@ -361,6 +362,11 @@ def add_guides(
     legend_kwargs
         passed to place_guides, will eventually be used in mlegend.Legend
     """
+    print("relaoded guides 3")
+
+    if legend_kwargs is None:
+        legend_kwargs = {}
+
     ax.axis("off")
     if guide_titles:
         selected_guide_specs_l = []
@@ -371,7 +377,9 @@ def add_guides(
     else:
         selected_guide_specs_l = guide_spec_l
 
-    guide_placement_params_df = get_guide_placement_params(selected_guide_specs_l, ax)
+    guide_placement_params_df = get_guide_placement_params(
+        selected_guide_specs_l, ax, legend_kwargs
+    )
     place_guides(
         ax=ax,
         placement_df=guide_placement_params_df,
@@ -383,7 +391,7 @@ def add_guides(
     )
 
 
-def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
+def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kwargs):
     """Get dataframe with required height and width for all guides
 
     Parameters
@@ -433,10 +441,34 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax):
                 ignore_index=True,
             )
         else:  # We have a standard legend
-            elem = guide_d["handles"], guide_d["labels"]
+
             # Create a throw-away legend object without appropriate placing parameters,
             # to get the legend size
-            l = mlegend.Legend(ax, *elem, title=guide_d.get("title", None))
+
+            curr_legend_kwargs = (
+                legend_kwargs
+                | pd.Series(guide_d)
+                .drop(
+                    ["handles", "labels"]
+                    + (["title"] if "title" in guide_d else [])
+                    + (["_constructor"] if "_constructor" in guide_d else [])
+                )
+                .to_dict()
+            )
+
+            try:
+                constructor = guide_d["_constructor"]
+            except KeyError:
+                constructor = mlegend.Legend
+
+            l = constructor(
+                ax,
+                guide_d["handles"],
+                guide_d["labels"],
+                title=guide_d.get("title", None),
+                **curr_legend_kwargs,
+            )
+
             r = ax.figure.canvas.get_renderer()
             bbox = l.get_window_extent(r).transformed(ax.transAxes.inverted())
             placement_df = placement_df.append(
@@ -460,8 +492,8 @@ def place_guides(
     ax: Axes,
     placement_df: pd.DataFrame,
     cbar_styling_func: Callable,
-    xpad_in=0.2,
-    ypad_in=0.2 / 2.54,
+    xpad_in=0.5 / 2.54,
+    ypad_in=0.5 / 2.54,
     cbar_title_as_label=False,
     legend_kwargs=None,
 ) -> None:
@@ -489,12 +521,11 @@ def place_guides(
         passed to mlegend.Legend via _add_legend
     """
 
-    if legend_kwargs is None:
-        legend_kwargs = {}
-
-    ax_width_in, ax_height_in = get_axes_dim_in(ax)
-    min_xpad_ax_coord = xpad_in / ax_width_in
-    min_ypad_ax_coord = ypad_in / ax_width_in
+    # ax_width_in, ax_height_in = get_axes_dim_in(ax)
+    # min_xpad_ax_coord = xpad_in / ax_width_in
+    # min_ypad_ax_coord = ypad_in / ax_width_in
+    min_xpad_data_coords, _ = coutils.convert_inch_to_data_coords(xpad_in, ax)
+    _, min_ypad_data_coords = coutils.convert_inch_to_data_coords(ypad_in, ax)
 
     # Iterate over guides, from largest to smallest
     # Fill guide Axes column by column
@@ -513,9 +544,9 @@ def place_guides(
 
         # Place the guide, even if its height is larger than the Axes height
         if "handles" in row_ser.contents:
-            _add_legend(ax, curr_x, curr_y, row_ser, **legend_kwargs)
-            curr_xpad = min_xpad_ax_coord
-            curr_ypad = min_ypad_ax_coord
+            _add_legend(ax, curr_x, curr_y, row_ser, legend_kwargs)
+            curr_xpad = min_xpad_data_coords
+            curr_ypad = min_ypad_data_coords
         else:
             # The colorbar is added as inset axes
             # we need to add additional padding to the predefined padding to
@@ -523,15 +554,15 @@ def place_guides(
             add_xpad_ax_coord, add_ypad_ax_coord = _add_cbar_inset_axes(
                 row_ser, ax, curr_x, curr_y, cbar_styling_func, cbar_title_as_label
             )
-            curr_xpad = min_xpad_ax_coord + add_xpad_ax_coord
-            curr_ypad = min_ypad_ax_coord + add_ypad_ax_coord
+            curr_xpad = min_xpad_data_coords + add_xpad_ax_coord
+            curr_ypad = min_ypad_data_coords + add_ypad_ax_coord
 
         # TODO: padding around colorbars hardcoded in axes coordinates
         curr_y = curr_y - (row_ser.height + curr_ypad)
         next_x = max(next_x, curr_x + row_ser.width + curr_xpad)
 
 
-def _add_legend(ax, curr_x, curr_y, row_ser, **kwargs):
+def _add_legend(ax, curr_x, curr_y, row_ser, legend_kwargs):
     """Add legend to axis
     Helper method for place_guides
 
@@ -539,16 +570,38 @@ def _add_legend(ax, curr_x, curr_y, row_ser, **kwargs):
         kwargs:
             passed to mlegend.Legend
     """
-    l = mlegend.Legend(
+
+    guide_d = row_ser["contents"]
+
+    try:
+        constructor = guide_d["_constructor"]
+    except KeyError:
+        constructor = mlegend.Legend
+
+    # fmt: off
+    curr_legend_kwargs = (
+        legend_kwargs
+        | (
+            pd.Series(guide_d).drop(
+            ["handles", "labels"]
+            + (["title"] if "title" in guide_d else [])
+            + (["_constructor"] if "_constructor" in guide_d else [])
+            ).to_dict())
+        | dict(
+            # avoid padding between legend corner and anchor point
+            borderaxespad=0,
+            loc="upper left",
+            bbox_to_anchor=(curr_x, curr_y),
+        )
+    )
+    # fmt: on
+
+    l = constructor(
         ax,
         handles=row_ser.contents["handles"],
         labels=row_ser.contents["labels"],
         title=row_ser.contents.get("title", None),
-        # avoid padding between legend corner and anchor point
-        borderaxespad=0,
-        loc="upper left",
-        bbox_to_anchor=(curr_x, curr_y),
-        **kwargs,
+        **curr_legend_kwargs,
     )
 
     # https://github.com/matplotlib/matplotlib/issues/12388
@@ -797,7 +850,7 @@ def cross_plot(
     layout_pads: Optional[Dict] = None,
     pads_around_center: Optional[List[Tuple[float, str]]] = None,
     # default plotting function
-    default_plotting_func: Callable = co.plotting.heatmap,
+    default_plotting_func: Callable = co.heatmap,
     default_plotting_func_kwargs: Optional[Dict] = None,
     # automatic alignment, spacing-adjustment and data distribution
     supply_tasks: Optional[Dict] = cross_plot_supply_tasks_d,
