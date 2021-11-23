@@ -163,7 +163,8 @@ class MyCenteredLabelFullHeightLegend(mlegend.Legend):
         self._legend_title_box = TextArea("")
         self._legend_box = HPacker(
             pad=self.borderpad * fontsize,
-            sep=self.labelspacing * fontsize,
+            # sep=self.labelspacing * fontsize,
+            sep=mpl.rcParams['axes.labelpad'],
             align="center",
             children=[self._legend_handle_box, self._legend_title_box],
         )
@@ -196,7 +197,8 @@ class MyCenteredLabelFullHeightLegend(mlegend.Legend):
         # self._legend_title_box._text.set_y((h - y)/2)
         # self._legend_title_box.set_clip_on(False)
         # self._legend_box.set_clip_on(False)
-        self.parent.figure.canvas.draw()
+
+        # self.parent.figure.canvas.draw()
 
         self.stale = True
 
@@ -279,4 +281,7 @@ def create_legend_for_norm_size_patches(
         title=title,
         **legend_kwargs,
     )
+
+    leg.set_clip_on(False)
+
     return leg
