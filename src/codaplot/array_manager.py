@@ -850,7 +850,7 @@ def cross_plot(
     layout_pads: Optional[Dict] = None,
     pads_around_center: Optional[List[Tuple[float, str]]] = None,
     # default plotting function
-    default_plotting_func: Callable = co.heatmap,
+    default_plotting_func: Callable = co.plotting.heatmap,
     default_plotting_func_kwargs: Optional[Dict] = None,
     # automatic alignment, spacing-adjustment and data distribution
     supply_tasks: Optional[Dict] = cross_plot_supply_tasks_d,

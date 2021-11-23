@@ -188,7 +188,10 @@ class VariableSizeRectanglePatchHandler:
         width_handlebox_coord = handlebox.width * rel_width
         height_handlebox_coord = handlebox.height * rel_height
         patch = mpatches.Rectangle(
-            [0, 0],
+            [
+                handlebox.width / 2 - width_handlebox_coord / 2,
+                handlebox.height / 2 - height_handlebox_coord / 2,
+            ],
             width_handlebox_coord,
             height_handlebox_coord,
             facecolor="black",
@@ -201,7 +204,7 @@ class VariableSizeRectanglePatchHandler:
 
 
 def create_legend_for_norm_size_patches(
-        ax, handles, labels, title=None, **legend_kwargs
+    ax, handles, labels, title=None, **legend_kwargs
 ):
     """
 
