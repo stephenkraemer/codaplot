@@ -189,7 +189,7 @@ class VariableSizeRectanglePatchHandler:
         height_handlebox_coord = handlebox.height * rel_height
         patch = mpatches.Rectangle(
             [
-                handlebox.width / 2 - width_handlebox_coord / 2,
+                handlebox.width - width_handlebox_coord,
                 handlebox.height / 2 - height_handlebox_coord / 2,
             ],
             width_handlebox_coord,

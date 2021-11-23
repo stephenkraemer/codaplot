@@ -114,7 +114,7 @@ def test_cl_with_legend():
         loc="upper left",
         bbox_to_anchor=(1, 1),
         labelspacing=1,
-        title=None,
+        title='abc',
         # handletextpad=0,
         # borderaxespad=0,
         # borderpad=0,
@@ -125,6 +125,7 @@ def test_cl_with_legend():
     # leg.get_in_layout()
     # leg.get_clip_on()
     leg.set_clip_on(False)
+    leg._legend_box.align = 'center'
 
     # ax.legend_ = leg
     # ax.legend_._remove_method = ax._remove_legend
