@@ -161,17 +161,44 @@ class MyCenteredLabelFullHeightLegend(mlegend.Legend):
             pad=0, sep=sep, align="baseline", mode=mode, children=columnbox
         )
         self._legend_title_box = TextArea("")
-        self._legend_box = VPacker(
+        self._legend_box = HPacker(
             pad=self.borderpad * fontsize,
             sep=self.labelspacing * fontsize,
             align="center",
-            children=[self._legend_title_box, self._legend_handle_box],
+            children=[self._legend_handle_box, self._legend_title_box],
         )
         self._legend_box.set_figure(self.figure)
         self._legend_box.axes = self.axes
         self.texts = text_list
         self.legendHandles = handle_list
 
+    def set_title(self, title, prop=None):
+        """
+        Set the legend title. Fontproperties can be optionally set
+        with *prop* parameter.
+        """
+        self._legend_title_box._text.set_text(title)
+        if title:
+            self._legend_title_box._text.set_visible(True)
+            self._legend_title_box.set_visible(True)
+        else:
+            self._legend_title_box._text.set_visible(False)
+            self._legend_title_box.set_visible(False)
+
+        w, h, x, y = self._legend_handle_box.get_extent(self.parent.figure.canvas.renderer)
+        print(w, h, x, y)
+
+        if prop is not None:
+            self._legend_title_box._text.set_fontproperties(prop)
+        self._legend_title_box._text.set_rotation('vertical')
+        # self._legend_title_box._text.set_va('bottom')
+        # self._legend_title_box._text.set_ha('left')
+        # self._legend_title_box._text.set_y((h - y)/2)
+        # self._legend_title_box.set_clip_on(False)
+        # self._legend_box.set_clip_on(False)
+        self.parent.figure.canvas.draw()
+
+        self.stale = True
 
 class VariableSizeRectanglePatchHandler:
     def __init__(self, max_height, max_width):
@@ -187,6 +214,7 @@ class VariableSizeRectanglePatchHandler:
         )
         width_handlebox_coord = handlebox.width * rel_width
         height_handlebox_coord = handlebox.height * rel_height
+        # move rectangle up a little bit to align with center of 'A', not of 'Ag'
         patch = mpatches.Rectangle(
             [
                 handlebox.width - width_handlebox_coord,

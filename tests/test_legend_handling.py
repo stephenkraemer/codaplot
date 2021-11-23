@@ -84,7 +84,7 @@ def test_cl_with_legend():
 
     # add patches with meaningful height and width
     patches = []
-    heights = np.linspace(0, 0.1, 5)
+    heights = np.linspace(0, 0.02, 3)
     for i, curr_height in enumerate(heights):
         curr_width = curr_height * 2
         patches.append(
@@ -110,22 +110,22 @@ def test_cl_with_legend():
     # leg = ax.legend(
         ax,
         handles=patches,
-        labels=list("ABCDE"),
+        labels=list("ABCDE") * 2,
         loc="upper left",
         bbox_to_anchor=(1, 1),
         labelspacing=1,
-        title='abc',
-        # handletextpad=0,
-        # borderaxespad=0,
-        # borderpad=0,
+        title='line1line1line1lin1lin1',
+        handletextpad=0,
+        borderaxespad=0,
+        borderpad=0,
         # numpoints=None,
-        # frameon=True,
+        frameon=True,
         # mode='expand',
     )
     # leg.get_in_layout()
     # leg.get_clip_on()
     leg.set_clip_on(False)
-    leg._legend_box.align = 'center'
+    # leg._legend_box.align = 'right'
 
     # ax.legend_ = leg
     # ax.legend_._remove_method = ax._remove_legend
