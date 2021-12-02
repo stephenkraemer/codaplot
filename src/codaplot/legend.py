@@ -187,7 +187,6 @@ class MyCenteredLabelFullHeightLegend(mlegend.Legend):
             self._legend_title_box.set_visible(False)
 
         w, h, x, y = self._legend_handle_box.get_extent(self.parent.figure.canvas.renderer)
-        print(w, h, x, y)
 
         if prop is not None:
             self._legend_title_box._text.set_fontproperties(prop)
