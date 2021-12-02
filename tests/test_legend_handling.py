@@ -1,3 +1,5 @@
+# # Imports
+
 import os
 import matplotlib.legend as mlegend
 import numpy as np
@@ -14,6 +16,16 @@ import seaborn as sns
 import mouse_hema_meth.styling as mhstyle
 import mouse_hema_meth.utils as ut
 
+# # Known problems (see tests)
+
+# - CL can distort the rectangle patches
+
+
+# # Tests
+
+# ## Works: anything without CL
+
+# ### Legend within axes, no CL: works
 
 def test_legend():
 
@@ -28,14 +40,17 @@ def test_legend():
 
     # add patches with meaningful height and width
     patches = []
-    heights = np.linspace(0, 0.1, 5)
+    heights = np.linspace(0, 0.05, 5)
     for i, curr_height in enumerate(heights):
         curr_width = curr_height * 2
         patches.append(
             mpatches.Rectangle(
-                xy=(0.2, i * 0.1),
+                xy=(0.2, i * 0.2),
                 width=curr_width,
                 height=curr_height,
+                # change long and short side
+                # width=curr_height,
+                # height=curr_width,
                 facecolor="black",
                 edgecolor=None,
                 linewidth=0,
@@ -54,7 +69,7 @@ def test_legend():
         handles=patches,
         labels=list("ABCDE"),
         loc="upper left",
-        bbox_to_anchor=(0.75, 0.75),
+        bbox_to_anchor=(0.5, 1),
         labelspacing=1,
         # handletextpad=0,
         # borderaxespad=0,
@@ -70,9 +85,73 @@ def test_legend():
         "/omics/odcf/analysis/OE0219_projects/mouse_hematopoiesis/notebook-figures/browser.svg"
     )
 
+# ### Legend on separate axes, no CL: works
 
-# %%
+def test_legend_without_cl_on_second_axes():
 
+    # %%
+    mpl.rcParams.update(mhstyle.paper_context)
+
+    # create figure
+    fig, (ax, legend_ax) = plt.subplots(
+        1, 2, dpi=180, figsize=(3, 3), gridspec_kw=dict(width_ratios=(3, 1))
+    )
+    fig.subplots_adjust(0, 0, 1, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlim(0, 1)
+
+    # add patches with meaningful height and width
+    patches = []
+    heights = np.linspace(0, 0.05, 5)
+    for i, curr_height in enumerate(heights):
+        curr_width = curr_height * 2
+        patches.append(
+            mpatches.Rectangle(
+                xy=(0.2, i * 0.2),
+                width=curr_width,
+                height=curr_height,
+                # change long and short side
+                # width=curr_height,
+                # height=curr_width,
+                facecolor="black",
+                edgecolor=None,
+                linewidth=0,
+                zorder=1,
+                clip_on=False,
+            )
+        )
+        ax.add_patch(patches[-1])
+
+    # create list of pseudopatches at meaningful sizes, here this is not necessary,
+    # we just use the patches created above; in real life, new patches at characteristic values
+    # have to be created
+
+    leg = co.create_legend_for_norm_size_patches(
+        ax=legend_ax,
+        handles=patches,
+        labels=list("ABCDE"),
+        loc="upper left",
+        bbox_to_anchor=(0.5, 1),
+        labelspacing=1,
+        # handletextpad=0,
+        # borderaxespad=0,
+        # borderpad=0,
+        # numpoints=None,
+        # frameon=True,
+        # mode='expand',
+    )
+
+    legend_ax.add_artist(leg)
+
+    fig.savefig(
+        "/omics/odcf/analysis/OE0219_projects/mouse_hematopoiesis/notebook-figures/browser.svg"
+    )
+    # %%
+
+# ## Fails: anything with CL
+# ### Legend on axes, but plotted outside axes, with CL: legend becomes distorted
+
+# not super clearly visible in this example, but its true - i checked in inkscape
 
 def test_cl_with_legend():
 
@@ -135,19 +214,22 @@ def test_cl_with_legend():
     ax.add_artist(leg)
 
     fig.savefig(
-        "/omics/odcf/analysis/OE0219_projects/mouse_hematopoiesis/notebook-figures/browser.png"
+        "/omics/odcf/analysis/OE0219_projects/mouse_hematopoiesis/notebook-figures/browser.svg"
     )
     # %%
 
+# ### Legend on second axes, reaching outside of axes, so that CL resizes the axes: distorted
 
 def test_cl_with_legend_on_second_axes():
+    # legend is placed using CL, but the boxes are distorted!
 
     # %%
     mpl.rcParams.update(mhstyle.paper_context)
 
     # create figure
     fig, (ax, legend_ax) = plt.subplots(
-        1, 2,
+        1,
+        2,
         dpi=180,
         figsize=(3, 3),
         constrained_layout=True, gridspec_kw=dict(width_ratios=(2, 1))
@@ -158,7 +240,7 @@ def test_cl_with_legend_on_second_axes():
 
     # add patches with meaningful height and width
     patches = []
-    heights = np.linspace(0, 0.02, 3)
+    heights = np.linspace(0, 0.2, 3)
     for i, curr_height in enumerate(heights):
         curr_width = curr_height * 2
         patches.append(
@@ -186,7 +268,7 @@ def test_cl_with_legend_on_second_axes():
         handles=patches,
         labels=list("ABCDE") * 3,
         loc="upper left",
-        bbox_to_anchor=(0.5, 0.5),
+        bbox_to_anchor=(0.5, 1),
         labelspacing=1,
         title="W\n1\n2\n3\n4",
         # handletextpad=0,
@@ -208,6 +290,10 @@ def test_cl_with_legend_on_second_axes():
     legend_ax.add_artist(leg)
 
     fig.savefig(
-        "/omics/odcf/analysis/OE0219_projects/mouse_hematopoiesis/notebook-figures/browser.png"
+        "/omics/odcf/analysis/OE0219_projects/mouse_hematopoiesis/notebook-figures/browser.svg"
     )
     # %%
+
+
+
+

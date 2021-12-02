@@ -1,3 +1,7 @@
+- add tests to demonstrate that CL distorts the rectangle patches
+
+fab27a4 * main origin/main fix more legend alignment problems
+
 Development version
 
 2020-12-09
