@@ -30,9 +30,9 @@ def jointplot(
     hist1d_kwargs: Optional[Dict[str, Any]] = None,
     xlim=None,
     ylim=None,
-    pcc_pos: Optional[Union[
-        Literal["title", "upper center"], Tuple[float, float, str, str]
-    ]] = "title",
+    pcc_pos: Optional[
+        Union[Literal["title", "upper center"], Tuple[float, float, str, str]]
+    ] = "title",
     dist_axes_height_and_width_in=6 / 2.54,
     hist_height=1 / 2.54,
     cbar_height=0.3 / 2.54,
@@ -68,8 +68,8 @@ def jointplot(
         hist1d_kwargs = {}
     if hist2d_kwargs is None:
         hist2d_kwargs = {}
-    assert not {'rasterized'}.intersection(set(hist2d_kwargs.values()))
-    assert not {'rasterized', 'orientation'}.intersection(set(hist1d_kwargs.values()))
+    assert not {"rasterized"}.intersection(set(hist2d_kwargs.values()))
+    assert not {"rasterized", "orientation"}.intersection(set(hist1d_kwargs.values()))
 
     """
     Note that if the fig height /  fig width ratio is not chosen appropriately (such that the space for the 2d axes is square), there will be a lot of whitespace introduced by CL. It could be that the figure can also be arranged with little whitespace if these ratios are off, but that this is just not handled optimally by CL atm, see https://github.com/matplotlib/matplotlib/pull/17246 and https://github.com/mwaskom/seaborn/issues/2051. I am not sure if thats the case
@@ -101,8 +101,8 @@ def jointplot(
         ),
     )
     hist2d_ax = axd["main"]
-    xhist_ax = axd['x_hist']
-    yhist_ax = axd['y_hist']
+    xhist_ax = axd["x_hist"]
+    yhist_ax = axd["y_hist"]
 
     cbar_ax = axd["cbar"]
     _, _, _, qmesh = hist2d_ax.hist2d(
@@ -163,6 +163,7 @@ def jointplot(
 
     fig.canvas.draw()
     fig.set_constrained_layout(False)
+
     # bbox: [[xmin, ymin], [xmax, ymax]]
     bbox_main = axd["main"].get_position()
 
@@ -185,5 +186,7 @@ def jointplot(
             [[bbox_main.xmin, bbox_cbar.ymin], [bbox_main.xmax, bbox_cbar.ymax]]
         )
     )
+
     # %%
+
     return fig, axd
