@@ -565,7 +565,10 @@ def heatmap(
         # normal heatmap
         qm = heatmap2(**shared_args)
 
-    guide_args_copy["mappable"] = qm
+    # the qm is only necessary and allowed if we use a colorbar,
+    # ie if the heatmap is not categorical
+    if not is_categorical:
+        guide_args_copy["mappable"] = qm
 
     # Axis and tick labels
     if xticklabels:
@@ -634,8 +637,6 @@ def heatmap(
     # noinspection PyUnboundLocalVariable
     patches = [mpatches.Patch(facecolor=c) for c in categorical_colors_listmap.colors]
     if show_guide:
-        # TODO: improve logic
-        guide_args_copy.pop("mappable")
         if guide_ax is not None:
             # noinspection PyUnboundLocalVariable
             guide_ax.legend(
