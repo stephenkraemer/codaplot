@@ -362,7 +362,6 @@ def add_guides(
     legend_kwargs
         passed to place_guides, will eventually be used in mlegend.Legend
     """
-    print("relaoded guides 3")
 
     if legend_kwargs is None:
         legend_kwargs = {}
