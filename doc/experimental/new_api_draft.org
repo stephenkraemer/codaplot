@@ -46,7 +46,9 @@
     - could also be a list eg for triangle which can have two colors
   - size
   - marker
+- is_categorical
 - marker
+  - type: name of a function, or a function, or a Mesh object
   - 'pcolormesh'
   - 'pcolormesh_plus'
   - 'rectangle'
@@ -62,8 +64,13 @@
   - color_legend_*
     - show
     - title
+    - legend_kwds
     - cbar_kwds
-    - styling_func
+      - shrink
+      - aspect
+      - expand
+      - cbar_ax
+    - cbar_styling_func
   - size_legend_*
     - show
     - title
@@ -78,13 +85,9 @@
   - col_spacing_group_ids
   - frame_spaced_elements=False,
   - frame_kwargs=None,
-- 
 - ax
 - kwds: pcolormesh, or other mesh
 **** draw
-*** sized_rectangle_mesh
-*** sized_circle_mesh
-*** sized_triangle_mesh
 ** clustermap
 *** ClusterMap
 **** _gimmicks
