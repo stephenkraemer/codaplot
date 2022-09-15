@@ -1,0 +1,195 @@
+* Concept
+** Applications
+*** scanpy dotplot
+*** complex heatmap
+*** oncoprints
+*** highlight differentially expressed transcription factors in tf enrichment heatmap
+** Goodies
+*** construct complex heatmaps by overlaying multiple heatmaps resrtricted to certain parts of the full rectangle in the heatmap
+*** spacing
+**** align any plot to the spacing
+*** vmin='p1', automatic center norm when vcenter is specified
+*** Cut dendrograms
+*** 3D clustering
+*** multi-row enrichment plots
+** Notes
+*** how to allow direct use of pcolormesh?
+*** overlay multiple heatmaps on one plot, eg to create oncoprints
+* API
+** utils
+*** format_labels
+- ticklabels
+  - xticklabels
+  - xticklabel_colors
+  - xticklabel_side
+  - yticklabels
+  - yticklabel_colors
+  - yticklabel_side
+  - x_group_labels
+    - also allow multi-index
+  - y_group_labels
+    - also allow multi-index
+- other
+  - xlabel
+  - ylabel
+  - title
+*** 
+** notes
+*** pcolormesh_plus
+**** vmin can be 'p1'
+**** if vcenter is specified, will use MidpointNormalize
+** heatmap
+*** Heatmap
+**** init
+- long or wide format aesthetics
+  - color
+    - could also be a list eg for triangle which can have two colors
+  - size
+  - marker
+- marker
+  - 'pcolormesh'
+  - 'pcolormesh_plus'
+  - 'rectangle'
+  - 'circle'
+  - 'triangle'
+  - 'multimarker'
+- placement_params
+  - max_size \in [0,1]
+  - loc
+    - (x, y)
+  - alignment point: 'upper left', 'center' etc. 
+- legend
+  - color_legend_*
+    - show
+    - title
+    - cbar_kwds
+    - styling_func
+  - size_legend_*
+    - show
+    - title
+    - legend_kwds
+  - 
+  - legend_titles
+    - {'size': None, 'color': None}
+- spacing
+  - row_spacer_sizes
+  - col_spacer_sizes
+  - row_spacing_group_ids
+  - col_spacing_group_ids
+  - frame_spaced_elements=False,
+  - frame_kwargs=None,
+- 
+- ax
+- kwds: pcolormesh, or other mesh
+**** draw
+*** sized_rectangle_mesh
+*** sized_circle_mesh
+*** sized_triangle_mesh
+** clustermap
+*** ClusterMap
+**** _gimmicks
+***** allow multiple layers
+***** check the different layers have same row and column indices
+***** cache different clustering results
+****** allow cutting at a later timepoint
+***** auto number layers
+***** titles above and besides colorbars
+**** questions
+***** where to add spacing
+**** init
+- heatmap: co.Heatmap
+- size: inch or relative
+- layer_name = 'base'
+- row_order
+- col_order
+- row_linkage
+- col_linkage
+**** add_layer
+- heatmap: co.Heatmap
+- name
+- legend_titles
+  - prefix to layer legend titles
+**** hierarchical_cluster_cols
+- layer_name
+- method
+- metric
+**** hierarchical_cluster_row
+- layer_name
+- method
+- metric
+**** cut_hierarchical_cluster
+- method: 'treecut' | 'cutree_hybrid'
+- add_spacing
+**** add_dendrograms
+- col_dendrogram_location = 'top' | 'bottom'
+- col_dendrogram_size: relative or absolute
+- row_dendrogram_location = 'top' | 'bottom'
+- row_dendrogram_size: relative or absolute
+**** add_left_annos
+- annos: List[co.Heatmap]
+- sizes
+**** add_right_annos
+**** add_top_annos
+**** add_bottom_annos
+**** draw_new_figure
+- figsize
+  - only possible if at least on row and one column has relative size
+  - only considered if not axes passed
+- layout_algo
+- return
+  - fig
+**** draw on axes
+- axd
+**** get_mosaic
+**** _apply_row_order
+**** _apply_col_order
+**** _apply_row_spacing
+**** _apply_col_spacing
+*** HeatmapMesh
+**** HeatmapMesh
+- vmin
+- vmax
+- is_categorical
+- annotate: Union[str, bool] = False,
+- color_bar
+- categorical_legend
+**** Unsorted
+
+- subregion
+  - value depends on kind
+- min_size
+- max_size
+- cmap
+- vmin
+- vmax
+** complex_heatmap
+*** add_center
+*** add_left
+*** add_right
+*** add_bottom
+*** add_top
+*** get_subplot_mosaic
+*** draw_on_axes
+*** draw
+** dendrogram_and_linkage
+*** Dendrogram
+**** init
+- cutting_args
+- coloring_args
+**** _apply_row_spacing
+**** _apply_col_spacing
+**** draw
+- ax
+** legend_handling
+*** Legend
+**** ColorBarLegend
+- title
+- shrink
+- aspect
+- expand
+- cbar_styling_func=cbar_change_style_to_inward_white_ticks,
+- cbar_styling_func_kwargs: Optional[Dict] = None,
+- **kwargs
+**** CategoricalColorLegend
+- categorical_legend_patch_kwargs=None,
+**** SizeLegend
