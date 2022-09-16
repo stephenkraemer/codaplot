@@ -1,3 +1,8 @@
+* Selling points
+** easy way to encode complex information into a single heatmap
+*** e.g. two half circles with size
+**** enrichment plots
+*** eg four rectangles growing from the middle of the patch
 * Concept
 ** Applications
 *** scanpy dotplot
@@ -16,28 +21,6 @@
 *** how to allow direct use of pcolormesh?
 *** overlay multiple heatmaps on one plot, eg to create oncoprints
 * API
-** utils
-*** format_labels
-- ticklabels
-  - xticklabels
-  - xticklabel_colors
-  - xticklabel_side
-  - yticklabels
-  - yticklabel_colors
-  - yticklabel_side
-  - x_group_labels
-    - also allow multi-index
-  - y_group_labels
-    - also allow multi-index
-- other
-  - xlabel
-  - ylabel
-  - title
-*** 
-** notes
-*** pcolormesh_plus
-**** vmin can be 'p1'
-**** if vcenter is specified, will use MidpointNormalize
 ** heatmap
 *** Heatmap
 **** init
@@ -88,6 +71,28 @@
 - ax
 - kwds: pcolormesh, or other mesh
 **** draw
+** utils
+*** format_labels
+- ticklabels
+  - xticklabels
+  - xticklabel_colors
+  - xticklabel_side
+  - yticklabels
+  - yticklabel_colors
+  - yticklabel_side
+  - x_group_labels
+    - also allow multi-index
+  - y_group_labels
+    - also allow multi-index
+- other
+  - xlabel
+  - ylabel
+  - title
+*** 
+** notes
+*** pcolormesh_plus
+**** vmin can be 'p1'
+**** if vcenter is specified, will use MidpointNormalize
 ** clustermap
 *** ClusterMap
 **** _gimmicks
