@@ -25,11 +25,9 @@ mlog10_pvalues = pd.DataFrame()
 fig, ax = plt.subplots(1, 1)
 h = co.Heatmap(
     color=mlog10_pvalues,
-    marker_kwargs=dict(
-        vmin=0,
-        vmax=3,
-        cmap="Reds",
-    ),
+    marker_color_vmin=0,
+    marker_color_vmax=3,
+    marker_color_map="Reds",
     guides_color_title="-log10(q-values)",
     guides_color_cbar_kwds=dict(
         shrink=0.5,
@@ -51,11 +49,9 @@ ax.set(xlabel="abc", ylabel="abc")
 fig, ax = plt.subplots(1, 1)
 h = co.Heatmap(
     color=mlog10_pvalues,
-    marker_kwargs=dict(
-        vmin=0,
-        vmax=3,
-        cmap="Reds",
-    ),
+    marker_color_vmin=0,
+    marker_color_vmax=3,
+    marker_color_map="Reds",
     guides_color_title="-log10(q-values)",
     guides_color_cbar_kwds=dict(
         shrink=0.5,
@@ -83,9 +79,7 @@ h = co.Heatmap(
     # autodetected for categorical and object dtypes
     # specify for numeric dtypes
     # is_categorical=True,
-    marker_kwargs=dict(
-        cmap="Set1",
-    ),
+    marker_color_map="Set1",
     guides_color_title="groups",
     guides_color_legend_kwds=dict(loc=(0, 1), bbox_to_anchor="upper_left"),
 ).draw(ax=ax)
@@ -105,18 +99,17 @@ log_odds = pd.DataFrame()
 p_values = pd.DataFrame()
 
 
-for DemoMesh in [co.CircleMesh, co.RectangleMesh, co.TriangleMesh]:
+for marker_patch in ['circle', 'rectangle', 'triangle']:
     fig, ax = plt.subplots(1, 1)
     h = co.Heatmap(
         color=log_odds,
         size=p_values,
-        marker_mesh=DemoMesh(
-            color_min=0,
-            color_max=3,
-            color_map="Reds",
-            size_min=0.1,
-            size_max=0.9,
-        ),
+        patch=marker_patch,
+        marker_color_vmin=0,
+        marker_color_vmax=3,
+        marker_color_map="Reds",
+        marker_size_vmin=0.1,
+        marker_size_vmax=0.9,
         guides_color_title="log-odds",
         guides_size_title="p-value",
         guides_color_cbar_kwds=dict(
@@ -130,15 +123,6 @@ for DemoMesh in [co.CircleMesh, co.RectangleMesh, co.TriangleMesh]:
     ).draw(ax=ax)
     ax.set(xlabel="abc", ylabel="abc")
 
-# %% [markdown]
-# ### MultiMarkMesh
-
-co.MultiMarkMesh
-
-# %% [markdown]
-# ### PcolorMeshPlus
-
-co.PcolorMeshPlus
 
 # %% [markdown]
 # ## Handle multiple legends
@@ -167,14 +151,12 @@ shared_kwargs = dict(
 average_meth = pd.DataFrame()
 meth_legend_d = co.Heatmap(
     color=average_meth,
-    marker_mesh=co.TriangleMesh(
-        color_min=0,
-        color_max=1,
-        color_map="cividis",
-    ),
-    marker_max_field_fraction=0.9,
-    marker_loc=(0, 0),
-    marker_bbox_to_anchor="upper_left",
+    marker_color_vmin=0,
+    marker_color_vmax=1,
+    marker_color_map="cividis",
+    field_max_fraction=0.9,
+    field_loc=(0, 0),
+    field_bbox_to_anchor="upper_left",
     guides_color_title="Average meth.",
     **shared_kwargs,
 ).draw(ax=ax)
@@ -184,14 +166,12 @@ meth_legend_d = co.Heatmap(
 expression_data = pd.DataFrame()
 expr_legend_d = co.Heatmap(
     color=expression_data,
-    marker_mesh=co.TriangleMesh(
-        color_min=0,
-        color_max=10,
-        color_map="Reds",
-    ),
-    marker_max_field_fraction=0.9,
-    marker_loc=(1, 1),
-    marker_bbox_to_anchor="lower_right",
+    marker_color_vmin=0,
+    marker_color_vmax=10,
+    marker_color_map="Reds",
+    field_max_fraction=0.9,
+    field_loc=(1, 1),
+    field_bbox_to_anchor="lower_right",
     guides_color_title="Normalized expression",
     **shared_kwargs,
 ).draw(ax=ax)

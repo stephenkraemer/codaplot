@@ -75,9 +75,9 @@ def jointplot(
         y_hist1d_kwargs = {}
     if hist2d_kwargs is None:
         hist2d_kwargs = {}
-    assert not {"rasterized"}.intersection(set(hist2d_kwargs.values()))
-    assert not {"rasterized", "orientation"}.intersection(set(x_hist1d_kwargs.values()))
-    assert not {"rasterized", "orientation"}.intersection(set(y_hist1d_kwargs.values()))
+    assert not {"rasterized"}.intersection(set(hist2d_kwargs.keys()))
+    assert not {"rasterized", "orientation"}.intersection(set(x_hist1d_kwargs.keys()))
+    assert not {"rasterized", "orientation"}.intersection(set(y_hist1d_kwargs.keys()))
 
     """
     Note that if the fig height /  fig width ratio is not chosen appropriately (such that the space for the 2d axes is square), there will be a lot of whitespace introduced by CL. It could be that the figure can also be arranged with little whitespace if these ratios are off, but that this is just not handled optimally by CL atm, see https://github.com/matplotlib/matplotlib/pull/17246 and https://github.com/mwaskom/seaborn/issues/2051. I am not sure if thats the case
@@ -119,7 +119,10 @@ def jointplot(
         **hist2d_kwargs,
         rasterized=True,
     )
-    hist2d_ax.set_aspect("equal")
+
+    # TODO: temp disabled for testing
+    # hist2d_ax.set_aspect("equal")
+
     hist2d_ax.set(
         xlabel=xlabel,
         ylabel=ylabel,

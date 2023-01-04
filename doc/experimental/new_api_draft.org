@@ -20,6 +20,8 @@
 ** Notes
 *** how to allow direct use of pcolormesh?
 *** overlay multiple heatmaps on one plot, eg to create oncoprints
+* interesting markers
+** tortendiagram wedges
 * API
 ** heatmap
 *** Heatmap
