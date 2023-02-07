@@ -1,4 +1,5 @@
 import matplotlib.legend as mlegend
+from matplotlib.colorbar import Colorbar
 import matplotlib.patches as patches
 from typing import Dict, Tuple, Literal, Optional, Union, Iterable
 import re
@@ -576,3 +577,279 @@ def _get_label_positions(
         xytext_bar,
         xytext_inner_label,
     )
+
+
+LegendLocation = Literal[
+    # to the right of the figure, with top edge of legend aligned to top edge of figure
+    "outside right upper",
+    # above the figure, with right edge of legend aligned to right edge of figure
+    "outside upper right",
+    # to the right of the figure, with center of legend aligned to the center of the figure
+    "outside center right",
+]
+
+
+def move_figure_legend_outside_of_figure(
+    fig: mpl.figure.Figure,
+    loc: LegendLocation = "outside center right",
+    title: str | None = None,
+    alignment: Literal["left", "center", "right"] = "left",
+    borderpad: float = 0.5,
+    **kwargs,
+) -> None:
+    """Move the legend in fig.legends[-1] to `loc`
+
+    *idea and code stolen from import seaborn.utils.move_legend*
+
+    Actually: move is not possible, the legend is removed and then recreated
+
+    currently seaborn.utils.move_legend fails with figure legends because it tries legend.remove(), resulting in NotImplementedError for figure legends
+
+    why borderpad?
+    borderaxespad does not work with constrained_layout+figure legend in mpl 3.7
+    how to get spacing between axes and legends instead? => use borderpad
+    borderpad is added all around the axes. we set it to 0.5 by default, then the legend can manually be moved to the edge of the figure (0.5 to the right)
+
+    Parameters
+    ----------
+    kwargs
+        passed to fig.legend
+    title
+        if None, will use original title
+    """
+
+    """
+    # *idea and code stolen from import seaborn.utils.move_legend*
+    Code for taking over many other legend properties when copying the legend
+    can be found in seaborn.utils.move_legend
+    """
+
+    old_legend = fig.legends[-1]
+    handles = old_legend.legend_handles
+    labels = [t.get_text() for t in old_legend.get_texts()]
+    # Extract legend properties that can be passed to the recreation method
+    # (Vexingly, these don't all round-trip)
+    legend_kws = inspect.signature(mpl.legend.Legend).parameters  # type: ignore
+    props = {k: v for k, v in old_legend.properties().items() if k in legend_kws}
+
+    # get original title text object
+    # it has all original font and style settings
+    # change the text if required
+    title_text_obj = props.pop("title")
+    if title:
+        title_text_obj.set_text(title)
+    # set additional new kwargs on the title text object
+    title_kwargs = {k: v for k, v in kwargs.items() if k.startswith("title_")}
+    for key, val in title_kwargs.items():
+        title_text_obj.set(**{key[6:]: val})
+        kwargs.pop(key)
+
+    # old_legend.remove() gives NotImplementedError
+    # but it seems possible to just remove the legend from fig.legends
+    del fig.legends[-1]
+
+    new_legend: mpl.legend.Legend = fig.legend(
+        handles,
+        labels,
+        loc=loc,
+        borderpad=borderpad,
+        alignment=alignment,
+    )
+    new_legend.set_title(title_text_obj.get_text(), title_text_obj.get_fontproperties())
+
+
+
+def cbar_change_style_to_inward_white_ticks(
+    cbar: Colorbar,
+    tick_width: int = 1,
+    tick_length: int = 2,
+    tick_params_kwargs: Optional[Dict] = None,
+    remove_ticks_at_ends: Literal["always", "if_on_edge", "never"] = "if_on_edge",
+    outline_is_visible=False,
+):
+    """Change to nicer colorbar aesthetics with good defaults
+
+    Troubleshooting
+    ---------------
+    - Ticks are missing from colorbar
+      - Make sure that correct ticks are available prior to calling this function (may require fig.canvas.draw()).
+
+    Implementation note
+    -------------------
+    - i have not added a call to fig.canvas.draw within this function yet;
+      would there be any reason to avoid this? Doing this within the function
+      may avoid some problems, see Troubleshooting section.
+      - I have had problems with calling fig.canvas.draw at the wrong place before,
+        eg the crossplot legend was missing when I called fig.canvas.draw in color_ticklabels
+
+    Parameters
+    ----------
+    cbar
+        Colorbar, eg returned by plt.colorbar
+    tick_params_kwargs
+        passed to cbar.ax.tick_params
+        overwrites the defaults
+        do not pass width and length, these are controlled by dedicated args
+        tick_width, tick_length
+    tick_width
+        cbar tick width, controlled via ax.tick_params
+    tick_length
+        cbar tick length, controlled via ax.tick_params
+    remove_ticks_at_ends
+        the outmost ticks lead to a 'sticky end' if they are inward facing and lie on the edges of the axis. This cannot really be avoided when using inward facing ticks, and is for example also present in r-ggplot2 colorbars. If 'always', the highest and lowest tick are not plotted to avoid creating sticky ends. If 'if_on_edge' the ticks are only invisible if the ticks lie on the axis edges, ie on the lower and upper axis limit. Ticks are never removed if the colorbar has "extend triangles" at the ends.
+    outline_is_visible
+        whether to draw spines
+
+    """
+
+    assert remove_ticks_at_ends in ["always", "if_on_edge", "never"]
+
+    # use tick params to get white, inward facing ticks (default)
+    tick_params_kwargs_ = dict(
+        color="white",
+        direction="in",
+        which="both",
+        axis="both",
+        left=True,
+        right=True,
+        bottom=True,
+        top=True,
+    )
+    if tick_params_kwargs is not None:
+        tick_params_kwargs_.update(tick_params_kwargs)
+        if "length" in tick_params_kwargs or "width" in tick_params_kwargs:
+            print(
+                "WARNING: kwarg length and/or width has been passed through tick_params_kwargs, but these args are ignored."
+            )
+    tick_params_kwargs_["length"] = tick_length
+    tick_params_kwargs_["width"] = tick_width
+    cbar.ax.tick_params(**tick_params_kwargs_)
+
+    cbar.outline.set_visible(outline_is_visible)
+
+    # Remove the first and last tick to avoid "sticky ends" of the colorbar due to
+    # ticks at the very end of the colorbar
+
+    if cbar.orientation == "vertical":
+        ticks_objects = cbar.ax.yaxis.majorTicks
+    else:
+        ticks_objects = cbar.ax.xaxis.majorTicks
+
+    # TODO: this does not handle extension to one side correctly
+    if cbar.extend != "both":
+        if remove_ticks_at_ends == "if_on_edge":
+            ticks_arr = (
+                cbar.ax.get_yticks()
+                if cbar.orientation == "vertical"
+                else cbar.ax.get_xticks()
+            )
+            ticks_axis_limits = (
+                cbar.ax.get_ylim()
+                if cbar.orientation == "vertical"
+                else cbar.ax.get_xlim()
+            )
+            lowest_tick_is_on_axis_limit = np.isclose(
+                ticks_arr[0], ticks_axis_limits[0]
+            )
+            highest_tick_is_on_axis_limit = np.isclose(
+                ticks_arr[-1], ticks_axis_limits[-1]
+            )
+            if lowest_tick_is_on_axis_limit:
+                ticks_objects[0].tick1line.set_visible(False)
+                ticks_objects[0].tick2line.set_visible(False)
+            if highest_tick_is_on_axis_limit:
+                ticks_objects[-1].tick1line.set_visible(False)
+                ticks_objects[-1].tick2line.set_visible(False)
+        elif remove_ticks_at_ends == "always":
+            ticks_objects[0].tick1line.set_visible(False)
+            ticks_objects[0].tick2line.set_visible(False)
+            ticks_objects[-1].tick1line.set_visible(False)
+            ticks_objects[-1].tick2line.set_visible(False)
+
+
+"""
+def test_cbar_style():
+
+    fig, ax = plt.subplots(1, 1, dpi=180, figsize=(6/2.54, 6/2.54))
+    qm = ax.pcolormesh([[1, 2, 3], [1, 2, 6]], vmin=2, vmax=5)
+    cbar = plt.colorbar(qm, shrink=0.5, aspect=5, ticks=[3, 4])
+    fig.canvas.draw()
+    cbar_change_style_to_inward_white_ticks(cbar, remove_ticks_at_ends = 'if_on_edge')
+
+"""
+
+
+def create_standalone_colorbar(
+    cbar_width_axes_only: float,
+    cbar_height_axes_only: float,
+    cmap,
+    ticks,
+        vmin,
+        vmax,
+    png_path: str,
+    title: str | None =None,
+    orientation: Literal['vertical']="vertical",
+    extend: str | None = None,
+):
+    """ Create a stand-alone colorbar without a mappable as a figure
+
+    NOTE: its expected behavior atm that long cbar labels are cut off
+
+    horizontal orientation not implemened atm, should be easy to add
+
+    Because the colobar is plotted without any underlying data, one must specify the vmin or vmax of the data explicitely
+
+    Parameters
+    ----------
+    cbar_width_axes_only
+        cbar width in inch without ticks, ticklabels and title
+    cbar_height_axes_only
+        cbar height in inch without ticks, ticklabels and title
+    cmap
+    ticks
+    vmin
+    vmax
+    png_path
+    title
+        colorbar title is placed as axis label
+    orientation
+        currently only 'vertical' implemented
+    cbar_kwargs=None
+
+    """
+
+    if orientation != 'vertical':
+        raise NotImplementedError()
+
+    # %%
+    fig, ax = plt.subplots(
+        1,
+        1,
+        constrained_layout=False,
+        dpi=180,
+        figsize=(cbar_width_axes_only, cbar_height_axes_only),
+    )
+
+    cb = mpl.colorbar.Colorbar(
+        ax=ax,
+        orientation=orientation,
+        cmap=cmap,
+        extend=extend,
+        # norm _?
+        # boundaries and sequence _?
+        # appear to control how many 'steps' are shown in the colorbar _???
+    )
+
+    # afg no way to get a colorbar to not only plot on yaxis between 0 and 1, but between ylim[0] and ylim[1]
+    # so instead i normalize the ytick positions for the given (apparently hard to change) 0, 1 axis limits
+    yticks_01_norm = (np.array(ticks) - vmin) / (vmax - vmin)
+    ax.set_yticks(yticks_01_norm)
+    ax.set_yticklabels(ticks)
+
+    if title is not None:
+        ax.set_ylabel(title)
+
+    cbar_change_style_to_inward_white_ticks(cb, remove_ticks_at_ends="if_on_edge")
+
+    fig.savefig(png_path)
+    fig.savefig(png_path.replace('.png', '.pdf'))

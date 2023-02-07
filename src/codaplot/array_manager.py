@@ -19,7 +19,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import toolz as tz
-from codaplot.plotting import adjust_coords, cbar_change_style_to_inward_white_ticks
+from codaplot.plotting import adjust_coords
+from codaplot.utils import cbar_change_style_to_inward_white_ticks
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from scipy.cluster.hierarchy import leaves_list, linkage

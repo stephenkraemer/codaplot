@@ -14,6 +14,7 @@ Heatmaps
 
 """
 import warnings
+from codaplot.utils import cbar_change_style_to_inward_white_ticks
 from copy import deepcopy
 from dataclasses import dataclass
 from itertools import product, zip_longest
@@ -46,7 +47,6 @@ from matplotlib import patches as mpatches
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
-from matplotlib.colorbar import Colorbar
 from matplotlib.figure import Figure
 from pandas.core.dtypes.common import is_numeric_dtype
 from pandas.core.groupby import GroupBy
@@ -316,125 +316,6 @@ def categorical_heatmap2(
 
     return {"handles": patches, "labels": levels, **legend_args}
 
-
-def cbar_change_style_to_inward_white_ticks(
-    cbar: Colorbar,
-    tick_width: int = 1,
-    tick_length: int = 2,
-    tick_params_kwargs: Optional[Dict] = None,
-    remove_ticks_at_ends: Literal["always", "if_on_edge", "never"] = "if_on_edge",
-    outline_is_visible=False,
-):
-    """Change to nicer colorbar aesthetics with good defaults
-
-    Troubleshooting
-    ---------------
-    - Ticks are missing from colorbar
-      - Make sure that correct ticks are available prior to calling this function (may require fig.canvas.draw()).
-
-    Implementation note
-    -------------------
-    - i have not added a call to fig.canvas.draw within this function yet;
-      would there be any reason to avoid this? Doing this within the function
-      may avoid some problems, see Troubleshooting section.
-      - I have had problems with calling fig.canvas.draw at the wrong place before,
-        eg the crossplot legend was missing when I called fig.canvas.draw in color_ticklabels
-
-    Parameters
-    ----------
-    cbar
-        Colorbar, eg returned by plt.colorbar
-    tick_params_kwargs
-        passed to cbar.ax.tick_params
-        overwrites the defaults
-        do not pass width and length, these are controlled by dedicated args
-        tick_width, tick_length
-    tick_width
-        cbar tick width, controlled via ax.tick_params
-    tick_length
-        cbar tick length, controlled via ax.tick_params
-    remove_ticks_at_ends
-        the outmost ticks lead to a 'sticky end' if they are inward facing and lie on the edges of the axis. This cannot really be avoided when using inward facing ticks, and is for example also present in r-ggplot2 colorbars. If 'always', the highest and lowest tick are not plotted to avoid creating sticky ends. If 'if_on_edge' the ticks are only invisible if the ticks lie on the axis edges, ie on the lower and upper axis limit. Ticks are never removed if the colorbar has "extend triangles" at the ends.
-    outline_is_visible
-        whether to draw spines
-
-    """
-
-    assert remove_ticks_at_ends in ["always", "if_on_edge", "never"]
-
-    # use tick params to get white, inward facing ticks (default)
-    tick_params_kwargs_ = dict(
-        color="white",
-        direction="in",
-        which="both",
-        axis="both",
-        left=True,
-        right=True,
-        bottom=True,
-        top=True,
-    )
-    if tick_params_kwargs is not None:
-        tick_params_kwargs_.update(tick_params_kwargs)
-        if "length" in tick_params_kwargs or "width" in tick_params_kwargs:
-            print(
-                "WARNING: kwarg length and/or width has been passed through tick_params_kwargs, but these args are ignored."
-            )
-    tick_params_kwargs_["length"] = tick_length
-    tick_params_kwargs_["width"] = tick_width
-    cbar.ax.tick_params(**tick_params_kwargs_)
-
-    cbar.outline.set_visible(outline_is_visible)
-
-    # Remove the first and last tick to avoid "sticky ends" of the colorbar due to
-    # ticks at the very end of the colorbar
-
-    if cbar.orientation == "vertical":
-        ticks_objects = cbar.ax.yaxis.majorTicks
-    else:
-        ticks_objects = cbar.ax.xaxis.majorTicks
-
-    # TODO: this does not handle extension to one side correctly
-    if cbar.extend != "both":
-        if remove_ticks_at_ends == "if_on_edge":
-            ticks_arr = (
-                cbar.ax.get_yticks()
-                if cbar.orientation == "vertical"
-                else cbar.ax.get_xticks()
-            )
-            ticks_axis_limits = (
-                cbar.ax.get_ylim()
-                if cbar.orientation == "vertical"
-                else cbar.ax.get_xlim()
-            )
-            lowest_tick_is_on_axis_limit = np.isclose(
-                ticks_arr[0], ticks_axis_limits[0]
-            )
-            highest_tick_is_on_axis_limit = np.isclose(
-                ticks_arr[-1], ticks_axis_limits[-1]
-            )
-            if lowest_tick_is_on_axis_limit:
-                ticks_objects[0].tick1line.set_visible(False)
-                ticks_objects[0].tick2line.set_visible(False)
-            if highest_tick_is_on_axis_limit:
-                ticks_objects[-1].tick1line.set_visible(False)
-                ticks_objects[-1].tick2line.set_visible(False)
-        elif remove_ticks_at_ends == "always":
-            ticks_objects[0].tick1line.set_visible(False)
-            ticks_objects[0].tick2line.set_visible(False)
-            ticks_objects[-1].tick1line.set_visible(False)
-            ticks_objects[-1].tick2line.set_visible(False)
-
-
-"""
-def test_cbar_style():
-
-    fig, ax = plt.subplots(1, 1, dpi=180, figsize=(6/2.54, 6/2.54))
-    qm = ax.pcolormesh([[1, 2, 3], [1, 2, 6]], vmin=2, vmax=5)
-    cbar = plt.colorbar(qm, shrink=0.5, aspect=5, ticks=[3, 4])
-    fig.canvas.draw()
-    cbar_change_style_to_inward_white_ticks(cbar, remove_ticks_at_ends = 'if_on_edge')
-    
-"""
 
 
 def heatmap(
