@@ -1,33 +1,35 @@
 # # Imports
 
-import os
-import mouse_hema_meth.paths as mhpaths
-import figure_report as fr
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
-import matplotlib as mpl
+from typing import Any, Dict, Optional, Tuple
 import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
-import matplotlib.gridspec as mgridspec
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import yaml
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 import codaplot as co
-import codaplot.utils as coutils
-import mouse_hema_meth.utils as ut
-from mouse_hema_meth.utils import cm
+from typing import List
 
 # # Runner
 
 # moved to pseudotime lib
 
+# # Helpers
+
+class MidpointNormalize(mcolors.Normalize):
+    def __init__(self, vmin=None, vmax=None, vcenter=None, clip=False) -> None:
+        self.vcenter = vcenter
+        mcolors.Normalize.__init__(self, vmin, vmax, clip)
+
+    def __call__(self, value, clip=None) -> np.ndarray:  # type: ignore
+        # I'm ignoring masked values and all kinds of edge cases to make a
+        # simple example...
+        x: List[float] = [self.vmin, self.vcenter, self.vmax]  # type: ignore
+        y: List[float] = [0, 0.5, 1]
+        return np.ma.masked_array(np.interp(value, x, y))
 
 
+def cm(x):
+    return x/2.54
 
 
 # # Multiline plot
@@ -81,7 +83,7 @@ def cluster_homogeneity_multiline_plot(
     # - therefore in all cases use norm to set vmin and vmax, and if necessary vcenter
     if color_norm is None and color_ser is not None:
         vmin, mid, vmax = color_ser.quantile([0.1, 0.5, 0.9])
-        color_norm = ut.MidpointNormalize(vmin=vmin, vmax=vmax, vcenter=mid)
+        color_norm = MidpointNormalize(vmin=vmin, vmax=vmax, vcenter=mid)
 
     if ylim is None:
         ylim = (np.floor(data.min().min()), np.ceil(data.max().max()))  # type: ignore
@@ -112,8 +114,8 @@ def cluster_homogeneity_multiline_plot(
             for curr_alpha in [1, alpha]
         ]
         lc.set_array(color_ser.to_numpy())
-        ax.add_collection(lc)
-        cbar = fig.colorbar(lc_dummy, **cbar_kwds)
+        ax.add_collection(lc)  # type: ignore
+        cbar = fig.colorbar(lc_dummy, **cbar_kwds)  # type: ignore
         cbar.set_label(color_name)
         co.cbar_change_style_to_inward_white_ticks(
             cbar=cbar,
@@ -126,7 +128,7 @@ def cluster_homogeneity_multiline_plot(
         )
     else:
         lc = LineCollection(segments_arr, alpha=alpha, **line_collection_kwds)  # type: ignore
-        ax.add_collection(lc)
+        ax.add_collection(lc)  # type: ignore
 
     # adjust limits,
     # X and Y ticks are not automatically updated after the Artist was added
