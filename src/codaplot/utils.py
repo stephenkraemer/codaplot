@@ -1,4 +1,5 @@
 import matplotlib.legend as mlegend
+import inspect
 from matplotlib.colorbar import Colorbar
 import matplotlib.patches as patches
 from typing import Dict, Tuple, Literal, Optional, Union, Iterable
@@ -284,7 +285,7 @@ def get_artist_size_inch(art, fig):
 # TODO: copy-pasted from plotting module, clean up
 
 
-def color_ticklabels(axis: str, colors: Union[Iterable, Dict], ax: Axes) -> None:
+def color_ticklabels(axis: str, colors: Union[Iterable, Dict, pd.Series], ax: Axes) -> None:
     """Mark tick labels with different colors
 
     Args:
@@ -298,7 +299,7 @@ def color_ticklabels(axis: str, colors: Union[Iterable, Dict], ax: Axes) -> None
     # (the legend Axes was not shown - not sure what happened exactly)
     # I comment this part out for now - why was it necessary?
     axis = [ax.xaxis, ax.yaxis][axis == "y"]
-    if isinstance(colors, dict):
+    if isinstance(colors, (dict, pd.Series)):
         # ax.figure.canvas.draw()
         for tick in axis.get_ticklabels():  # type: ignore
             tick.set_color(colors[tick.get_text()])
@@ -586,6 +587,8 @@ LegendLocation = Literal[
     "outside upper right",
     # to the right of the figure, with center of legend aligned to the center of the figure
     "outside center right",
+    # centered below the plot
+    "outside lower center",
 ]
 
 
@@ -648,12 +651,12 @@ def move_figure_legend_outside_of_figure(
     # but it seems possible to just remove the legend from fig.legends
     del fig.legends[-1]
 
+    del props['bbox_to_anchor']
+
     new_legend: mpl.legend.Legend = fig.legend(
         handles,
         labels,
-        loc=loc,
-        borderpad=borderpad,
-        alignment=alignment,
+        **(props | kwargs | {'borderpad': borderpad, 'alignment': alignment, 'loc': loc}),
     )
     new_legend.set_title(title_text_obj.get_text(), title_text_obj.get_fontproperties())
 
