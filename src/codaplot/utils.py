@@ -285,7 +285,9 @@ def get_artist_size_inch(art, fig):
 # TODO: copy-pasted from plotting module, clean up
 
 
-def color_ticklabels(axis: str, colors: Union[Iterable, Dict, pd.Series], ax: Axes) -> None:
+def color_ticklabels(
+    axis: str, colors: Union[Iterable, Dict, pd.Series], ax: Axes
+) -> None:
     """Mark tick labels with different colors
 
     Args:
@@ -651,15 +653,18 @@ def move_figure_legend_outside_of_figure(
     # but it seems possible to just remove the legend from fig.legends
     del fig.legends[-1]
 
-    del props['bbox_to_anchor']
+    del props["bbox_to_anchor"]
 
     new_legend: mpl.legend.Legend = fig.legend(
         handles,
         labels,
-        **(props | kwargs | {'borderpad': borderpad, 'alignment': alignment, 'loc': loc}),
+        **(
+            props
+            | kwargs
+            | {"borderpad": borderpad, "alignment": alignment, "loc": loc}
+        ),
     )
     new_legend.set_title(title_text_obj.get_text(), title_text_obj.get_fontproperties())
-
 
 
 def cbar_change_style_to_inward_white_ticks(
@@ -787,14 +792,14 @@ def create_standalone_colorbar(
     cbar_height_axes_only: float,
     cmap,
     ticks,
-        vmin,
-        vmax,
+    vmin,
+    vmax,
     png_path: str,
-    title: str | None =None,
-    orientation: Literal['vertical']="vertical",
+    title: str | None = None,
+    orientation: Literal["vertical"] = "vertical",
     extend: str | None = None,
 ):
-    """ Create a stand-alone colorbar without a mappable as a figure
+    """Create a stand-alone colorbar without a mappable as a figure
 
     NOTE: its expected behavior atm that long cbar labels are cut off
 
@@ -821,7 +826,7 @@ def create_standalone_colorbar(
 
     """
 
-    if orientation != 'vertical':
+    if orientation != "vertical":
         raise NotImplementedError()
 
     # %%
@@ -854,5 +859,6 @@ def create_standalone_colorbar(
 
     cbar_change_style_to_inward_white_ticks(cb, remove_ticks_at_ends="if_on_edge")
 
-    fig.savefig(png_path)
-    fig.savefig(png_path.replace('.png', '.pdf'))
+    fig.savefig(png_path, bbox_inches="tight", pad_inches=0)
+    fig.savefig(png_path.replace(".png", ".pdf"), bbox_inches="tight", pad_inches=0)
+    fig.savefig(png_path.replace(".png", ".svg"), bbox_inches="tight", pad_inches=0)
