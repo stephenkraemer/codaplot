@@ -428,7 +428,7 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
             else:
                 width = shrink
                 height = shrink / aspect
-            placement_df = placement_df.append(
+            tmp_df = pd.DataFrame([
                 dict(
                     # remove title, it is not a cbar arg, so that the guide specification
                     # from now on only contains cbar args
@@ -437,9 +437,9 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
                     height=height,
                     width=width,
                     contents=guide_d,
-                ),
-                ignore_index=True,
-            )
+                )
+            ])
+            placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
         else:  # We have a standard legend
 
             # Create a throw-away legend object without appropriate placing parameters,
