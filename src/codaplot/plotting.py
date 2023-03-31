@@ -336,6 +336,7 @@ def heatmap(
     guide_args: Optional[Dict] = None,
     guide_ax: Optional[Axes] = None,
     guide_title: Optional[str] = None,
+    cbar_ticks: Optional[list] = None,
     title: Optional[str] = None,
     annotate: Union[str, bool] = False,
     row_spacing_group_ids: Union[np.ndarray, pd.Series] = None,
@@ -508,6 +509,7 @@ def heatmap(
         # return guide_args_copy, it will be used as legend spec, therefore add title
         guide_args_copy["title"] = guide_title
         guide_args_copy["styling_func_kwargs"] = cbar_styling_func_kwargs
+        guide_args_copy["cbar_ticks"] = cbar_ticks
         return guide_args_copy
 
     # This is a cateogrical heatmap, take care of the legend

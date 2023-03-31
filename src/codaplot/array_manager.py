@@ -3,6 +3,7 @@
 
 # * Setup
 import itertools
+import copy
 from copy import deepcopy
 from functools import wraps
 from inspect import signature
@@ -408,12 +409,21 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
     """
     # Note that 'title' is not a colorbar arg. It is removed before passing on the cbar_args
     placement_df = pd.DataFrame(
-        columns=["title", "height", "width", "contents", "styling_func_kwargs"]
+        columns=[
+            "title",
+            "height",
+            "width",
+            "contents",
+            "styling_func_kwargs",
+            "cbar_ticks",
+        ]
     )
     for guide_d in guide_spec_l:
         # Empty slots are allowed and should be skipped
         if guide_d is None:
             continue
+        else:
+            guide_d = copy.deepcopy(guide_d)
         # A guide spec without handles is expected to define a colorbar
         if "handles" not in guide_d:
             assert "mappable" in guide_d
@@ -428,17 +438,20 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
             else:
                 width = shrink
                 height = shrink / aspect
-            tmp_df = pd.DataFrame([
-                dict(
-                    # remove title, it is not a cbar arg, so that the guide specification
-                    # from now on only contains cbar args
-                    title=guide_d.pop("title", None),
-                    styling_func_kwargs=guide_d.pop("styling_func_kwargs", {}),
-                    height=height,
-                    width=width,
-                    contents=guide_d,
-                )
-            ])
+            tmp_df = pd.DataFrame(
+                [
+                    dict(
+                        # remove title, it is not a cbar arg, so that the guide specification
+                        # from now on only contains cbar args
+                        title=guide_d.pop("title", None),
+                        styling_func_kwargs=guide_d.pop("styling_func_kwargs", {}),
+                        cbar_ticks=guide_d.pop("cbar_ticks", None),
+                        height=height,
+                        width=width,
+                        contents=guide_d,
+                    )
+                ]
+            )
             placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
         else:  # We have a standard legend
 
@@ -471,17 +484,21 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
 
             r = ax.figure.canvas.get_renderer()
             bbox = l.get_window_extent(r).transformed(ax.transAxes.inverted())
-            placement_df = placement_df.append(
-                dict(
-                    title=guide_d.get("title", None),
-                    # not yet considered for legends
-                    styling_func_kwargs=None,
-                    height=bbox.height,
-                    width=bbox.width,
-                    contents=guide_d,
-                ),
-                ignore_index=True,
+
+            tmp_df = pd.DataFrame(
+                [
+                    dict(
+                        title=guide_d.get("title", None),
+                        styling_func_kwargs=None,
+                        cbar_ticks=None,
+                        height=bbox.height,
+                        width=bbox.width,
+                        contents=guide_d,
+                    )
+                ]
             )
+            placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
+
     return placement_df
 
 
@@ -698,6 +715,11 @@ def _add_cbar_inset_axes(
     cbar = fig.colorbar(**row_ser.contents, cax=cbar_ax)
     # make sure that cbar ticks are available for the cbar styling func
     fig.canvas.draw()
+    if row_ser['cbar_ticks'] is not None:
+        if orientation == "vertical":
+            cbar_ax.set_yticks(row_ser['cbar_ticks'])
+        else:
+            cbar_ax.set_xticks(row_ser['cbar_ticks'])
     cbar_styling_func(cbar, **row_ser["styling_func_kwargs"])
 
     if row_ser["title"]:
