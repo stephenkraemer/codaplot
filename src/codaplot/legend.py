@@ -27,6 +27,8 @@ class MyCenteredLabelFullHeightLegend(mlegend.Legend):
     """
 
     def __init__(self, *args, **kwargs):
+        # quick fix for missing _ncol
+        self._ncol = 1
         super().__init__(*args, **kwargs)
 
     def _init_legend_box(self, handles, labels, markerfirst=True):
@@ -171,7 +173,7 @@ class MyCenteredLabelFullHeightLegend(mlegend.Legend):
         self._legend_box.set_figure(self.figure)
         self._legend_box.axes = self.axes
         self.texts = text_list
-        self.legendHandles = handle_list
+        self.legend_handles = handle_list
 
     def set_title(self, title, prop=None):
         """
