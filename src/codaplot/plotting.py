@@ -496,7 +496,10 @@ def heatmap(
 
     # add colorbar for continuous data (if requested)
     if not is_categorical and show_guide:
-        cb = ax.figure.colorbar(ax=ax, **guide_args_copy)
+        # cbar axes is helpful to avoid automatic shrinking of the main Axes
+        cb = ax.figure.colorbar(ax=ax, cax=guide_ax, **guide_args_copy)  # type: ignore
+        if cbar_ticks is not None:
+            cb.ax.set_yticks(cbar_ticks)
         # cb.outline.set_linewidth(0)
         # cb.ax.tick_params(length=0, which="both", axis="both")
         ax.figure.canvas.draw()
