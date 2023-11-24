@@ -323,7 +323,7 @@ def heatmap(
     ax: Axes,
     is_categorical: bool = False,
     categorical_colors: Optional[List] = None,
-    xticklabels: Union[bool, List[str]] = None,
+    xticklabels: Optional[Union[bool, List[str]]] = None,
     xticklabel_rotation=90,
     xticklabel_colors: Optional[Union[Iterable, Dict]] = None,
     xticklabel_side="bottom",

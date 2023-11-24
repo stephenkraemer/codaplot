@@ -6,8 +6,6 @@ from typing import Optional, List, Tuple, Union, Dict, Any, Type
 
 import matplotlib as mpl
 
-mpl.use('Agg') # import before pyplot import!
-
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
