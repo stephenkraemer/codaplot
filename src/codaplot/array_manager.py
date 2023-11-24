@@ -1354,7 +1354,7 @@ def cross_plot(
         col_dendrogram["orientation"] = "vertical"
         # if no cluster ids are specified, use col_spacing_groups (may be None)
         if "cluster_ids_data_order" not in col_dendrogram:
-            col_dendrogram["cluster_ids_data_order"] = col_spacing_group_ids
+            col_dendrogram["cluster_ids_data_order"] = pd.Series(col_spacing_group_ids)
         # if cluster ids are specified, align them if alignment mode is on
         elif col_dendrogram["cluster_ids_data_order"] is not None and align_args:
             col_dendrogram["cluster_ids_data_order"] = col_dendrogram[
