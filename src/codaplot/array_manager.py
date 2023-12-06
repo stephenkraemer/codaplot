@@ -497,7 +497,11 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
                     )
                 ]
             )
-            placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
+
+            if placement_df.empty:
+                placement_df = tmp_df
+            else:
+                placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
 
     return placement_df
 

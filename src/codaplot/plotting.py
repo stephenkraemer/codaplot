@@ -403,7 +403,7 @@ def heatmap(
     if not df.dtypes.unique().shape[0] == 1:
         raise ValueError("All columns must have the same dtype")
 
-    is_categorical = is_categorical or df.dtypes[0].name in ["category", "object"]
+    is_categorical = is_categorical or df.dtypes.iloc[0].name in ["category", "object"]
 
     if annotate and not is_categorical:
         raise NotImplementedError()
