@@ -506,6 +506,7 @@ def heatmap(
         cbar_styling_func(cb, **cbar_styling_func_kwargs)
         if guide_title is not None:
             cb.set_label(guide_title)
+        guide_args_copy['cbar'] = cb
 
     # Done with continous data, return the result
     if not is_categorical:
