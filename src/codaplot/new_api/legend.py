@@ -19,8 +19,6 @@ import seaborn as sns
 import yaml
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-import mouse_hema_meth.utils as ut
-from mouse_hema_meth.utils import cm
 from dataclasses import dataclass
 
 def add_guides(
