@@ -444,15 +444,19 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
                         # remove title, it is not a cbar arg, so that the guide specification
                         # from now on only contains cbar args
                         title=guide_d.pop("title", None),
-                        styling_func_kwargs=guide_d.pop("styling_func_kwargs", {}),
-                        cbar_ticks=guide_d.pop("cbar_ticks", None),
                         height=height,
                         width=width,
                         contents=guide_d,
+                        styling_func_kwargs=guide_d.pop("styling_func_kwargs", {}),
+                        cbar_ticks=guide_d.pop("cbar_ticks", None),
                     )
                 ]
             )
-            placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
+            pd.testing.assert_index_equal(placement_df.columns, tmp_df.columns)
+            if placement_df.empty:
+                placement_df = tmp_df
+            else:
+                placement_df = pd.concat([placement_df, tmp_df], axis=0, ignore_index=True)
         else:  # We have a standard legend
 
             # Create a throw-away legend object without appropriate placing parameters,
@@ -489,13 +493,18 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
                 [
                     dict(
                         title=guide_d.get("title", None),
-                        styling_func_kwargs=None,
-                        cbar_ticks=None,
                         height=bbox.height,
                         width=bbox.width,
                         contents=guide_d,
+                        styling_func_kwargs=None,
+                        cbar_ticks=None,
                     )
                 ]
+            )
+            
+            pd.testing.assert_index_equal(
+                placement_df.columns,
+                tmp_df.columns
             )
 
             if placement_df.empty:
