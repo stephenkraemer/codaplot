@@ -388,7 +388,11 @@ def add_two_level_labels(
         (outer_label, inner_label),
     ) in labels_and_pos_from_left_to_right_or_from_top_to_bottom:
 
-        (xytext_outer_label, xytext_bar, xytext_inner_label,) = _get_label_positions(
+        (
+            xytext_outer_label,
+            xytext_bar,
+            xytext_inner_label,
+        ) = _get_label_positions(
             max_outer_text_length_data_coords=max_outer_text_length_data_coords,
             bar_length_data_coords=approximated_bar_char_length_data_coords,
             max_inner_text_length_data_coords=max_inner_text_length_data_coords,
@@ -593,12 +597,58 @@ LegendLocation = Literal[
     "outside lower center",
 ]
 
+FigureLegendAlignment = Literal["left", "center", "right"]
+
+
+def move_seaborn_objects_plot_legend_outside_of_figure(
+    fig,
+    p,
+    alignment: FigureLegendAlignment = "left",
+    loc: LegendLocation = "outside center right",
+):
+    """WIP
+
+    NOTE this uses private attribute Plot._legend_contents and may not be stable
+
+    based on https://stackoverflow.com/questions/75935869/how-to-move-marker-and-color-sections-of-a-figure-legend
+
+    - this function has minimal functionality, see move_figure_legend_outside_of_figure and sns.move_legend for possible improvements, e.g. add padding
+
+    """
+    fig.legends.pop(0)
+    legend_contents = p._legend_contents
+    blank_handle = mpl.patches.Patch(alpha=0, linewidth=0, visible=False)  # type: ignore
+    handles = []
+    labels = []
+    for legend_content in legend_contents:
+        handles.append(blank_handle)
+        handles.extend(legend_content[1])
+        labels.append(legend_content[0][0])
+        labels.extend(legend_content[2])
+    fig.legend(handles, labels, loc=loc, alignment=alignment)
+    _adjust_legend_subtitles(fig.legends[0])
+
+
+# move the sub legend titles to the left such that they are aligned with the markers
+def _adjust_legend_subtitles(legend):
+    font_size = plt.rcParams.get("legend.title_fontsize", None)
+    hpackers = legend.findobj(mpl.offsetbox.VPacker)[0].get_children()  # type: ignore
+    for hpack in hpackers:
+        draw_area, text_area = hpack.get_children()
+        handles = draw_area.get_children()
+        handle = handles[0]
+        if not handles[0]._visible:
+            draw_area.set_width(0)
+            for text in text_area.get_children():
+                if font_size is not None:
+                    text.set_size(font_size)
+
 
 def move_figure_legend_outside_of_figure(
     fig: mpl.figure.Figure,
     loc: LegendLocation = "outside center right",
     title: str | None = None,
-    alignment: Literal["left", "center", "right"] = "left",
+    alignment: FigureLegendAlignment = "left",
     borderpad: float = 0.5,
     **kwargs,
 ) -> None:
