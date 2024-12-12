@@ -324,6 +324,7 @@ def add_two_level_labels(
     inner_label_colors: Optional[Dict] = None,
     ticklabel_to_axis_margin_factor=2,
     skip_repeated_outer_labels=True,
+    fontsize=6,
 ):
     """Add ticklabels consisting of an outer and inner label with some goodies
 
@@ -414,7 +415,7 @@ def add_two_level_labels(
         shared_args = dict(
             zorder=10,
             annotation_clip=False,
-            fontsize=6,
+            fontsize=fontsize,
             textcoords="data",
             rotation=rotation,
             va=va,
@@ -427,7 +428,7 @@ def add_two_level_labels(
                 text=outer_label,
                 color=(
                     "black"
-                    if outer_label_colors is None
+                    if not outer_label_colors
                     else outer_label_colors[outer_label]
                 ),
                 xytext=xytext_outer_label,
@@ -447,7 +448,7 @@ def add_two_level_labels(
             text=inner_label,
             color=(
                 "black"
-                if inner_label_colors is None
+                if not inner_label_colors
                 else inner_label_colors[inner_label]
             ),
             xytext=xytext_inner_label,
@@ -517,7 +518,7 @@ def _get_text_length_in_target_axis_data_coords(outer_inner_labels_df, ax, axis)
     )[width_height_idx]
 
     single_space_width = get_text_width_height_in_x(
-        s="m",  # may not work correctly with " "
+        s=".",
         fontsize=mpl.rcParams["legend.fontsize"],
         ax=ax,
         x="data_coordinates",

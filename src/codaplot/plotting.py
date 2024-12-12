@@ -322,7 +322,7 @@ def heatmap(
     df: pd.DataFrame,
     ax: Axes,
     is_categorical: bool = False,
-    categorical_colors: Optional[List] = None,
+    categorical_colors: List | dict | pd.Series | None = None,
     xticklabels: Optional[Union[bool, List[str]]] = None,
     xticklabel_rotation=90,
     xticklabel_colors: Optional[Union[Iterable, Dict]] = None,
@@ -586,6 +586,7 @@ def _get_categorical_codes_colors(categorical_colors, df):
     # Check inputs
     if df.isna().any().any():
         raise ValueError("NA values not allowed")
+
     # Process data: turn categories into consecutive integers (codes_df)
     # Tile colors to get vector mapping each category to its color (cmap_listmap)
     is_categorical = df.dtypes.iloc[0].name == "category"
@@ -594,14 +595,22 @@ def _get_categorical_codes_colors(categorical_colors, df):
     else:
         levels = np.unique(df.values)
     n_levels = len(levels)
+
     # Colors are repeatedly tiled until all levels are covered
     # They may be specified as color palette names or list of colors
     if isinstance(categorical_colors, str):
         color_list = sns.color_palette(categorical_colors, n_levels)
-    else:  # List of colors
+    elif isinstance(categorical_colors, (list, np.ndarray, tuple)):  # List of colors
         color_list = (
             np.ceil(n_levels / len(categorical_colors)).astype(int) * categorical_colors
         )[:n_levels]
+    elif isinstance(categorical_colors, dict):
+        color_list = pd.Series(categorical_colors).loc[levels].to_list()
+    elif isinstance(categorical_colors, pd.Series):
+        color_list = categorical_colors.loc[levels].to_list()
+    else:
+        raise TypeError(f"Categorical colors argument {categorical_colors} has unexpected type.")
+
     # noinspection PyUnresolvedReferences
     categorical_colors_listmap = mpl.colors.ListedColormap(color_list)
     # Get integer codes matrix for pcolormesh, ie levels are represented by
@@ -1096,7 +1105,7 @@ class CutDendrogram:
         min_cluster_size: Optional[int] = None,
         min_height: str = "auto",
         colors: Union[str, List, Dict] = "Set1",
-        no_member_color: [Tuple[int], str] = "black",
+        no_member_color: Tuple[int] | str = "black",
     ):
         """
 
@@ -1801,6 +1810,8 @@ def spaced_heatmap2(
         for use in colorbar plotting etc.
     """
 
+    df = df.copy(deep=True)
+
     # Troubleshooting
     # ---------------
     # - for dataframes with multiple columns and different presence of categories
@@ -1835,16 +1846,16 @@ def spaced_heatmap2(
     # if df has a multiindex, flatten it to get labels usable for plotting
     if xticklabels:
         if isinstance(xticklabels, list):
-            df.index = xticklabels
+            df.columns = pd.Index(xticklabels)
         else:
-            df.index = index_to_labels(df.index)
+            df.columns = pd.Index(index_to_labels(df.columns))
     else:
         ax.tick_params(labelbottom=False)
     if yticklabels:
         if isinstance(yticklabels, list):
-            df.columns = yticklabels
+            df.index = pd.Index(yticklabels)
         else:
-            df.columns = index_to_labels(df.columns)
+            df.index = pd.Index(index_to_labels(df.index))
     else:
         ax.tick_params(labelleft=False)
 
