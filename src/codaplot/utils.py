@@ -24,6 +24,35 @@ from matplotlib.offsetbox import (
 # # Unsorted
 
 
+def get_subplot_adjust_hspace_wspace_params_in_inch(
+    fig: Figure,
+    distance_between_cols_in: float = 0,
+    distance_between_rows_in: float = 0,
+):
+    fig_width, fig_height = fig.get_size_inches()
+    # assuming plot was created with plt.subplots
+    # so all axes have the same gridspec
+    if isinstance(fig.axes, list):
+        any_ax = fig.axes[0]
+    elif isinstance(fig.axes, np.ndarray):
+        any_ax = fig.axes.flatten()[0]
+    else:
+        raise ValueError()
+
+    gs = any_ax.get_gridspec()  # type: ignore
+    ncols = gs.ncols
+    nrows = gs.nrows
+    hspace = (distance_between_rows_in * nrows) / (
+        fig_height - (nrows - 1) * distance_between_rows_in
+    )
+    wspace = (distance_between_cols_in * ncols) / (
+        fig_width - (ncols - 1) * distance_between_cols_in
+    )
+
+    return dict(hspace=hspace, wspace=wspace)
+
+
+
 def warn(s):
     print(f"\033[1;101m\n\nWARNING: {s}\n\n\033[0m")
 
