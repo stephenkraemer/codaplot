@@ -1,7 +1,7 @@
 # # Imports
 
 import os
-from typing import Any, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import matplotlib as mpl
 import matplotlib.colors as mcolors
@@ -42,6 +42,8 @@ def jointplot(
     hist_height=1 / 2.54,
     cbar_height=0.3 / 2.54,
     cbar_spacer_height=0.2 / 2.54,
+    cbar_styling_func: Callable | None = co.cbar_change_style_to_inward_white_ticks,
+    cbar_styling_func_kwargs: dict | None = None,
 ) -> Tuple[Figure, Dict[str, Axes]]:
     """jointplot
 
@@ -129,6 +131,8 @@ def jointplot(
         xlim=xlim,
         ylim=ylim,
     )
+    xhist_ax.set(xlim=xlim)
+    yhist_ax.set(ylim=ylim)
 
     cb = fig.colorbar(
         qmesh,
@@ -136,7 +140,11 @@ def jointplot(
         orientation="horizontal",
     )  # location="bottom",
     axd["cbar"].set_xlabel(freq_label)
-    co.cbar_change_style_to_inward_white_ticks(cb, remove_ticks_at_ends="always")
+
+    if cbar_styling_func is not None:
+        if cbar_styling_func_kwargs is None:
+            cbar_styling_func_kwargs = {}
+        cbar_styling_func(cb, **cbar_styling_func_kwargs)
 
     xhist_ax.hist(xscore, rasterized=True, **x_hist1d_kwargs)
     xhist_ax.xaxis.set_visible(False)

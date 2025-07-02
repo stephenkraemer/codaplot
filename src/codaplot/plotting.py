@@ -339,8 +339,8 @@ def heatmap(
     cbar_ticks: Optional[list] = None,
     title: Optional[str] = None,
     annotate: Union[str, bool] = False,
-    row_spacing_group_ids: Union[np.ndarray, pd.Series] = None,
-    col_spacing_group_ids: Union[np.ndarray, pd.Series] = None,
+    row_spacing_group_ids: np.ndarray | None = None,
+    col_spacing_group_ids: np.ndarray | None = None,
     row_spacer_sizes: Union[float, Iterable[float]] = 0.01,
     col_spacer_sizes: Union[float, Iterable[float]] = 0.01,
     frame_spaced_elements=False,
@@ -2328,7 +2328,8 @@ def frame_groups(
     spacer_sizes: Optional[Union[float, List[float]]] = None,
     edge_alignment: Literal["outside", "inside", "centered"] = "inside",
     origin=(0, 0),
-    add_labels: bool = False,
+    add_labels: bool = True,
+    add_patch: bool = False,
     labels: Optional[Union[Dict, Iterable]] = None,
     label_groups_kwargs: Optional[Dict] = None,
     label_colors: Optional[Union[Dict, Iterable, str, Tuple[float]]] = None,
@@ -2387,10 +2388,10 @@ def frame_groups(
     # - exact limits will depend on the padding
     non_direction_patch_size = 1
 
-    if not isinstance(colors, dict):
-        raise ValueError(
-            'Other types than dict for arg "colors" may currently not work, including None'
-        )
+    # if not isinstance(colors, dict):
+    #     raise ValueError(
+    #         'Other types than dict for arg "colors" may currently not work, including None'
+    #     )
     assert edge_alignment in ["inside", "outside", "centered"]
     if kwargs:
         warnings.warn("passing **kwargs is deprecated", category=DeprecationWarning)
@@ -2606,16 +2607,17 @@ def frame_groups(
         else:
             raise ValueError()
 
-        # noinspection PyTypeChecker
-        patch = mpatches.FancyBboxPatch(
-            cast(Tuple[float, float], curr_origin),
-            *(patch_size_in_direction, patch_size_other_dim)[::slice_direction],
-            # use color as edgecolor if defined; otherwise, kwargs will contain an edgecolor kwarg
-            **dict(edgecolor=color) if color else {},
-            **kwargs,
-            **fancy_box_kwargs,
-        )
-        ax.add_artist(patch)
+        if add_patch:
+            # noinspection PyTypeChecker
+            patch = mpatches.FancyBboxPatch(
+                cast(Tuple[float, float], curr_origin),
+                *(patch_size_in_direction, patch_size_other_dim)[::slice_direction],
+                # use color as edgecolor if defined; otherwise, kwargs will contain an edgecolor kwarg
+                **dict(edgecolor=color) if color else {},
+                **kwargs,
+                **fancy_box_kwargs,
+            )
+            ax.add_artist(patch)
 
     if add_labels:
         if not label_groups_kwargs:

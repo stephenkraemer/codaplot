@@ -875,6 +875,7 @@ def create_standalone_colorbar(
     vmin,
     vmax,
     png_path: str,
+    fontsize=None,
     title: str | None = None,
     orientation: Literal["vertical"] = "vertical",
     extend: str | None = None,
@@ -906,9 +907,6 @@ def create_standalone_colorbar(
 
     """
 
-    if orientation != "vertical":
-        raise NotImplementedError()
-
     # %%
     fig, ax = plt.subplots(
         1,
@@ -931,14 +929,23 @@ def create_standalone_colorbar(
     # afg no way to get a colorbar to not only plot on yaxis between 0 and 1, but between ylim[0] and ylim[1]
     # so instead i normalize the ytick positions for the given (apparently hard to change) 0, 1 axis limits
     yticks_01_norm = (np.array(ticks) - vmin) / (vmax - vmin)
-    ax.set_yticks(yticks_01_norm)
-    ax.set_yticklabels(ticks)
+    if orientation == 'vertical':
+        ax.set_yticks(yticks_01_norm)
+        ax.set_yticklabels(ticks)
+    else:
+        ax.set_xticks(yticks_01_norm)
+        ax.set_xticklabels(ticks)
 
     if title is not None:
-        ax.set_ylabel(title)
+        if orientation == 'vertical':
+            ax.set_ylabel(title, fontsize=fontsize)
+        else:
+            ax.set_xlabel(title, fontsize=fontsize)
 
     cbar_change_style_to_inward_white_ticks(cb, remove_ticks_at_ends="if_on_edge")
 
     fig.savefig(png_path, bbox_inches="tight", pad_inches=0)
     fig.savefig(png_path.replace(".png", ".pdf"), bbox_inches="tight", pad_inches=0)
     fig.savefig(png_path.replace(".png", ".svg"), bbox_inches="tight", pad_inches=0)
+
+    return fig
