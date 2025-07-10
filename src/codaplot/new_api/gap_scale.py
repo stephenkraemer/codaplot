@@ -4,7 +4,7 @@ This allows creating plots with spaced-out elements, e.g. heatmaps with gaps
 between clusters, with standard matplotlib artists.
 """
 
-print('reloaded gap_scale')
+print("reloaded gap_scale")
 
 import numbers
 import numpy as np
