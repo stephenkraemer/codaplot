@@ -109,7 +109,7 @@ def heatmap(
     # %%
     if is_categorical:
         patches = [
-            Patch(facecolor=color_d[l]) for l in levels
+            Patch(facecolor=color_d[l]) for l in levels # pyright: ignore[reportPossiblyUnboundVariable]
         ]  # pyright: ignore[reportPossiblyUnboundVariable]
         if show_guide:
             ax.legend(
@@ -123,7 +123,7 @@ def heatmap(
 
     if not is_categorical:
         return {
-            "mappable": scalar_mappable
+            "mappable": scalar_mappable  # pyright: ignore[reportPossiblyUnboundVariable]
         }  # pyright: ignore[reportPossiblyUnboundVariable]
     return {}
 
