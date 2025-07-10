@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import toolz as tz
 from codaplot.plotting import adjust_coords
 from codaplot.utils import cbar_change_style_to_inward_white_ticks
 from matplotlib.axes import Axes
@@ -156,7 +155,7 @@ def array_to_figure(
         ge_name = ge.get("_name", None)
         ge_func = ge.get("_func", None)
         ge_args = ge.get("_args", [])
-        ge_kwargs = tz.dissoc(ge, "_name", "_func", "_args", "_supply")
+        ge_kwargs = {k: v for k, v in ge.items() if k not in ["_name", "_func", "_args", "_supply"]}
 
         if (
             ge_name is not None
@@ -1363,7 +1362,7 @@ def cross_plot(
             col_dendrogram = {}
         else:
             col_dendrogram = deepcopy(col_dendrogram)
-        col_dendrogram = tz.merge(cut_dendrogram_defaults, col_dendrogram)
+        col_dendrogram = cut_dendrogram_defaults | col_dendrogram
         col_dendrogram["orientation"] = "vertical"
         # if no cluster ids are specified, use col_spacing_groups (may be None)
         if "cluster_ids_data_order" not in col_dendrogram:
@@ -1394,7 +1393,7 @@ def cross_plot(
             row_dendrogram = {}
         else:
             row_dendrogram = deepcopy(row_dendrogram)
-        row_dendrogram = tz.merge(cut_dendrogram_defaults, row_dendrogram)
+        row_dendrogram = cut_dendrogram_defaults | row_dendrogram
         row_dendrogram["orientation"] = "horizontal"
         # if no cluster ids are specified, use row_spacing_groups (may be None)
         if "cluster_ids_data_order" not in row_dendrogram:

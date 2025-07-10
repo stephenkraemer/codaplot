@@ -40,7 +40,6 @@ import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import toolz as tz
 from codaplot.cluster_ids import ClusterIDs
 from codaplot.linkage_mat import Linkage
 from matplotlib import patches as mpatches
@@ -2242,7 +2241,7 @@ def label_groups(
     assert (x is not None) + (y is not None) == 1, "Specify either x OR y"
 
     # ha and va default to center, rotation defaults to 90 if text goes along x axis
-    kwargs = tz.merge(dict(ha="center", va="center"), kwargs)
+    kwargs = dict(ha="center", va="center") | kwargs
     if x and "rotation" not in kwargs:
         kwargs["rotation"] = 90
 
@@ -2401,7 +2400,7 @@ def frame_groups(
     defaults = dict(
         fill=False, boxstyle=mpatches.BoxStyle("Round", pad=0), edgecolor="black"
     )
-    fancy_box_kwargs = tz.merge(defaults, fancy_box_kwargs)
+    fancy_box_kwargs = defaults | fancy_box_kwargs
 
     if axis_off:
         ax.axis("off")

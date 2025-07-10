@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_categorical_dtype
 from dataclasses import dataclass
-from toolz import merge
 
 
 @dataclass
@@ -54,7 +53,7 @@ class ClusterIDs:
 
         # construct full mapping which combines identiy mappings and mappings
         # which replace a cluster ID with the lowest ID from the merge group
-        full_lowest_group_id_mapping = merge(identity_mapping, merge_group_to_lowest_group_id_mapping)
+        full_lowest_group_id_mapping = identity_mapping | merge_group_to_lowest_group_id_mapping
 
         unique_merged_ids = pd.Series(np.unique(list(full_lowest_group_id_mapping.values())))
         if has_int_clust_ids:
