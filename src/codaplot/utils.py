@@ -949,3 +949,9 @@ def create_standalone_colorbar(
     fig.savefig(png_path.replace(".png", ".svg"), bbox_inches="tight", pad_inches=0)
 
     return fig
+
+def despine(ax, left=False, bottom = False, right=True, top=True):
+    ax.spines['top'].set_visible(not top)
+    ax.spines['right'].set_visible(not right)
+    ax.spines['bottom'].set_visible(not bottom)
+    ax.spines['left'].set_visible(not left)

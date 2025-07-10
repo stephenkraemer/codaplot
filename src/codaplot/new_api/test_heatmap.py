@@ -6,18 +6,19 @@ from codaplot.new_api.gap_scale import compute_breakpoints_and_offsets
 
 import pandas as pd
 
-print('reloaded test_heatmap')
+print("reloaded test_heatmap")
+
 
 def test_heatmap():
 
     # %%
     data = pd.DataFrame(np.random.randn(3_000, 5_000))
     x_groups = np.repeat([1, 2, 3, 4], 1250)
-    y_groups = np.repeat(['a', 'b', 'c'], 1000)
+    y_groups = np.repeat(["a", "b", "c"], 1000)
     x_gaps = [100, 100, 100]
     y_gaps = np.array([50, 50]) * 10
 
-    fig, ax = plt.subplots(1, 1, layout='constrained', figsize=(4, 4))
+    fig, ax = plt.subplots(1, 1, layout="constrained", figsize=(4, 4))
     ax.set_xscale("gap_scale", groups=x_groups, gap_sizes=x_gaps)
     ax.set_yscale("gap_scale", groups=y_groups, gap_sizes=y_gaps)
 
@@ -34,15 +35,16 @@ def test_heatmap():
 
     plt.close()
 
-    fig.savefig('/home/stephen/projects/codaplot/src/codaplot/new_api/test1.png')
+    fig.savefig("/home/stephen/projects/codaplot/src/codaplot/new_api/test1.png")
     # %%
+
 
 def test_heatmap_normal():
 
     # %%
     data = pd.DataFrame(np.random.randn(3_000, 5_000))
 
-    fig, ax = plt.subplots(1, 1, layout='constrained', figsize=(4, 4))
+    fig, ax = plt.subplots(1, 1, layout="constrained", figsize=(4, 4))
 
     heatmap(
         data,
@@ -52,9 +54,8 @@ def test_heatmap_normal():
     )
     plt.close()
 
-    fig.savefig('/home/stephen/projects/codaplot/src/codaplot/new_api/test2.png')
+    fig.savefig("/home/stephen/projects/codaplot/src/codaplot/new_api/test2.png")
     # %%
-
 
 
 def test_heatmap_small():
@@ -65,7 +66,7 @@ def test_heatmap_small():
     x_gaps = [40, 40, 40]
     y_gaps = [0.5, 1, 2]
 
-    fig, ax = plt.subplots(1, 1, layout='constrained', figsize=(2, 2))
+    fig, ax = plt.subplots(1, 1, layout="constrained", figsize=(2, 2))
     ax.set_xscale("gap_scale", groups=x_groups, gap_sizes=x_gaps)
     ax.set_yscale("gap_scale", groups=y_groups, gap_sizes=y_gaps)
 
@@ -78,7 +79,7 @@ def test_heatmap_small():
         y_groups=y_groups,
         vmin=-1,
         vmax=1,
-        palette='RdBu_r',
+        palette="RdBu_r",
     )
 
     # fig.colorbar(qm['mappable'], ax=ax)
@@ -87,16 +88,19 @@ def test_heatmap_small():
     # ax.set_xticklabels([f"tf{i}" for i in np.arange(5)])
     # %%
 
+
 def test_heatmap_categorical():
 
     # %%
-    data = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': ['a', 'd', 'd'], 'c': ['a', 'd', 'e']})
+    data = pd.DataFrame(
+        {"a": ["a", "b", "c"], "b": ["a", "d", "d"], "c": ["a", "d", "e"]}
+    )
     x_groups = [1, 1, 2]
     y_groups = [1, 2, 2]
     x_gaps = 1
     y_gaps = 1
 
-    fig, ax = plt.subplots(1, 1, layout='constrained', figsize=(2, 2))
+    fig, ax = plt.subplots(1, 1, layout="constrained", figsize=(2, 2))
     ax.set_xscale("gap_scale", groups=x_groups, gap_sizes=x_gaps)
     ax.set_yscale("gap_scale", groups=y_groups, gap_sizes=y_gaps)
 
@@ -112,7 +116,8 @@ def test_heatmap_categorical():
     )
     # %%
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     # %%
     t1 = time.time()

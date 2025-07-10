@@ -1,18 +1,20 @@
-print("reloaded heatmap 3")
-
+from copy import deepcopy
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import to_rgba
+from matplotlib.legend import Legend
+from matplotlib.patches import Patch
 import pandas as pd
 import numpy as np
 from matplotlib.axes import Axes
 
 from codaplot.new_api.gap_scale import compute_breakpoints_and_offsets, groups_t, gaps_t
+from codaplot.utils import cbar_change_style_to_inward_white_ticks, despine
 from matplotlib.colors import Normalize
 from matplotlib.colors import Colormap
 
-pd.set_option('future.no_silent_downcasting', True)
+pd.set_option("future.no_silent_downcasting", True)
 
 
 def heatmap(
@@ -26,16 +28,27 @@ def heatmap(
     vmin: float | None = None,
     vmax: float | None = None,
     palette: str | Colormap | dict | list | None = None,
-    na_color: str | tuple = 'white',
+    na_color: str | tuple = "white",
+    show_guide: bool = True,
+    guide_args: dict | None = None,
+    guide_title: str | None = None,
+    guide_ax: Axes | None = None,
+    cbar_ticks: np.ndarray | list | None = None,
+    cbar_styling_func=cbar_change_style_to_inward_white_ticks,
+    cbar_styling_func_kwargs: dict | None = None,
     **kwargs,
 ) -> dict:
 
     # %%
 
+    # handle inputs
     if not isinstance(data, (pd.DataFrame, np.ndarray)):
-        raise TypeError('data must be DataFrame or np.ndarray')
+        raise TypeError("data must be DataFrame or np.ndarray")
 
     data = pd.DataFrame(data)
+
+    if cbar_styling_func_kwargs is None:
+        cbar_styling_func_kwargs = {}
 
     is_categorical = (
         isinstance(data.dtypes.iloc[0], pd.CategoricalDtype)
@@ -43,16 +56,28 @@ def heatmap(
         or pd.api.types.is_string_dtype(data.dtypes.iloc[0])
     )
 
+    if guide_args is None:
+        if is_categorical:
+            guide_args_copy = dict(
+                loc="upper left", bbox_to_anchor=(1.05, 1), borderaxespad=0
+            )
+        else:
+            guide_args_copy = {}
+    else:
+        guide_args_copy = deepcopy(guide_args)
+
     if palette is None:
         if is_categorical:
-            palette = 'Set1'
+            palette = "Set1"
         else:
-            palette = 'viridis'
+            palette = "viridis"
 
     if is_categorical:
         levels = _find_ordered_levels(data)
         color_d = _generate_color_mapping(palette, na_color, levels, len(levels))
-        plot_arr = _df_to_rgba_vectorized(data=data, color_d=color_d, na_color=na_color, levels=levels)
+        plot_arr = _df_to_rgba_vectorized(
+            data=data, color_d=color_d, na_color=na_color, levels=levels
+        )
     else:
         cmap = palette
         if norm is None:
@@ -68,9 +93,40 @@ def heatmap(
 
     ax.pcolormesh(x, y, plot_arr, **kwargs)
 
+    # General aesthetics
+    # ax.tick_params(length=0, which="both", axis="both")
+    despine(ax, left=True, bottom=True)
+
+    if not is_categorical and show_guide:
+        cb = ax.figure.colorbar(scalar_mappable, ax=ax, cax=guide_ax, **guide_args_copy)  # type: ignore
+        if cbar_ticks is not None:
+            cb.ax.set_yticks(cbar_ticks)
+        ax.figure.canvas.draw()
+        cbar_styling_func(cb, **cbar_styling_func_kwargs)
+        if guide_title is not None:
+            cb.set_label(guide_title)
+        # guide_args_copy['cbar'] = cb
+    # %%
+    if is_categorical:
+        patches = [
+            Patch(facecolor=color_d[l]) for l in levels
+        ]  # pyright: ignore[reportPossiblyUnboundVariable]
+        if show_guide:
+            ax.legend(
+                handles=patches,
+                labels=list(levels),  # pyright: ignore[reportPossiblyUnboundVariable]
+                title=guide_title,
+                **guide_args_copy,  # pyright: ignore[reportArgumentType]
+            )
+
+    # %%
+
     if not is_categorical:
-        return {'mappable': scalar_mappable}  # pyright: ignore[reportPossiblyUnboundVariable]
+        return {
+            "mappable": scalar_mappable
+        }  # pyright: ignore[reportPossiblyUnboundVariable]
     return {}
+
 
 def _insert_gaps(plot_arr, x_groups, x_gaps, y_groups, y_gaps):
     n_rows, n_cols, _ = plot_arr.shape
@@ -78,9 +134,7 @@ def _insert_gaps(plot_arr, x_groups, x_gaps, y_groups, y_gaps):
         if x_gaps is None:
             raise ValueError("If x_groups is specified, x_gaps must also be specified")
         x_bps, _ = compute_breakpoints_and_offsets(x_groups, x_gaps)
-        plot_arr = np.insert(
-            plot_arr, x_bps, np.ones((n_rows, len(x_bps), 4)), axis=1
-        )
+        plot_arr = np.insert(plot_arr, x_bps, np.ones((n_rows, len(x_bps), 4)), axis=1)
         x = np.arange(n_cols + 1, dtype="f4")
         # if we subtract too much, for heatmaps with many elements (e.g. 5000)
         # the spacer column may have no effect (i.e. one just sees a stretched data columns in tests)
@@ -93,16 +147,15 @@ def _insert_gaps(plot_arr, x_groups, x_gaps, y_groups, y_gaps):
         if y_gaps is None:
             raise ValueError("If y_groups is specified, y_gaps must also be specified")
         y_bps, _ = compute_breakpoints_and_offsets(y_groups, y_gaps)
-        plot_arr = np.insert(
-            plot_arr, y_bps, np.ones((len(y_bps), n_cols, 4)), axis=0
-        )
+        plot_arr = np.insert(plot_arr, y_bps, np.ones((len(y_bps), n_cols, 4)), axis=0)
         y = np.arange(n_rows + 1, dtype="f4")
         y[y_bps] -= 0.001
         y = np.insert(y, y_bps + 1, y_bps)
         n_rows += len(y_bps)
     else:
         y = np.arange(n_rows + 1)
-    return plot_arr,x,y
+    return plot_arr, x, y
+
 
 def _generate_color_mapping(palette, na_color, levels, n_levels) -> dict:
     """Generate dict mapping each level to a color, and mapping null to na_color"""
@@ -112,9 +165,7 @@ def _generate_color_mapping(palette, na_color, levels, n_levels) -> dict:
         color_mapping = dict(zip(levels, color_l))
         # for a list of colors, cycle through them multiple times if necessary
     elif isinstance(palette, (list, np.ndarray, tuple)):
-        color_l = (
-                np.ceil(n_levels / len(palette)).astype(int) * palette
-            )[:n_levels]
+        color_l = (np.ceil(n_levels / len(palette)).astype(int) * palette)[:n_levels]
         color_mapping = dict(zip(levels, color_l))
     elif isinstance(palette, dict):
         assert set(palette.keys()) == set(levels)
@@ -124,25 +175,28 @@ def _generate_color_mapping(palette, na_color, levels, n_levels) -> dict:
         color_mapping = palette.to_dict()
     else:
         raise TypeError()
-        
+
     nullable_categorical_markers = [
-            None,     # Python’s null object
-            np.nan,   # NumPy “not a number” (float) marker
-            pd.NaT,   # pandas “Not a Time” for datetime/timedelta
-            pd.NA ,    # pandas’ new generic missing value for nullable dtypes
-        ]
+        None,  # Python’s null object
+        np.nan,  # NumPy “not a number” (float) marker
+        pd.NaT,  # pandas “Not a Time” for datetime/timedelta
+        pd.NA,  # pandas’ new generic missing value for nullable dtypes
+    ]
     if any(x in color_mapping.keys() for x in nullable_categorical_markers):
-        raise ValueError('NA color must be specified with argument na_color, not as part of palette')
+        raise ValueError(
+            "NA color must be specified with argument na_color, not as part of palette"
+        )
     for null_value in nullable_categorical_markers:
         color_mapping[null_value] = na_color
     return color_mapping
 
+
 def _find_ordered_levels(data: pd.DataFrame) -> np.ndarray:
     """Returns ordered levels, either in category order or in sort order otherwise"""
     if isinstance(data.dtypes.iloc[0], pd.CategoricalDtype):
-            # level order is given by CategoricalDtype or by sort order
-            # note that categories cannot be null, but the dataframe may still
-            # contain null values
+        # level order is given by CategoricalDtype or by sort order
+        # note that categories cannot be null, but the dataframe may still
+        # contain null values
         levels = data.dtypes.iloc[0].categories.values
     else:
         uni = pd.unique(data.values.ravel())
@@ -152,33 +206,33 @@ def _find_ordered_levels(data: pd.DataFrame) -> np.ndarray:
 
 
 def get_first_n_colors(palette_name: str, n: int):
-    cmap = plt.get_cmap(palette_name)         # e.g. 'tab20'
+    cmap = plt.get_cmap(palette_name)  # e.g. 'tab20'
     try:
         # most categorical maps (tab10, tab20, etc.) expose a .colors list
         return cmap.colors[:n]  # pyright: ignore[reportAttributeAccessIssue]
     except AttributeError:
         # fallback for continuous maps: sample N evenly‐spaced points
-        return [cmap(i/(n-1)) for i in range(n)]
+        return [cmap(i / (n - 1)) for i in range(n)]
 
 
-def _df_to_rgba_vectorized(data: pd.DataFrame,
-                          color_d: dict,
-                          levels: np.ndarray,
-                          na_color: str | tuple = 'none') -> np.ndarray:
-    
+def _df_to_rgba_vectorized(
+    data: pd.DataFrame,
+    color_d: dict,
+    levels: np.ndarray,
+    na_color: str | tuple = "none",
+) -> np.ndarray:
 
     if isinstance(data.dtypes.iloc[0], pd.CategoricalDtype):
         codes = data.iloc[:, 0].cat.codes
     else:
         code_map = {cat: i for i, cat in enumerate(levels)}
 
-
         codes = (
             data.replace(code_map)
             .astype(int)
             # default code for na in Categoricals is -1
             .fillna(-1)
-             .values
+            .values
         )
 
     # build RGBA lookup table
@@ -187,12 +241,12 @@ def _df_to_rgba_vectorized(data: pd.DataFrame,
         col = color_d[cat]
         # normalize if tuple of 0–255 ints
         if isinstance(col, tuple) and max(col) > 1:
-            col = tuple(c/255.0 for c in col)
+            col = tuple(c / 255.0 for c in col)
         lut[i] = to_rgba(col)
     if isinstance(na_color, tuple) and max(na_color) > 1:
-        na_color = tuple(c/255.0 for c in na_color)
+        na_color = tuple(c / 255.0 for c in na_color)
     lut[-1] = to_rgba(na_color)
 
     # fancy‐index
-    rgba = lut[codes]   # shape (H, W, 4)
+    rgba = lut[codes]  # shape (H, W, 4)
     return rgba
