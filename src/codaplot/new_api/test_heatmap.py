@@ -2,7 +2,8 @@ import time
 from matplotlib import pyplot as plt
 import numpy as np
 from src.codaplot.new_api.heatmap import heatmap
-from codaplot.new_api.gap_scale import compute_breakpoints_and_offsets
+
+from src.codaplot.new_api.legend import add_guides
 
 import pandas as pd
 
@@ -114,6 +115,51 @@ def test_heatmap_categorical():
         vmin=-1,
         vmax=1,
     )
+    # %%
+
+
+def test_complex_heatmap():
+
+    # %%
+    data = pd.DataFrame(
+        {"a": ["a", "b", "c"], "b": ["a", "d", "d"], "c": ["a", "d", "e"]}
+    )
+    x_groups = [1, 1, 2]
+    y_groups = [1, 2, 2]
+    x_gaps = 1
+    y_gaps = 1
+
+    fig, axes = plt.subplots(
+        1, 3, layout="constrained", figsize=(4, 2), width_ratios=(5, 5, 10)
+    )
+    cat_plot_ax = axes[0]
+    cont_plot_ax = axes[1]
+    legend_ax = axes[2]
+    cat_plot_ax.set_xscale("gap_scale", groups=x_groups, gap_sizes=x_gaps)
+    cat_plot_ax.set_yscale("gap_scale", groups=y_groups, gap_sizes=y_gaps)
+
+    guide_d_1 = heatmap(
+        data,
+        ax=cat_plot_ax,
+        x_groups=x_groups,
+        x_gaps=x_gaps,
+        y_gaps=y_gaps,
+        y_groups=y_groups,
+        vmin=-1,
+        vmax=1,
+        show_guide=False,
+    )
+
+    guide_d_2 = heatmap(
+        data=np.random.randn(3, 3),
+        ax=cont_plot_ax,
+        show_guide=False,
+    )
+
+    add_guides(guide_spec_l=[guide_d_1, guide_d_2], ax=legend_ax)
+
+    plt.close("all")
+
     # %%
 
 
