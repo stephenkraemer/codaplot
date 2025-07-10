@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+import subprocess
+import sys
+
+def get_staged_files():
+    """Return a list of all staged file paths (relative to repo root)."""
+    try:
+        out = subprocess.check_output(
+            ['git', 'diff', '--cached', '--name-only'], text=True
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Error: unable to get staged files: {e}", file=sys.stderr)
+        sys.exit(1)
+    return out.splitlines()
+
+def find_unformatted_py(files):
+    """Use black --check to find which .py files need formatting."""
+    if not files:
+        return []
+    # Run black in check mode
+    result = subprocess.run(
+        ['black', '--check'] + files,
+        capture_output=True,
+        text=True
+    )
+    unformatted = []
+    # black prints lines like "would reformat path/to/file.py"
+    for line in result.stderr.splitlines():
+        if line.startswith('would reformat '):
+            unformatted.append(line[len('would reformat '):])
+    return unformatted
+
+def main():
+    staged = get_staged_files()
+    py_files = [f for f in staged if f.endswith('.py')]
+    unformatted = find_unformatted_py(py_files)
+
+    if unformatted:
+        print("✘ Commit aborted.\n")
+        print("Not all python files are black formatted. Fix with\n")
+        print('black \\')
+        print(' \\\n'.join(unformatted))
+        sys.exit(1)
+
+    # All checks passed
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
