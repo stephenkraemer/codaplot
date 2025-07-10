@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Any
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
@@ -39,23 +40,169 @@ def heatmap(
     **kwargs,
 ) -> dict:
 
-    # %%
+    palette, cbar_styling_func_kwargs, df, is_categorical, guide_args_copy = (
+        _handle_inputs(data, palette, guide_args, guide_title, cbar_styling_func_kwargs)
+    )
 
-    # handle inputs
+    # General aesthetics
+    # ax.tick_params(length=0, which="both", axis="both")
+    despine(ax, left=True, bottom=True)
+
+    if is_categorical:
+        levels, patches = _create_categorical_heatmap(
+            ax,
+            x_groups,
+            x_gaps,
+            y_groups,
+            y_gaps,
+            palette,
+            na_color,
+            show_guide,
+            guide_title,
+            kwargs,
+            df,
+            guide_args_copy,
+        )
+
+        return guide_args_copy | {
+            "title": guide_title,
+            "handles": patches,
+            "labels": levels,
+        }
+
+    scalar_mappable, cbar = _create_continuous_heatmap(
+        ax,
+        x_groups,
+        x_gaps,
+        y_groups,
+        y_gaps,
+        norm,
+        vmin,
+        vmax,
+        palette,
+        show_guide,
+        guide_title,
+        guide_ax,
+        cbar_ticks,
+        cbar_styling_func,
+        cbar_styling_func_kwargs,
+        kwargs,
+        df,
+        guide_args_copy,
+    )
+
+    return guide_args_copy | {
+        # "cbar": cbar,
+        "mappable": scalar_mappable,
+        "title": guide_title,
+        "styling_func_kwargs": cbar_styling_func_kwargs,
+        "cbar_ticks": cbar_ticks,
+    }
+
+
+def _create_continuous_heatmap(
+    ax,
+    x_groups,
+    x_gaps,
+    y_groups,
+    y_gaps,
+    norm,
+    vmin,
+    vmax,
+    palette,
+    show_guide,
+    guide_title,
+    guide_ax,
+    cbar_ticks,
+    cbar_styling_func,
+    cbar_styling_func_kwargs,
+    kwargs,
+    df,
+    guide_args_copy,
+):
+    cmap = palette
+    if norm is None:
+        norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    scalar_mappable = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)  # type: ignore[reportAttributeAccessIssue]
+    plot_arr = scalar_mappable.to_rgba(df)
+    plot_arr, x, y = _insert_gaps_and_generate_coordinates(
+        x_groups, x_gaps, y_groups, y_gaps, plot_arr
+    )
+    ax.pcolormesh(x, y, plot_arr, **kwargs)
+
+    cbar = None
+    if show_guide:
+        cbar = ax.figure.colorbar(scalar_mappable, ax=ax, cax=guide_ax, **guide_args_copy)  # type: ignore
+        if cbar_ticks is not None:
+            cbar.ax.set_yticks(cbar_ticks)
+        ax.figure.canvas.draw()
+        cbar_styling_func(cbar, **cbar_styling_func_kwargs)
+        if guide_title is not None:
+            cbar.set_label(guide_title)
+    return scalar_mappable, cbar
+
+
+def _create_categorical_heatmap(
+    ax,
+    x_groups,
+    x_gaps,
+    y_groups,
+    y_gaps,
+    palette,
+    na_color,
+    show_guide,
+    guide_title,
+    kwargs,
+    df,
+    guide_args_copy,
+):
+    levels = _find_ordered_levels(df)
+    color_d = _generate_color_mapping(palette, na_color, levels, len(levels))
+    plot_arr = _df_to_rgba_vectorized(
+        data=df, color_d=color_d, na_color=na_color, levels=levels
+    )
+    plot_arr, x, y = _insert_gaps_and_generate_coordinates(
+        x_groups, x_gaps, y_groups, y_gaps, plot_arr
+    )
+    ax.pcolormesh(x, y, plot_arr, **kwargs)
+
+    patches = [Patch(facecolor=color_d[l]) for l in levels]
+    if show_guide:
+        ax.legend(
+            handles=patches,
+            labels=list(levels),
+            title=guide_title,
+            **guide_args_copy,
+        )
+
+    return levels, patches
+
+
+def _insert_gaps_and_generate_coordinates(x_groups, x_gaps, y_groups, y_gaps, plot_arr):
+    if x_groups is not None or y_groups is not None:
+        plot_arr, x, y = _insert_gaps(plot_arr, x_groups, x_gaps, y_groups, y_gaps)
+    else:
+        x = np.arange(plot_arr.shape[1])
+        y = np.arange(plot_arr.shape[0])
+    return plot_arr, x, y
+
+
+def _handle_inputs(data, palette, guide_args, guide_title, cbar_styling_func_kwargs):
     if not isinstance(data, (pd.DataFrame, np.ndarray)):
         raise TypeError("data must be DataFrame or np.ndarray")
 
-    data = pd.DataFrame(data)
+    df = pd.DataFrame(data)
 
     if cbar_styling_func_kwargs is None:
         cbar_styling_func_kwargs = {}
 
     is_categorical = (
-        isinstance(data.dtypes.iloc[0], pd.CategoricalDtype)
-        or pd.api.types.is_object_dtype(data.dtypes.iloc[0])
-        or pd.api.types.is_string_dtype(data.dtypes.iloc[0])
+        isinstance(df.dtypes.iloc[0], pd.CategoricalDtype)
+        or pd.api.types.is_object_dtype(df.dtypes.iloc[0])
+        or pd.api.types.is_string_dtype(df.dtypes.iloc[0])
     )
 
+    guide_args_copy: dict[str, Any]
     if guide_args is None:
         if is_categorical:
             guide_args_copy = dict(
@@ -71,61 +218,7 @@ def heatmap(
             palette = "Set1"
         else:
             palette = "viridis"
-
-    if is_categorical:
-        levels = _find_ordered_levels(data)
-        color_d = _generate_color_mapping(palette, na_color, levels, len(levels))
-        plot_arr = _df_to_rgba_vectorized(
-            data=data, color_d=color_d, na_color=na_color, levels=levels
-        )
-    else:
-        cmap = palette
-        if norm is None:
-            norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-        scalar_mappable = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)  # type: ignore[reportAttributeAccessIssue]
-        plot_arr = scalar_mappable.to_rgba(data)
-
-    if x_groups is not None or y_groups is not None:
-        plot_arr, x, y = _insert_gaps(plot_arr, x_groups, x_gaps, y_groups, y_gaps)
-    else:
-        x = np.arange(plot_arr.shape[1])
-        y = np.arange(plot_arr.shape[0])
-
-    ax.pcolormesh(x, y, plot_arr, **kwargs)
-
-    # General aesthetics
-    # ax.tick_params(length=0, which="both", axis="both")
-    despine(ax, left=True, bottom=True)
-
-    if not is_categorical and show_guide:
-        cb = ax.figure.colorbar(scalar_mappable, ax=ax, cax=guide_ax, **guide_args_copy)  # type: ignore
-        if cbar_ticks is not None:
-            cb.ax.set_yticks(cbar_ticks)
-        ax.figure.canvas.draw()
-        cbar_styling_func(cb, **cbar_styling_func_kwargs)
-        if guide_title is not None:
-            cb.set_label(guide_title)
-        # guide_args_copy['cbar'] = cb
-    # %%
-    if is_categorical:
-        patches = [
-            Patch(facecolor=color_d[l]) for l in levels # pyright: ignore[reportPossiblyUnboundVariable]
-        ]  # pyright: ignore[reportPossiblyUnboundVariable]
-        if show_guide:
-            ax.legend(
-                handles=patches,
-                labels=list(levels),  # pyright: ignore[reportPossiblyUnboundVariable]
-                title=guide_title,
-                **guide_args_copy,  # pyright: ignore[reportArgumentType]
-            )
-
-    # %%
-
-    if not is_categorical:
-        return {
-            "mappable": scalar_mappable  # pyright: ignore[reportPossiblyUnboundVariable]
-        }  # pyright: ignore[reportPossiblyUnboundVariable]
-    return {}
+    return palette, cbar_styling_func_kwargs, df, is_categorical, guide_args_copy
 
 
 def _insert_gaps(plot_arr, x_groups, x_gaps, y_groups, y_gaps):
