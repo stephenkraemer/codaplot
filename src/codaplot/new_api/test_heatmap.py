@@ -130,11 +130,10 @@ def test_complex_heatmap():
     y_gaps = 1
 
     fig, axes = plt.subplots(
-        1, 3, layout="constrained", figsize=(4, 2), width_ratios=(5, 5, 10)
+        1, 2, layout="none", figsize=(10 / 2.54, 5 / 2.54), width_ratios=(1, 1)
     )
     cat_plot_ax = axes[0]
     cont_plot_ax = axes[1]
-    legend_ax = axes[2]
     cat_plot_ax.set_xscale("gap_scale", groups=x_groups, gap_sizes=x_gaps)
     cat_plot_ax.set_yscale("gap_scale", groups=y_groups, gap_sizes=y_gaps)
 
@@ -148,17 +147,20 @@ def test_complex_heatmap():
         vmin=-1,
         vmax=1,
         show_guide=False,
+        guide_title="Legend",
     )
 
     guide_d_2 = heatmap(
         data=np.random.randn(3, 3),
         ax=cont_plot_ax,
         show_guide=False,
+        guide_title="Cbar",
     )
 
-    add_guides(guide_spec_l=[guide_d_1, guide_d_2], ax=legend_ax)
+    add_guides(guide_spec_l=[guide_d_1, guide_d_2], fig=fig)
 
     plt.close("all")
+    fig
 
     # %%
 

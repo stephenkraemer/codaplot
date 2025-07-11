@@ -14,13 +14,14 @@ from src.codaplot.utils import cbar_change_style_to_inward_white_ticks
 
 def add_guides(
     guide_spec_l,
-    ax,
+    fig,
     cbar_styling_func: Callable = cbar_change_style_to_inward_white_ticks,
     guide_titles=None,
-    xpad_in=0.1,
-    ypad_in=0.1,
+    xpad_in=0.5,
+    ypad_in=0.5,
     cbar_title_as_label=False,
     legend_kwargs=None,
+    sort_guides_by_size: bool = False,
 ) -> None:
     """Pack Legends and colorbars into ax
 
@@ -56,7 +57,9 @@ def add_guides(
     if legend_kwargs is None:
         legend_kwargs = {}
 
+    ax = _add_right_axes(fig, width_inch=1)
     ax.axis("off")
+
     if guide_titles:
         selected_guide_specs_l = []
         for title in guide_titles:
@@ -66,9 +69,24 @@ def add_guides(
     else:
         selected_guide_specs_l = guide_spec_l
 
-    guide_placement_params_df = get_guide_placement_params(
-        selected_guide_specs_l, ax, legend_kwargs
+    axes_height_in = fig.get_size_inches()[1]
+
+    guide_placement_params_df = _get_guide_placement_params(
+        selected_guide_specs_l, ax, legend_kwargs, axes_height_in
     )
+
+    if sort_guides_by_size:
+        guide_placement_params_df = guide_placement_params_df.sort_values(
+            "height", ascending=False
+        )
+
+    # will raise if figure height is insufficient
+    _, required_width = _compute_required_space_for_legend(
+        guide_placement_params_df, axes_height_in, xpad_in, ypad_in
+    )
+
+    _resize_right_axes(fig, ax, required_width)
+
     place_guides(
         ax=ax,
         placement_df=guide_placement_params_df,
@@ -80,7 +98,14 @@ def add_guides(
     )
 
 
-def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kwargs):
+def _get_guide_placement_params(
+    guide_spec_l: List[Optional[Dict]],
+    ax,
+    legend_kwargs,
+    axes_height_in,
+    shrink_default=0.5,
+    aspect_default=10,
+):
     """Get dataframe with required height and width for all guides
 
     Parameters
@@ -95,6 +120,7 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
          contents is a reference to the guide specification dictionary from guide_spec_l, styling_func_kwargs is a reference to the corresponding dict from guide_spec_l, or an empty dict. currently, styling_func_kwargs is only handled for colobars.
          (because its convenient to have these things together in the same frame)
     """
+
     # Note that 'title' is not a colorbar arg. It is removed before passing on the cbar_args
     placement_df = pd.DataFrame(
         columns=[
@@ -107,33 +133,46 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
         ]
     )
     for guide_d in guide_spec_l:
+
         # Empty slots are allowed and should be skipped
         if guide_d is None:
             continue
         else:
             guide_d = copy.deepcopy(guide_d)
+
         # A guide spec without handles is expected to define a colorbar
         if "handles" not in guide_d:
             assert "mappable" in guide_d
             # compute width and height of the inset axes in parent axes coordinates
             # shrink gives the width or height in parent axes coordinates, depending on the orientation
-            shrink = guide_d.get("shrink", 1)
-            aspect = guide_d.get("aspect", 20)
-            orientation = guide_d.get("orientation", "vertical")
-            if orientation == "vertical":
-                height = shrink
-                width = shrink / aspect
+
+            if ("height" in guide_d) or ("width" in guide_d):
+                if not "height" in guide_d and "width" in guide_d:
+                    raise ValueError(
+                        "Height and width of colorbar can only be specified together"
+                    )
+                height_in = guide_d.get("height")
+                width_in = guide_d.get("width")
             else:
-                width = shrink
-                height = shrink / aspect
+                shrink = guide_d.get("shrink", shrink_default)
+                aspect = guide_d.get("aspect", aspect_default)
+                orientation = guide_d.get("orientation", "vertical")
+                if orientation == "vertical":
+                    height_in = shrink * axes_height_in
+                    width_in = height_in / aspect
+                else:
+                    raise NotImplementedError()
+                    width_in = shrink * axes_width_in
+                    height_in = width_in / aspect
+
             tmp_df = pd.DataFrame(
                 [
                     dict(
                         # remove title, it is not a cbar arg, so that the guide specification
                         # from now on only contains cbar args
                         title=guide_d.pop("title", None),
-                        height=height,
-                        width=width,
+                        height=height_in,
+                        width=width_in,
                         contents=guide_d,
                         styling_func_kwargs=guide_d.pop("styling_func_kwargs", {}),
                         cbar_ticks=guide_d.pop("cbar_ticks", None),
@@ -176,8 +215,17 @@ def get_guide_placement_params(guide_spec_l: List[Optional[Dict]], ax, legend_kw
                 **curr_legend_kwargs,
             )
 
-            r = ax.figure.canvas.get_renderer()
-            bbox = l.get_window_extent(r).transformed(ax.transAxes.inverted())
+            # ax.figure.canvas.draw()
+            # renderer = ax.figure.canvas.get_renderer()
+            # ax_bbox = ax.get_window_extent(renderer).transformed(ax.figure.dpi_scale_trans.inverted())
+            # axes_width_in, axes_height_in = ax_bbox.width, ax_bbox.height
+
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+
+            bbox = l.get_window_extent(renderer).transformed(
+                ax.figure.dpi_scale_trans.inverted()
+            )
 
             tmp_df = pd.DataFrame(
                 [
@@ -492,3 +540,176 @@ def get_axes_dim_in(ax):
     bbox = ax.get_window_extent().transformed(transform)
     ax_width_in, ax_height_in = bbox.width, bbox.height
     return ax_width_in, ax_height_in
+
+
+def _compute_required_space_for_legend(
+    df: pd.DataFrame, box_height: float, x_pad: float, y_pad: float
+) -> tuple[float, float]:
+    """
+    Compute stacking layout for items in 'df' into columns of max height box_height,
+    with horizontal padding x_pad between columns and vertical padding y_pad before
+    each item (including the very first one in a column).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Must have columns 'height' and 'width', all > 0.
+    box_height : float
+        Maximum allowed height per column.
+    x_pad : float
+        Horizontal space between columns.
+    y_pad : float
+        Vertical space before each item in its column.
+
+    Returns
+    -------
+    tallest_col_height : float
+        The maximum total height used in any column.
+    total_width : float
+        The x‐span from 0 to the right edge of the last column.
+
+    Raises
+    ------
+    ValueError
+        If any single item (y_pad + item.height) exceeds box_height.
+    """
+    # List of columns, each as dict with keys: 'height', 'width', 'x_start'
+    columns = []
+
+    # Start first column
+    curr_height = 0.0
+    curr_width = 0.0
+    curr_x = 0.0
+
+    for idx, row in df.iterrows():
+        h = float(row["height"])
+        w = float(row["width"])
+
+        # Check for oversized item
+        if h > box_height:
+            raise ValueError(
+                f"Item at row {idx} (height={h}) "
+                f"cannot fit in box of height {box_height}."
+            )
+
+        if curr_height != 0:
+            needed = h + y_pad
+        else:
+            needed = h
+        # If it doesn't fit in current column, close it & start a new one
+        if curr_height + needed > box_height:
+            columns.append(
+                {"height": curr_height, "width": curr_width, "x_start": curr_x}
+            )
+            # New column origin
+            curr_x = curr_width + x_pad
+            curr_height = 0.0
+            curr_width = 0.0
+
+        # Place item in current (new or existing) column
+        curr_height += needed
+        curr_width = max(curr_width, w)
+
+    # Finalize last column
+    if curr_width > 0 or curr_height > 0:
+        columns.append({"height": curr_height, "width": curr_width, "x_start": curr_x})
+
+    # Compute outputs
+    tallest_col_height = max(col["height"] for col in columns)
+    last = columns[-1]
+    total_width = last["x_start"] + last["width"]
+
+    return tallest_col_height, total_width
+
+
+def _add_right_axes(fig, width_inch):
+    """
+    Expand `fig` horizontally by `width_inch`, shift all existing axes
+    over so they keep their original physical size, and insert a new axes
+    on the right spanning the full height.
+
+    Returns the new Axes object.
+    """
+    # 1) Original figure size
+    old_w, old_h = fig.get_size_inches()
+    new_w = old_w + width_inch
+
+    # 2) Resize the figure
+    fig.set_size_inches(new_w, old_h)
+
+    # 3) Reposition each existing Axes
+    for ax in fig.axes:
+        pos = ax.get_position()  # Bbox in normalized (0–1) coords
+        l0, b0, w0, h0 = pos.x0, pos.y0, pos.width, pos.height
+
+        # convert their left & width to inches
+        phys_l = l0 * old_w
+        phys_w = w0 * old_w
+
+        # back to new normalized coords
+        new_l = phys_l / new_w
+        new_wf = phys_w / new_w
+
+        ax.set_position([new_l, b0, new_wf, h0])
+
+    # 4) Insert the new Axes on the right, full height
+    #    left edge = old_w / new_w, width = width_inch / new_w
+    new_ax = fig.add_axes([old_w / new_w, 0, width_inch / new_w, 1.0])
+    return new_ax
+
+
+def _resize_right_axes(fig, right_ax, new_width_inch):
+    """
+    Change the width of the right‐margin Axes (as created by add_right_axes)
+    to new_width_inch, without touching the inch‐sizes of the other axes.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        The figure containing all of your subplots plus the right_ax.
+    right_ax : matplotlib.axes.Axes
+        The Axes instance you want to act as the right margin.
+    new_width_inch : float
+        The desired width (in inches) of the right_ax.
+
+    Returns
+    -------
+    right_ax : matplotlib.axes.Axes
+        The same Axes instance, now resized.
+    """
+    # 1) current figure size (inches)
+    fig_w, fig_h = fig.get_size_inches()
+
+    # 2) gather the “main” axes (everything except the right margin)
+    mains = [ax for ax in fig.axes if ax is not right_ax]
+
+    # 3) record each main‐axes physical (inch) position & size
+    phys = []
+    max_right = 0.0
+    for ax in mains:
+        bb = ax.get_position()
+        l_in = bb.x0 * fig_w
+        w_in = bb.width * fig_w
+        phys.append((ax, l_in, w_in, bb.y0, bb.height))
+        max_right = max(max_right, l_in + w_in)
+
+    # 4) compute new figure width
+    margin_left = max_right
+    new_fig_w = margin_left + new_width_inch
+    fig.set_size_inches(new_fig_w, fig_h)
+
+    # 5) re‐position the main axes so their inch sizes are preserved
+    for ax, l_in, w_in, y0, h in phys:
+        ax.set_position([l_in / new_fig_w, y0, w_in / new_fig_w, h])
+
+    # 6) re‐position the right‐margin axes
+    right_ax.set_position(
+        [
+            margin_left / new_fig_w,  # new x0
+            0.0,  # y0 stays at bottom
+            new_width_inch / new_fig_w,  # normalized width
+            1.0,  # full height
+        ]
+    )
+
+    return right_ax

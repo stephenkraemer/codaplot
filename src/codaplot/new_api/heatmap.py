@@ -120,6 +120,7 @@ def _create_continuous_heatmap(
     df,
     guide_args_copy,
 ):
+
     cmap = palette
     if norm is None:
         norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
@@ -139,6 +140,7 @@ def _create_continuous_heatmap(
         cbar_styling_func(cbar, **cbar_styling_func_kwargs)
         if guide_title is not None:
             cbar.set_label(guide_title)
+
     return scalar_mappable, cbar
 
 
