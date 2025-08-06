@@ -1,155 +1,78 @@
-# # Setup
-
-# ## Imports
-
-from typing import Union, Any
-
+n_cores = 12
+ 
+# isort: off
 import os
+num_threads = str(n_cores)
+# these need to be set prior to numpy import
+os.environ["OMP_NUM_THREADS"] = num_threads
+os.environ["OPENBLAS_NUM_THREADS"] = num_threads
+os.environ["MKL_NUM_THREADS"] = num_threads
+os.environ["VECLIB_MAXIMUM_THREADS"] = num_threads
+os.environ["NUMEXPR_NUM_THREADS"] = num_threads
+import numpy as np
+# isort: on
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+
 import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.gridspec as mgridspec
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import matplotlib.transforms as mtransforms
-import matplotlib.patches as mpatches
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-import numpy as np
+import matplotlib.style as mplstyle
 import pandas as pd
 import seaborn as sns
-import yaml
+import subprocess
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from IPython.display import display
+from collections import defaultdict
+from joblib import delayed, Parallel
 
-# ## Types
+import codaplot as co
+import codaplot.utils as coutils
 
-colname_or_df_opt = Optional[Union[str, pd.DataFrame]]
-str_or_num_t = Union[str, int, float]
-str_or_num_t_opt = Optional[Union[str, int, float]]
-cmap_t = Optional[str]
-norm_t_opt = Optional[str]
-kwds_t = Optional[Dict[str, Any]]
-arr_or_list_opt = Optional[Union[np.ndarray, list]]
+from codaplot.new_api.gap_scale import compute_breakpoints_and_offsets, groups_t, gaps_t
+ 
+
+def heatmap(
+    data: pd.DataFrame | np.ndarray,
+    ax: Axes,
+    x_groups,
+    x_gaps,
+    y_groups,
+    y_gaps,
+    norm,
+    vmin,
+    vmax,
+    cmap='rocket',
+    **kwargs,
+):
+
+    # %%
+    if norm is None:
+        norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+    scalar_mappable = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+    rgba_array = scalar_mappable.to_rgba(data.values)
+
+    x_bps, _ = compute_breakpoints_and_offsets(x_groups, x_gaps)
+    y_bps, _ = compute_breakpoints_and_offsets(y_groups, y_gaps)
+
+    n_rows, n_cols = data.shape
+    rgba_array = np.insert(rgba_array, x_bps, np.ones((n_rows, len(x_bps), 4)), axis=1)
+    rgba_array = np.insert(rgba_array, y_bps, np.ones((len(y_bps), n_cols + len(x_bps), 4)), axis=0)
+
+    x = np.arange(n_cols + 1, dtype='f4')
+    x[x_bps] -= 0.00001
+    x = np.insert(x, x_bps + 1, x_bps)
+
+    y = np.arange(n_rows + 1, dtype='f4')
+    y[y_bps] -= 0.00001
+    y = np.insert(y, y_bps + 1, y_bps)
+
+    ax.pcolormesh(x, y, rgba_array)
+    # %%
 
 
-# # Shared docstrings
 
-vmin = "p1.5 for 1.5th percentile"
-vmax = "p99.5 for percentile"
-
-# # Heatmap
-
-patch_types = [
-    'rectangle',
-    'circle',
-    'halfcircle',
-    'triangle',
-    ]
-patch_t = Union[str, mpatches.Patch]
-
-bbox_to_anchor_values = ['lower_left', 'upper_left', 'upper_right', 'lower_right', 'center']
-bbox_to_anchor_values_t = str
-
-
-class Heatmap:
-    """
-    """
-
-    def __init__(
-        self,
-        # Aesthetic mappings
-        color: colname_or_df_opt = None,
-        size: colname_or_df_opt = None,
-        data: Optional[pd.DataFrame] = None,
-        is_categorical: bool = False,
-        # Patch
-        patch: patch_t = "rectangle",
-        marker_color_vmin: str_or_num_t_opt = None,
-        marker_color_vmax: str_or_num_t_opt = None,
-        marker_color_vcenter: str_or_num_t_opt = None,
-        marker_color_norm: norm_t_opt = None,
-        marker_color_map: cmap_t = None,
-        marker_size_vmin: str_or_num_t_opt = None,
-        marker_size_vmax: str_or_num_t_opt = None,
-        marker_size_vcenter: str_or_num_t_opt = None,
-        marker_size_norm: norm_t_opt = None,
-        # How to draw the patch into the field
-        field_max_fraction: float = 1.0,
-        field_loc: Tuple[float, float] = (0.5, 0.5),
-        field_bbox_to_anchor: bbox_to_anchor_values_t = "center",
-        # Guides
-        guides_color_title: Optional[str] = None,
-        guides_color_cbar_kwds: kwds_t = None,
-        guides_color_legend_kwds: kwds_t = None,
-        guides_size_title: Optional[str] = None,
-        guides_size_legend_kwds: kwds_t = None,
-        guides_ax: Optional[Axes] = None,
-        guides_add: bool = True,
-        # Spacing
-        spacing_row_ids: arr_or_list_opt = None,
-        spacing_row_gap_sizes: arr_or_list_opt = None,
-        spacing_col_ids: arr_or_list_opt = None,
-        spacing_col_gap_sizes: arr_or_list_opt = None,
-    ) -> None:
-        pass
-
-    def draw(self, ax: Axes):
-        pass
-
-# # Patch drawing functions
-
-def add_full_field_rectangle_patch(
-        height,
-        width,
-        color,
-        field_x_left,
-        field_y_low,
-        field_width,
-        field_height,
-        bbox_to_anchor,
-        loc,
-        ):
-    pass
-
-def add_size_variable_rectangle_patch(
-        height,
-        width,
-        color,
-        field_x_left,
-        field_y_low,
-        field_width,
-        field_height,
-        bbox_to_anchor,
-        loc,
-        ):
-    pass
-
-def add_circle_patch(
-        height,
-        width,
-        color,
-        field_x_left,
-        field_y_low,
-        field_width,
-        field_height,
-        bbox_to_anchor,
-        loc,
-        ):
-    # ignore bbox_to_anchor, loc
-    # print warning message if not None
-    pass
-
-def add_triangle_patch(
-        height,
-        width,
-        orientation,
-        color,
-        field_x_left,
-        field_y_low,
-        field_width,
-        field_height,
-        bbox_to_anchor,
-        loc,
-        ):
-    pass
